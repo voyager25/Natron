@@ -16,7 +16,7 @@ NatronCrashReporter.xcodeproj
 CrashReporter/NatronCrashReporter
 Tests.xcodeproj
 HostSupport.xcodeproj
-LibMV.xcodeproj
+libmv/LibMV.xcodeproj
 Gui.xcodeproj
 Engine.xcodeproj
 Project.xcodeproj
@@ -211,3 +211,9 @@ pch
 *.pyc
 
 Renderer/NatronRenderer
+
+libmv/LibMV.xcodeproj/qt_preprocess.mak
+
+libmv/LibMV.xcodeproj/qt_makeqmake.mak
+
+libmv/LibMV.xcodeproj/project.pbxproj
