@@ -10,6 +10,7 @@ CONFIG += ordered
 
 SUBDIRS += \
     HostSupport \
+    libmv \
     Engine \
     Gui \
     Renderer \

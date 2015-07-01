@@ -1,0 +1,3286 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+		D7BA7D76DAB5DD13389D6332 = {
+			buildActionMask = 2147483647;
+			files = (
+				);
+			generatedFileNames = (
+				);
+			isa = PBXShellScriptBuildPhase;
+			name = "Qt Qmake";
+			neededFileNames = (
+				);
+			shellPath = "/bin/sh";
+			shellScript = "make\ -C\ /Users/alexandre/development/Natron/libmv\ -f\ \'LibMV.xcodeproj/qt_makeqmake.mak\'";
+		};
+		84D9B551661DD9BECFD17FF7 = {
+			isa = PBXFileReference;
+			name = "array_utils.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/array_utils.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		C742954408B98ECDD2713531 = {
+			fileRef = "84D9B551661DD9BECFD17FF7";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		AAE99EADD12C277135D6F642 = {
+			isa = PBXFileReference;
+			name = "blas.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/blas.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		F036A25AC4866E41415D627B = {
+			fileRef = "AAE99EADD12C277135D6F642";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		320E27C21A5999C070795193 = {
+			isa = PBXFileReference;
+			name = "block_evaluate_preparer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_evaluate_preparer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		84FF5CF7319722287666C940 = {
+			fileRef = "320E27C21A5999C070795193";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		67C38A02B0B3EEB2355BC42E = {
+			isa = PBXFileReference;
+			name = "block_jacobian_writer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_jacobian_writer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		CA178A418095B644C5553059 = {
+			fileRef = "67C38A02B0B3EEB2355BC42E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B599C79B48CAE49947D9E1F5 = {
+			isa = PBXFileReference;
+			name = "block_jacobi_preconditioner.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_jacobi_preconditioner.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		52C4C6B68461732E36B3CC8E = {
+			fileRef = "B599C79B48CAE49947D9E1F5";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B6FFEA69861DA2F2029EA6B1 = {
+			isa = PBXFileReference;
+			name = "block_random_access_dense_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_dense_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		F13567BD5160C4F4D0E5E9FB = {
+			fileRef = "B6FFEA69861DA2F2029EA6B1";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5224D969C5E2CAC2CA6DF317 = {
+			isa = PBXFileReference;
+			name = "block_random_access_diagonal_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_diagonal_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		51B634594F4D7B2222621D8E = {
+			fileRef = "5224D969C5E2CAC2CA6DF317";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		646065A790D1252A894DE57E = {
+			isa = PBXFileReference;
+			name = "block_random_access_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		88C882F5567663C1841327F1 = {
+			fileRef = "646065A790D1252A894DE57E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		7BE22E4C565FAAC33974B0C4 = {
+			isa = PBXFileReference;
+			name = "block_random_access_sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		AFE1CE08078EA8BC4E349C11 = {
+			fileRef = "7BE22E4C565FAAC33974B0C4";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B4DA619D9BB859C9DD2F04D7 = {
+			isa = PBXFileReference;
+			name = "block_sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		950B542B3093AF21ECF3873C = {
+			fileRef = "B4DA619D9BB859C9DD2F04D7";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		0F8475937B5C31C35D732E63 = {
+			isa = PBXFileReference;
+			name = "block_structure.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_structure.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		57F89DB395D1DF7DC28499ED = {
+			fileRef = "0F8475937B5C31C35D732E63";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		AB9624F845A2E28D27FDF182 = {
+			isa = PBXFileReference;
+			name = "callbacks.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/callbacks.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		259464435A0CADFE48E1A724 = {
+			fileRef = "AB9624F845A2E28D27FDF182";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		CE66EE5FCD9F2D65B5FB3F4F = {
+			isa = PBXFileReference;
+			name = "canonical_views_clustering.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/canonical_views_clustering.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		6CABF0A0CF76174C00743AE7 = {
+			fileRef = "CE66EE5FCD9F2D65B5FB3F4F";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5D104905BCDC117D0E5B3ACA = {
+			isa = PBXFileReference;
+			name = "c_api.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/c_api.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		CC2E2E7591AA0D0DFB5D661F = {
+			fileRef = "5D104905BCDC117D0E5B3ACA";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		E5EDD3EF9BB06CB9380264F4 = {
+			isa = PBXFileReference;
+			name = "cgnr_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/cgnr_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		C172A7184B935B2516BE3F0A = {
+			fileRef = "E5EDD3EF9BB06CB9380264F4";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		0E56344B3DD401050A1E76CE = {
+			isa = PBXFileReference;
+			name = "compressed_col_sparse_matrix_utils.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/compressed_col_sparse_matrix_utils.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		7E37AC62EC3922E830CCB3ED = {
+			fileRef = "0E56344B3DD401050A1E76CE";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5B216E88AF3DF51721498CA0 = {
+			isa = PBXFileReference;
+			name = "compressed_row_jacobian_writer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/compressed_row_jacobian_writer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		CA8CCBDF19F1026A57CF9ADE = {
+			fileRef = "5B216E88AF3DF51721498CA0";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		A55389F7C5B3FF384C4BDCAB = {
+			isa = PBXFileReference;
+			name = "compressed_row_sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/compressed_row_sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		448895E42E35E41DA8FFEAEE = {
+			fileRef = "A55389F7C5B3FF384C4BDCAB";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		E9F38368BBF59302DD5E2840 = {
+			isa = PBXFileReference;
+			name = "conditioned_cost_function.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/conditioned_cost_function.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		51BE6DFF322AED039279EF7A = {
+			fileRef = "E9F38368BBF59302DD5E2840";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		740BD9BFEFE5DB9B84234F54 = {
+			isa = PBXFileReference;
+			name = "conjugate_gradients_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/conjugate_gradients_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		5BFACFD25C1017929402C8DA = {
+			fileRef = "740BD9BFEFE5DB9B84234F54";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		2EF1828AFD1E6F2BA72923B0 = {
+			isa = PBXFileReference;
+			name = "coordinate_descent_minimizer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/coordinate_descent_minimizer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		D50A3E6D4DE8A2CB0AB88378 = {
+			fileRef = "2EF1828AFD1E6F2BA72923B0";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		31ECD7D2EAE344D0BA6B2610 = {
+			isa = PBXFileReference;
+			name = "corrector.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/corrector.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		7D8CD866D856C2AB7C98B094 = {
+			fileRef = "31ECD7D2EAE344D0BA6B2610";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		4F58752746527250347DF46E = {
+			isa = PBXFileReference;
+			name = "covariance.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/covariance.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		16A4991C63F4AF9C27A44CBC = {
+			fileRef = "4F58752746527250347DF46E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		92D732AD7E8CE37584287794 = {
+			isa = PBXFileReference;
+			name = "covariance_impl.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/covariance_impl.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		FF7748B3B5539B6ABF06E34E = {
+			fileRef = "92D732AD7E8CE37584287794";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		C49F574402F4335D1571C657 = {
+			isa = PBXFileReference;
+			name = "cxsparse.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/cxsparse.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		09946EE862401DCA2021BB3A = {
+			fileRef = "C49F574402F4335D1571C657";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		798207DC65ED3AC193637EDF = {
+			isa = PBXFileReference;
+			name = "dense_normal_cholesky_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_normal_cholesky_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		CEA1488F1FD09D7710085F79 = {
+			fileRef = "798207DC65ED3AC193637EDF";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		C3F3AE93E440BAF903FC7CED = {
+			isa = PBXFileReference;
+			name = "dense_qr_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_qr_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		B9985531B49A171E97D088E2 = {
+			fileRef = "C3F3AE93E440BAF903FC7CED";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		54723E9375016E9A4B7C249E = {
+			isa = PBXFileReference;
+			name = "dense_sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		0649A3A696EB4C52491B61FF = {
+			fileRef = "54723E9375016E9A4B7C249E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		4E8940C695C973922F62F274 = {
+			isa = PBXFileReference;
+			name = "detect_structure.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/detect_structure.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		8FB4E48018289B9D6EC9A83E = {
+			fileRef = "4E8940C695C973922F62F274";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		929D10DA7DB770C6F30DFAE7 = {
+			isa = PBXFileReference;
+			name = "dogleg_strategy.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dogleg_strategy.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		8CEC102B1ED783956C635642 = {
+			fileRef = "929D10DA7DB770C6F30DFAE7";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D94C99D18BF7B1D9B40A39C1 = {
+			isa = PBXFileReference;
+			name = "dynamic_compressed_row_jacobian_writer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dynamic_compressed_row_jacobian_writer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		64B3FEA32227FACB64E10A1F = {
+			fileRef = "D94C99D18BF7B1D9B40A39C1";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5960383E3690015CF711DB5C = {
+			isa = PBXFileReference;
+			name = "dynamic_compressed_row_sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dynamic_compressed_row_sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		4CA65B8A3387D42619FE7A13 = {
+			fileRef = "5960383E3690015CF711DB5C";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		20597DDC00F9611B722E1128 = {
+			isa = PBXFileReference;
+			name = "evaluator.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/evaluator.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		E47BEAEE6BA0C93BDB451799 = {
+			fileRef = "20597DDC00F9611B722E1128";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		C8A2C95C5786A77DBDA376A8 = {
+			isa = PBXFileReference;
+			name = "file.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/file.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		03506E16F57E4A1C07E2C9B6 = {
+			fileRef = "C8A2C95C5786A77DBDA376A8";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B6CE05B179BEF1709628EB00 = {
+			isa = PBXFileReference;
+			name = "partitioned_matrix_view_d_d_d.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/generated/partitioned_matrix_view_d_d_d.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		A216B185673E9309CE484F89 = {
+			fileRef = "B6CE05B179BEF1709628EB00";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D7A7AEC066FB3F8EC1E0C3A0 = {
+			isa = PBXFileReference;
+			name = "schur_eliminator_d_d_d.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/generated/schur_eliminator_d_d_d.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		5DF5929A8BB400EDDE93EE76 = {
+			fileRef = "D7A7AEC066FB3F8EC1E0C3A0";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D33CABB006704C8D8D89E529 = {
+			isa = PBXFileReference;
+			name = "gradient_checking_cost_function.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/gradient_checking_cost_function.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		61B4FC864C3C31060EE300E0 = {
+			fileRef = "D33CABB006704C8D8D89E529";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		6DE9663521D9081BF595352C = {
+			isa = PBXFileReference;
+			name = "gradient_problem.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/gradient_problem.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		F22BC735A62A0119FC44AD88 = {
+			fileRef = "6DE9663521D9081BF595352C";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		0D68617C99E4E745B8D3FCF8 = {
+			isa = PBXFileReference;
+			name = "gradient_problem_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/gradient_problem_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		60F93D3CDA84413261E58C7F = {
+			fileRef = "0D68617C99E4E745B8D3FCF8";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B34FF15B9C77511A9F968E9E = {
+			isa = PBXFileReference;
+			name = "implicit_schur_complement.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/implicit_schur_complement.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		3325848CF225154623C42406 = {
+			fileRef = "B34FF15B9C77511A9F968E9E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D09F746A4C8BD140154C812E = {
+			isa = PBXFileReference;
+			name = "incomplete_lq_factorization.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/incomplete_lq_factorization.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		BC64D64F738DA4DC5797A469 = {
+			fileRef = "D09F746A4C8BD140154C812E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		8129446D587C9175E52476A0 = {
+			isa = PBXFileReference;
+			name = "iterative_schur_complement_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/iterative_schur_complement_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		17076203E8F1069A4D05EF95 = {
+			fileRef = "8129446D587C9175E52476A0";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		36613086616DD933D4F0345C = {
+			isa = PBXFileReference;
+			name = "lapack.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/lapack.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		97A0F8B27563C9B5FEA9BDBD = {
+			fileRef = "36613086616DD933D4F0345C";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		29419E8927C1728B28C8389F = {
+			isa = PBXFileReference;
+			name = "levenberg_marquardt_strategy.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/levenberg_marquardt_strategy.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		5CC88364F81E9BC39E9A0A81 = {
+			fileRef = "29419E8927C1728B28C8389F";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		FC00D84E5B9B9D0F97779708 = {
+			isa = PBXFileReference;
+			name = "linear_least_squares_problems.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/linear_least_squares_problems.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		520C93DC893ACBC9622AF5FC = {
+			fileRef = "FC00D84E5B9B9D0F97779708";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		7B634029053DE50A55F841DC = {
+			isa = PBXFileReference;
+			name = "linear_operator.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/linear_operator.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		8255F4B36C64252C4FAAF1B8 = {
+			fileRef = "7B634029053DE50A55F841DC";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		1A69F5F307C05845F9924A07 = {
+			isa = PBXFileReference;
+			name = "linear_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/linear_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		164971DDF9523B79FAC647BC = {
+			fileRef = "1A69F5F307C05845F9924A07";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		63B4430034FE8E939985D811 = {
+			isa = PBXFileReference;
+			name = "line_search.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		97DC77BF33787A36665155DB = {
+			fileRef = "63B4430034FE8E939985D811";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D18E6EF468A5A5D8EBE44F3D = {
+			isa = PBXFileReference;
+			name = "line_search_direction.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search_direction.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		2B125C015B52637F9C8397D1 = {
+			fileRef = "D18E6EF468A5A5D8EBE44F3D";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D20C63362835EBF36AE5D1C8 = {
+			isa = PBXFileReference;
+			name = "line_search_minimizer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search_minimizer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		69ADAD69922EC09069242C60 = {
+			fileRef = "D20C63362835EBF36AE5D1C8";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B182145BDE6F86D118E07514 = {
+			isa = PBXFileReference;
+			name = "line_search_preprocessor.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search_preprocessor.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		BD83B9F17503C394E26C859C = {
+			fileRef = "B182145BDE6F86D118E07514";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		BA1321F538B2DDBA68C2935D = {
+			isa = PBXFileReference;
+			name = "local_parameterization.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/local_parameterization.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		C2D3EAD9E1071535AE018BC1 = {
+			fileRef = "BA1321F538B2DDBA68C2935D";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		C12DA2574CDB1C7934B44079 = {
+			isa = PBXFileReference;
+			name = "loss_function.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/loss_function.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		47E4BEC5C7D3A0BB199A82A7 = {
+			fileRef = "C12DA2574CDB1C7934B44079";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		71C83C1DB80E2E14355BE370 = {
+			isa = PBXFileReference;
+			name = "low_rank_inverse_hessian.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/low_rank_inverse_hessian.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		84AB6EE9C2FA2D3FDF7C8CDB = {
+			fileRef = "71C83C1DB80E2E14355BE370";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		BBC0BBB04B28D0E87E208CE4 = {
+			isa = PBXFileReference;
+			name = "minimizer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/minimizer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		31819AFE67A698D90F4EB517 = {
+			fileRef = "BBC0BBB04B28D0E87E208CE4";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5C2D6F644A9DC2DF60B171E5 = {
+			isa = PBXFileReference;
+			name = "normal_prior.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/normal_prior.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		CE7C1416FE7FA6047F2CADBE = {
+			fileRef = "5C2D6F644A9DC2DF60B171E5";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		08AFC729362B72D47584B0EB = {
+			isa = PBXFileReference;
+			name = "parameter_block_ordering.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/parameter_block_ordering.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		A7D5DDA6C279B007D6A84233 = {
+			fileRef = "08AFC729362B72D47584B0EB";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		C75EF664A40F49355EB5905F = {
+			isa = PBXFileReference;
+			name = "partitioned_matrix_view.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/partitioned_matrix_view.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		ED0B9B94C95F87502B506844 = {
+			fileRef = "C75EF664A40F49355EB5905F";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		27DA9BC4EC6917A9C7A81038 = {
+			isa = PBXFileReference;
+			name = "polynomial.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/polynomial.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		CDDDE6FE14A770C8C3F9FA1F = {
+			fileRef = "27DA9BC4EC6917A9C7A81038";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D21F821D9688AAFA44BD962E = {
+			isa = PBXFileReference;
+			name = "preconditioner.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/preconditioner.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		DC926ADFADD1437A5AA57646 = {
+			fileRef = "D21F821D9688AAFA44BD962E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5E21DC8A9393858149F7A96D = {
+			isa = PBXFileReference;
+			name = "preprocessor.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/preprocessor.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		483A61B6F3160253B629BBF9 = {
+			fileRef = "5E21DC8A9393858149F7A96D";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		00DC2D6C26F93111CF269430 = {
+			isa = PBXFileReference;
+			name = "problem.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/problem.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		87BDDA20D85DFDB271F0349B = {
+			fileRef = "00DC2D6C26F93111CF269430";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		400D1AFCE04543E139EB4E5C = {
+			isa = PBXFileReference;
+			name = "problem_impl.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/problem_impl.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		278D0F0D79737F65E2BBEA49 = {
+			fileRef = "400D1AFCE04543E139EB4E5C";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		F4292EC74F87CFAF9E93369C = {
+			isa = PBXFileReference;
+			name = "program.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/program.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		7F14FD98A2F1D47CFB7A9852 = {
+			fileRef = "F4292EC74F87CFAF9E93369C";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		DD415609E44FF97C1E2D74D1 = {
+			isa = PBXFileReference;
+			name = "reorder_program.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/reorder_program.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		218B4C40B6456942F92FA691 = {
+			fileRef = "DD415609E44FF97C1E2D74D1";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		FDD8407290EE01D09EC729A8 = {
+			isa = PBXFileReference;
+			name = "residual_block.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/residual_block.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		FE4E2359C094933E53B34DB3 = {
+			fileRef = "FDD8407290EE01D09EC729A8";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		D57D1DA9329AA715CC6CABEC = {
+			isa = PBXFileReference;
+			name = "residual_block_utils.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/residual_block_utils.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		AC0915E9950208B6E17BF1C7 = {
+			fileRef = "D57D1DA9329AA715CC6CABEC";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		B4A2640974DE8FE5E334C176 = {
+			isa = PBXFileReference;
+			name = "schur_complement_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_complement_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		C44A500D2D8F17AF2715172C = {
+			fileRef = "B4A2640974DE8FE5E334C176";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		7380F8016D36C20F454B7E66 = {
+			isa = PBXFileReference;
+			name = "schur_eliminator.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_eliminator.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		C3C7E8154411718F0CE13A6C = {
+			fileRef = "7380F8016D36C20F454B7E66";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		1284136AAD86D42F0838F586 = {
+			isa = PBXFileReference;
+			name = "schur_jacobi_preconditioner.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_jacobi_preconditioner.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		AE8581797B0FFA9DFAB5DCD3 = {
+			fileRef = "1284136AAD86D42F0838F586";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		76BFF47124330B43640E6B79 = {
+			isa = PBXFileReference;
+			name = "scratch_evaluate_preparer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/scratch_evaluate_preparer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		10E1165C22071665BF50D1D5 = {
+			fileRef = "76BFF47124330B43640E6B79";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		874310B9A59F6B6439B80210 = {
+			isa = PBXFileReference;
+			name = "single_linkage_clustering.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/single_linkage_clustering.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		8BE16E5540488A24A5BDEC82 = {
+			fileRef = "874310B9A59F6B6439B80210";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		3BB58E827B05B19B52B5B63F = {
+			isa = PBXFileReference;
+			name = "solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		B5535D81EA74DBC146F1BE6D = {
+			fileRef = "3BB58E827B05B19B52B5B63F";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		42CA4DC3C440F02F1E3BAB29 = {
+			isa = PBXFileReference;
+			name = "solver_utils.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/solver_utils.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		E1A5726CE72A981E10E2AEBB = {
+			fileRef = "42CA4DC3C440F02F1E3BAB29";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		8685B5183D585DD02B340BE6 = {
+			isa = PBXFileReference;
+			name = "sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		A1C0321C9C47A048305DF503 = {
+			fileRef = "8685B5183D585DD02B340BE6";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		F6B28A41BD9BCEF2F955384E = {
+			isa = PBXFileReference;
+			name = "sparse_normal_cholesky_solver.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/sparse_normal_cholesky_solver.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		C0B74CA9A0B6274AFD0BA3AC = {
+			fileRef = "F6B28A41BD9BCEF2F955384E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		CD509A12D3E943E0C97BF616 = {
+			isa = PBXFileReference;
+			name = "split.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/split.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		183EAE1CB9874A1B264B7047 = {
+			fileRef = "CD509A12D3E943E0C97BF616";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5091910D4C62330CB1EBD22F = {
+			isa = PBXFileReference;
+			name = "stringprintf.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/stringprintf.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		07500657B0B669ABA5249182 = {
+			fileRef = "5091910D4C62330CB1EBD22F";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		FDA0C72C7913CBFA90728933 = {
+			isa = PBXFileReference;
+			name = "suitesparse.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/suitesparse.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		6BEE49320F0FB7CFF5BDED58 = {
+			fileRef = "FDA0C72C7913CBFA90728933";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		7F68DEDEFE1537168B970D12 = {
+			isa = PBXFileReference;
+			name = "triplet_sparse_matrix.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/triplet_sparse_matrix.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		ADE741C4DE279D348B236473 = {
+			fileRef = "7F68DEDEFE1537168B970D12";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5D473BED760428A80417C46E = {
+			isa = PBXFileReference;
+			name = "trust_region_minimizer.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/trust_region_minimizer.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		63C477340C01461B1963D591 = {
+			fileRef = "5D473BED760428A80417C46E";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		894D6B052650D865755912A4 = {
+			isa = PBXFileReference;
+			name = "trust_region_preprocessor.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/trust_region_preprocessor.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		59314DF2B041673F29F7B0AF = {
+			fileRef = "894D6B052650D865755912A4";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		E68ACD309867B48BCAD7C970 = {
+			isa = PBXFileReference;
+			name = "trust_region_strategy.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/trust_region_strategy.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		61202DCA9BA60698270FB3E3 = {
+			fileRef = "E68ACD309867B48BCAD7C970";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		F33A4F096FC74F63D1B10BDD = {
+			isa = PBXFileReference;
+			name = "types.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/types.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		FE3B29FC97CD97AB5DDFF6B5 = {
+			fileRef = "F33A4F096FC74F63D1B10BDD";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		0A3A3CB572009130F499B004 = {
+			isa = PBXFileReference;
+			name = "visibility_based_preconditioner.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/visibility_based_preconditioner.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		0D8F06E9DDE1F79C2CD3695D = {
+			fileRef = "0A3A3CB572009130F499B004";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		1E579F7042964512349D8971 = {
+			isa = PBXFileReference;
+			name = "visibility.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/visibility.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		9547FFF314E67C8BCDCFB09E = {
+			fileRef = "1E579F7042964512349D8971";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		5B15B23042D9B4BCAB429DFC = {
+			isa = PBXFileReference;
+			name = "wall_time.cc";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/wall_time.cc";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+			lastKnownFileType = "sourcecode.cpp.cpp";
+		};
+		3ADAE356193904E8213D1824 = {
+			fileRef = "5B15B23042D9B4BCAB429DFC";
+			isa = PBXBuildFile;
+			settings = {
+				ATTRIBUTES = (
+					);
+			};
+		};
+		9B551FE402AB90A27FFCC287 = {
+			isa = PBXFileReference;
+			name = "autodiff_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/autodiff_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		DE56443EB6842A6A870EE57E = {
+			isa = PBXFileReference;
+			name = "autodiff_local_parameterization.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/autodiff_local_parameterization.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		E4A5F34409BFBBD9EACCDCB7 = {
+			isa = PBXFileReference;
+			name = "c_api.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/c_api.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		880DCC12D9F6BF339AAD636F = {
+			isa = PBXFileReference;
+			name = "ceres.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/ceres.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		97B050D8C6FB3B2E926DFDFF = {
+			isa = PBXFileReference;
+			name = "conditioned_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/conditioned_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		BC31443A429C84F9A3BAAD6C = {
+			isa = PBXFileReference;
+			name = "cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		6597E3AD5F67F3999C03F133 = {
+			isa = PBXFileReference;
+			name = "cost_function_to_functor.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/cost_function_to_functor.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		87CE8FB56D4D33AE17BFD6AD = {
+			isa = PBXFileReference;
+			name = "covariance.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/covariance.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		6D48C6EB1152ECFB8767763F = {
+			isa = PBXFileReference;
+			name = "crs_matrix.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/crs_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		303A100F02233532E8EF434A = {
+			isa = PBXFileReference;
+			name = "dynamic_autodiff_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/dynamic_autodiff_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		6503859DE1D0E139AF46E387 = {
+			isa = PBXFileReference;
+			name = "dynamic_numeric_diff_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/dynamic_numeric_diff_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3B96C7B4052A7BC22B2EED07 = {
+			isa = PBXFileReference;
+			name = "fpclassify.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/fpclassify.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		AAF2E7157D45A9DF2CAB9A0C = {
+			isa = PBXFileReference;
+			name = "gradient_checker.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/gradient_checker.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C3CB51660C4C2559986EE2DA = {
+			isa = PBXFileReference;
+			name = "gradient_problem.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/gradient_problem.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C7B614CC083046768595543B = {
+			isa = PBXFileReference;
+			name = "gradient_problem_solver.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/gradient_problem_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C33CFDE349380D100A674B7D = {
+			isa = PBXFileReference;
+			name = "autodiff.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/autodiff.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		8148DD8B16B1AABB4E80A279 = {
+			isa = PBXFileReference;
+			name = "disable_warnings.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/disable_warnings.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C0DE0DAE07C3B30461ACAD44 = {
+			isa = PBXFileReference;
+			name = "eigen.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/eigen.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		4436FB46A00A29B223BDD5F8 = {
+			isa = PBXFileReference;
+			name = "fixed_array.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/fixed_array.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		92CF08C8D496A552AE541A05 = {
+			isa = PBXFileReference;
+			name = "macros.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/macros.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		ACC987DC67426A659DFEE3CB = {
+			isa = PBXFileReference;
+			name = "manual_constructor.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/manual_constructor.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		D516E1362E034BBA4697EBA1 = {
+			isa = PBXFileReference;
+			name = "numeric_diff.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/numeric_diff.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		F5F22F8F78DC97BC4FFDC9D8 = {
+			isa = PBXFileReference;
+			name = "port.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/port.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		EBA509186A61E0BB2E4C4240 = {
+			isa = PBXFileReference;
+			name = "reenable_warnings.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/reenable_warnings.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C4945BB2B6E9CBE698945AB4 = {
+			isa = PBXFileReference;
+			name = "scoped_ptr.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/scoped_ptr.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3D74E0EB39CF1E51C3EBB723 = {
+			isa = PBXFileReference;
+			name = "variadic_evaluate.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/internal/variadic_evaluate.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		D257488EBAA789FD1229FD54 = {
+			isa = PBXFileReference;
+			name = "iteration_callback.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/iteration_callback.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3D6EB5855D8C88428F6E6945 = {
+			isa = PBXFileReference;
+			name = "jet.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/jet.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FED619E7899BA8F7257EE115 = {
+			isa = PBXFileReference;
+			name = "local_parameterization.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/local_parameterization.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3AC95F52BB499D0B0B66F3DE = {
+			isa = PBXFileReference;
+			name = "loss_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/loss_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C16DC62778AF1034836BBE38 = {
+			isa = PBXFileReference;
+			name = "normal_prior.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/normal_prior.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3D88E57684EE030C1EB9631E = {
+			isa = PBXFileReference;
+			name = "numeric_diff_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/numeric_diff_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		30BC34176FD2AB5E971A85D3 = {
+			isa = PBXFileReference;
+			name = "ordered_groups.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/ordered_groups.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		94EF3B0F7F6476C552AA4C9C = {
+			isa = PBXFileReference;
+			name = "problem.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/problem.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		A9DCC99F315F62238A0D970B = {
+			isa = PBXFileReference;
+			name = "rotation.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/rotation.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		012A2E77DA0ACF31437A2E5C = {
+			isa = PBXFileReference;
+			name = "sized_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/sized_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		1B19495DAE5E5BE0C55F836D = {
+			isa = PBXFileReference;
+			name = "solver.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		ED672F9EC78B27B7F3576C4D = {
+			isa = PBXFileReference;
+			name = "types.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/types.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		87A580618574C98885F14600 = {
+			isa = PBXFileReference;
+			name = "version.h";
+			path = "../libs/libmv/third_party/ceres/include/ceres/version.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FDD866DEC40701305398D921 = {
+			isa = PBXFileReference;
+			name = "array_utils.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/array_utils.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		13470A5DA77CAB3F98792B38 = {
+			isa = PBXFileReference;
+			name = "blas.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/blas.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		5561ABE0D004524E3839BA53 = {
+			isa = PBXFileReference;
+			name = "block_evaluate_preparer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_evaluate_preparer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0029A8F0BEE35E580D46099E = {
+			isa = PBXFileReference;
+			name = "block_jacobian_writer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_jacobian_writer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		4CE920683D3916A8161E7B67 = {
+			isa = PBXFileReference;
+			name = "block_jacobi_preconditioner.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_jacobi_preconditioner.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		8628C9157A30AB66FFD21B0E = {
+			isa = PBXFileReference;
+			name = "block_random_access_dense_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_dense_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C28E696194D97D72D28ECD67 = {
+			isa = PBXFileReference;
+			name = "block_random_access_diagonal_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_diagonal_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		BE7183EDFF83E840F85FD61B = {
+			isa = PBXFileReference;
+			name = "block_random_access_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		50A1CA76E15AB86C82B19C23 = {
+			isa = PBXFileReference;
+			name = "block_random_access_sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_random_access_sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		7E107E04226C1F9671A25B8F = {
+			isa = PBXFileReference;
+			name = "block_sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		BEF14DF19C58543A24C4C1D0 = {
+			isa = PBXFileReference;
+			name = "block_structure.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/block_structure.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		955F97887DCC18DDF269D266 = {
+			isa = PBXFileReference;
+			name = "callbacks.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/callbacks.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FD8F55AD277A73EE549CFBDD = {
+			isa = PBXFileReference;
+			name = "canonical_views_clustering.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/canonical_views_clustering.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		B268AD6DE20E9544D0FA43B6 = {
+			isa = PBXFileReference;
+			name = "casts.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/casts.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		98E90A6EB6B0004DBC332862 = {
+			isa = PBXFileReference;
+			name = "cgnr_linear_operator.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/cgnr_linear_operator.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		94F7309E87A953D417817B41 = {
+			isa = PBXFileReference;
+			name = "cgnr_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/cgnr_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FA4283791706616956414FD4 = {
+			isa = PBXFileReference;
+			name = "collections_port.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/collections_port.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FB04CC850ED9BAA0732E6E58 = {
+			isa = PBXFileReference;
+			name = "compressed_col_sparse_matrix_utils.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/compressed_col_sparse_matrix_utils.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		7D15A1027B6CA823BF62FE96 = {
+			isa = PBXFileReference;
+			name = "compressed_row_jacobian_writer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/compressed_row_jacobian_writer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		D4BF39E00ADDC370AE7FC2FC = {
+			isa = PBXFileReference;
+			name = "compressed_row_sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/compressed_row_sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		E9228B78AC2D7472B4696292 = {
+			isa = PBXFileReference;
+			name = "conjugate_gradients_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/conjugate_gradients_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		D6BBF7EFEE4CF9B61C6E5F2D = {
+			isa = PBXFileReference;
+			name = "coordinate_descent_minimizer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/coordinate_descent_minimizer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0767217E5FA54F8005D8628F = {
+			isa = PBXFileReference;
+			name = "corrector.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/corrector.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		7470DAAFE08E1C4198FA1C2C = {
+			isa = PBXFileReference;
+			name = "covariance_impl.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/covariance_impl.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		A1CB20B6BEE84A201548032D = {
+			isa = PBXFileReference;
+			name = "cxsparse.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/cxsparse.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		627C52EDBFE8E664B7FB5609 = {
+			isa = PBXFileReference;
+			name = "dense_jacobian_writer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_jacobian_writer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		1C2232090EB07FD68FDFC6FC = {
+			isa = PBXFileReference;
+			name = "dense_normal_cholesky_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_normal_cholesky_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		DD6D2360A0F99ABAE66F041A = {
+			isa = PBXFileReference;
+			name = "dense_qr_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_qr_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0D11C1EA9DC972AED3667084 = {
+			isa = PBXFileReference;
+			name = "dense_sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dense_sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		B3F7A1E34FEA67D3B55A402B = {
+			isa = PBXFileReference;
+			name = "detect_structure.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/detect_structure.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		5AEAB42732570635E96D3933 = {
+			isa = PBXFileReference;
+			name = "dogleg_strategy.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dogleg_strategy.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		B6C513E18D1596461E1DD043 = {
+			isa = PBXFileReference;
+			name = "dynamic_compressed_row_finalizer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dynamic_compressed_row_finalizer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		F500AAA6154BC8976B77FDFA = {
+			isa = PBXFileReference;
+			name = "dynamic_compressed_row_jacobian_writer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dynamic_compressed_row_jacobian_writer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		469520929FB5BA4FF769735D = {
+			isa = PBXFileReference;
+			name = "dynamic_compressed_row_sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/dynamic_compressed_row_sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		87B68E30F5AD654C00C6DF23 = {
+			isa = PBXFileReference;
+			name = "evaluator.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/evaluator.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		BC7E7D8D1FE7D42F56792569 = {
+			isa = PBXFileReference;
+			name = "execution_summary.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/execution_summary.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		783F209D2D677BDC94A504BD = {
+			isa = PBXFileReference;
+			name = "file.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/file.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		5FE136C4B25DE435B02C6A38 = {
+			isa = PBXFileReference;
+			name = "gradient_checking_cost_function.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/gradient_checking_cost_function.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		62D6B7E333D54C67E5D1E4D9 = {
+			isa = PBXFileReference;
+			name = "gradient_problem_evaluator.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/gradient_problem_evaluator.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		579E7A950AA5CAF92386FDAF = {
+			isa = PBXFileReference;
+			name = "graph_algorithms.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/graph_algorithms.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		D75898D20F1FB054767F6108 = {
+			isa = PBXFileReference;
+			name = "graph.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/graph.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		4E4FDB7D1E5BDC4829FDFEA2 = {
+			isa = PBXFileReference;
+			name = "implicit_schur_complement.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/implicit_schur_complement.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		12733DC9CB0932EABA8F4B5E = {
+			isa = PBXFileReference;
+			name = "incomplete_lq_factorization.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/incomplete_lq_factorization.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		042C844CBB2553B82C52740F = {
+			isa = PBXFileReference;
+			name = "integral_types.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/integral_types.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		887801FDB7821B83A749140C = {
+			isa = PBXFileReference;
+			name = "iterative_schur_complement_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/iterative_schur_complement_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		6FCCD3D6117026D73F3FBBC2 = {
+			isa = PBXFileReference;
+			name = "lapack.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/lapack.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		91C3092B8C0A96861F99DA16 = {
+			isa = PBXFileReference;
+			name = "levenberg_marquardt_strategy.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/levenberg_marquardt_strategy.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		2987F0F68711D7B076A8D713 = {
+			isa = PBXFileReference;
+			name = "linear_least_squares_problems.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/linear_least_squares_problems.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		2BE36B6527A1BB9E17385829 = {
+			isa = PBXFileReference;
+			name = "linear_operator.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/linear_operator.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		E885AFCF9E5F317DA4C4BDD6 = {
+			isa = PBXFileReference;
+			name = "linear_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/linear_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		5924A352A1E64227D380861D = {
+			isa = PBXFileReference;
+			name = "line_search_direction.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search_direction.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3368382EBB8D4C27EC96D634 = {
+			isa = PBXFileReference;
+			name = "line_search.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C06764C9D2CB801284726531 = {
+			isa = PBXFileReference;
+			name = "line_search_minimizer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search_minimizer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		415749FED8CEE4136BD20C08 = {
+			isa = PBXFileReference;
+			name = "line_search_preprocessor.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/line_search_preprocessor.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		F67EBC88F7A92197277B2534 = {
+			isa = PBXFileReference;
+			name = "low_rank_inverse_hessian.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/low_rank_inverse_hessian.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		E40DAB38F86143586C874124 = {
+			isa = PBXFileReference;
+			name = "map_util.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/map_util.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		ACA0BD931C296ACD8F3A99EB = {
+			isa = PBXFileReference;
+			name = "minimizer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/minimizer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		45E999627F8E56913701057A = {
+			isa = PBXFileReference;
+			name = "mutex.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/mutex.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		56DF5191C4771C2BC3948571 = {
+			isa = PBXFileReference;
+			name = "parameter_block.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/parameter_block.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		E7C40D52C566879ED7C6BE92 = {
+			isa = PBXFileReference;
+			name = "parameter_block_ordering.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/parameter_block_ordering.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		8592813B2973BC37DAF05617 = {
+			isa = PBXFileReference;
+			name = "partitioned_matrix_view.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/partitioned_matrix_view.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		627AD6ADCADEAB80C5A94D2D = {
+			isa = PBXFileReference;
+			name = "partitioned_matrix_view_impl.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/partitioned_matrix_view_impl.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		8D2806F18C5AF023D3EC11B7 = {
+			isa = PBXFileReference;
+			name = "polynomial.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/polynomial.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0721038646D6F0A900C853FF = {
+			isa = PBXFileReference;
+			name = "preconditioner.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/preconditioner.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		2529D172EFD33024A05AA8D8 = {
+			isa = PBXFileReference;
+			name = "preprocessor.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/preprocessor.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		DA00793BA0DAD3C80F642385 = {
+			isa = PBXFileReference;
+			name = "problem_impl.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/problem_impl.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		EEC71D2F8263A5F26F0B466C = {
+			isa = PBXFileReference;
+			name = "program_evaluator.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/program_evaluator.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0590285B2A737DA7E0BB6650 = {
+			isa = PBXFileReference;
+			name = "program.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/program.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0865A972F22E8585A0DC5BCB = {
+			isa = PBXFileReference;
+			name = "random.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/random.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		EC6E49A0105C70102CDC1D29 = {
+			isa = PBXFileReference;
+			name = "reorder_program.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/reorder_program.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		97BA0806AF072A33F347C96F = {
+			isa = PBXFileReference;
+			name = "residual_block.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/residual_block.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		B467370AEC78C9D11EF1BA50 = {
+			isa = PBXFileReference;
+			name = "residual_block_utils.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/residual_block_utils.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		AC5B4E438AC9C37885F19B04 = {
+			isa = PBXFileReference;
+			name = "schur_complement_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_complement_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		AFCC5649A786543145C68FCF = {
+			isa = PBXFileReference;
+			name = "schur_eliminator.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_eliminator.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		DB8DD383F878A2F7411B6BD8 = {
+			isa = PBXFileReference;
+			name = "schur_eliminator_impl.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_eliminator_impl.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		4BD36B813E2C3A5A5F624651 = {
+			isa = PBXFileReference;
+			name = "schur_jacobi_preconditioner.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/schur_jacobi_preconditioner.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		29EC1DC8414FFFF257D35013 = {
+			isa = PBXFileReference;
+			name = "scratch_evaluate_preparer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/scratch_evaluate_preparer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		54489C304D6A67DB2FAC8BE1 = {
+			isa = PBXFileReference;
+			name = "single_linkage_clustering.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/single_linkage_clustering.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		99D7EB8CA1D22C046E06794A = {
+			isa = PBXFileReference;
+			name = "small_blas.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/small_blas.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		ADC55FB4EB6B8BE0190EFE80 = {
+			isa = PBXFileReference;
+			name = "solver_utils.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/solver_utils.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		667860BD0D273F07D034D197 = {
+			isa = PBXFileReference;
+			name = "sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		58BF24C476F6A8287A0D1D6B = {
+			isa = PBXFileReference;
+			name = "sparse_normal_cholesky_solver.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/sparse_normal_cholesky_solver.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		9DBFF906DBDD52DFF423009C = {
+			isa = PBXFileReference;
+			name = "split.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/split.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		7EC34FDF40B9C3FF8BFF15F2 = {
+			isa = PBXFileReference;
+			name = "stl_util.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/stl_util.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		9C5E41F073D85BE1704D1023 = {
+			isa = PBXFileReference;
+			name = "stringprintf.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/stringprintf.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		15C31C4B6B596EB1200BB19A = {
+			isa = PBXFileReference;
+			name = "suitesparse.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/suitesparse.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		763E1BE7EDDC259E87716FBF = {
+			isa = PBXFileReference;
+			name = "triplet_sparse_matrix.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/triplet_sparse_matrix.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		16F34F443C0051C564B32F02 = {
+			isa = PBXFileReference;
+			name = "trust_region_minimizer.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/trust_region_minimizer.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3BC11016ABDAC11F31D2A610 = {
+			isa = PBXFileReference;
+			name = "trust_region_preprocessor.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/trust_region_preprocessor.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		6E81845CC8991F2800A507EF = {
+			isa = PBXFileReference;
+			name = "trust_region_strategy.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/trust_region_strategy.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		2D55008ECF88E1DDF45E326D = {
+			isa = PBXFileReference;
+			name = "visibility_based_preconditioner.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/visibility_based_preconditioner.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		338916377C8F7355D6524BC8 = {
+			isa = PBXFileReference;
+			name = "visibility.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/visibility.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		A7274243A29355CF2614C297 = {
+			isa = PBXFileReference;
+			name = "wall_time.h";
+			path = "../libs/libmv/third_party/ceres/internal/ceres/wall_time.h";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FE2C65CCAA1B1916464BA502 = {
+			isa = PBXFileReference;
+			name = "libmv.pro";
+			path = "libmv.pro";
+			refType = 4;
+			sourceTree = "SOURCE_ROOT";
+		};
+		883D7615C4D2DE3FA1218F12 = {
+			isa = PBXGroup;
+			children = (
+				"4458B98565818D7E2682FA2D");
+			name = "Headers";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		4458B98565818D7E2682FA2D = {
+			isa = PBXGroup;
+			children = (
+				"4ADF3BA822EEA2B3AF314130");
+			name = "..";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		4ADF3BA822EEA2B3AF314130 = {
+			isa = PBXGroup;
+			children = (
+				"46510880F7F001E93AADB6B3");
+			name = "libs";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		46510880F7F001E93AADB6B3 = {
+			isa = PBXGroup;
+			children = (
+				"E750BC9765F66E52E6D22EC1");
+			name = "libmv";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		E750BC9765F66E52E6D22EC1 = {
+			isa = PBXGroup;
+			children = (
+				"18F2545D109212ED70CBA344");
+			name = "third_party";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		18F2545D109212ED70CBA344 = {
+			isa = PBXGroup;
+			children = (
+				"C3800A8B7CA6CB62E9E0D107",
+				"24D3374E18D82FBBFCDC469E");
+			name = "ceres";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		C3800A8B7CA6CB62E9E0D107 = {
+			isa = PBXGroup;
+			children = (
+				"0EA43894F701CF96B021EA7A");
+			name = "include";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		0EA43894F701CF96B021EA7A = {
+			isa = PBXGroup;
+			children = (
+				"9B551FE402AB90A27FFCC287",
+				"DE56443EB6842A6A870EE57E",
+				"E4A5F34409BFBBD9EACCDCB7",
+				"880DCC12D9F6BF339AAD636F",
+				"97B050D8C6FB3B2E926DFDFF",
+				"BC31443A429C84F9A3BAAD6C",
+				"6597E3AD5F67F3999C03F133",
+				"87CE8FB56D4D33AE17BFD6AD",
+				"6D48C6EB1152ECFB8767763F",
+				"303A100F02233532E8EF434A",
+				"6503859DE1D0E139AF46E387",
+				"3B96C7B4052A7BC22B2EED07",
+				"AAF2E7157D45A9DF2CAB9A0C",
+				"C3CB51660C4C2559986EE2DA",
+				"C7B614CC083046768595543B",
+				"78CD30B7CD3B244408409081",
+				"D257488EBAA789FD1229FD54",
+				"3D6EB5855D8C88428F6E6945",
+				"FED619E7899BA8F7257EE115",
+				"3AC95F52BB499D0B0B66F3DE",
+				"C16DC62778AF1034836BBE38",
+				"3D88E57684EE030C1EB9631E",
+				"30BC34176FD2AB5E971A85D3",
+				"94EF3B0F7F6476C552AA4C9C",
+				"A9DCC99F315F62238A0D970B",
+				"012A2E77DA0ACF31437A2E5C",
+				"1B19495DAE5E5BE0C55F836D",
+				"ED672F9EC78B27B7F3576C4D",
+				"87A580618574C98885F14600");
+			name = "ceres";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		78CD30B7CD3B244408409081 = {
+			isa = PBXGroup;
+			children = (
+				"C33CFDE349380D100A674B7D",
+				"8148DD8B16B1AABB4E80A279",
+				"C0DE0DAE07C3B30461ACAD44",
+				"4436FB46A00A29B223BDD5F8",
+				"92CF08C8D496A552AE541A05",
+				"ACC987DC67426A659DFEE3CB",
+				"D516E1362E034BBA4697EBA1",
+				"F5F22F8F78DC97BC4FFDC9D8",
+				"EBA509186A61E0BB2E4C4240",
+				"C4945BB2B6E9CBE698945AB4",
+				"3D74E0EB39CF1E51C3EBB723");
+			name = "internal";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		24D3374E18D82FBBFCDC469E = {
+			isa = PBXGroup;
+			children = (
+				"A2A2E804F9E96B72FB057DFD");
+			name = "internal";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		A2A2E804F9E96B72FB057DFD = {
+			isa = PBXGroup;
+			children = (
+				"FDD866DEC40701305398D921",
+				"13470A5DA77CAB3F98792B38",
+				"5561ABE0D004524E3839BA53",
+				"0029A8F0BEE35E580D46099E",
+				"4CE920683D3916A8161E7B67",
+				"8628C9157A30AB66FFD21B0E",
+				"C28E696194D97D72D28ECD67",
+				"BE7183EDFF83E840F85FD61B",
+				"50A1CA76E15AB86C82B19C23",
+				"7E107E04226C1F9671A25B8F",
+				"BEF14DF19C58543A24C4C1D0",
+				"955F97887DCC18DDF269D266",
+				"FD8F55AD277A73EE549CFBDD",
+				"B268AD6DE20E9544D0FA43B6",
+				"98E90A6EB6B0004DBC332862",
+				"94F7309E87A953D417817B41",
+				"FA4283791706616956414FD4",
+				"FB04CC850ED9BAA0732E6E58",
+				"7D15A1027B6CA823BF62FE96",
+				"D4BF39E00ADDC370AE7FC2FC",
+				"E9228B78AC2D7472B4696292",
+				"D6BBF7EFEE4CF9B61C6E5F2D",
+				"0767217E5FA54F8005D8628F",
+				"7470DAAFE08E1C4198FA1C2C",
+				"A1CB20B6BEE84A201548032D",
+				"627C52EDBFE8E664B7FB5609",
+				"1C2232090EB07FD68FDFC6FC",
+				"DD6D2360A0F99ABAE66F041A",
+				"0D11C1EA9DC972AED3667084",
+				"B3F7A1E34FEA67D3B55A402B",
+				"5AEAB42732570635E96D3933",
+				"B6C513E18D1596461E1DD043",
+				"F500AAA6154BC8976B77FDFA",
+				"469520929FB5BA4FF769735D",
+				"87B68E30F5AD654C00C6DF23",
+				"BC7E7D8D1FE7D42F56792569",
+				"783F209D2D677BDC94A504BD",
+				"5FE136C4B25DE435B02C6A38",
+				"62D6B7E333D54C67E5D1E4D9",
+				"579E7A950AA5CAF92386FDAF",
+				"D75898D20F1FB054767F6108",
+				"4E4FDB7D1E5BDC4829FDFEA2",
+				"12733DC9CB0932EABA8F4B5E",
+				"042C844CBB2553B82C52740F",
+				"887801FDB7821B83A749140C",
+				"6FCCD3D6117026D73F3FBBC2",
+				"91C3092B8C0A96861F99DA16",
+				"2987F0F68711D7B076A8D713",
+				"2BE36B6527A1BB9E17385829",
+				"E885AFCF9E5F317DA4C4BDD6",
+				"5924A352A1E64227D380861D",
+				"3368382EBB8D4C27EC96D634",
+				"C06764C9D2CB801284726531",
+				"415749FED8CEE4136BD20C08",
+				"F67EBC88F7A92197277B2534",
+				"E40DAB38F86143586C874124",
+				"ACA0BD931C296ACD8F3A99EB",
+				"45E999627F8E56913701057A",
+				"56DF5191C4771C2BC3948571",
+				"E7C40D52C566879ED7C6BE92",
+				"8592813B2973BC37DAF05617",
+				"627AD6ADCADEAB80C5A94D2D",
+				"8D2806F18C5AF023D3EC11B7",
+				"0721038646D6F0A900C853FF",
+				"2529D172EFD33024A05AA8D8",
+				"DA00793BA0DAD3C80F642385",
+				"EEC71D2F8263A5F26F0B466C",
+				"0590285B2A737DA7E0BB6650",
+				"0865A972F22E8585A0DC5BCB",
+				"EC6E49A0105C70102CDC1D29",
+				"97BA0806AF072A33F347C96F",
+				"B467370AEC78C9D11EF1BA50",
+				"AC5B4E438AC9C37885F19B04",
+				"AFCC5649A786543145C68FCF",
+				"DB8DD383F878A2F7411B6BD8",
+				"4BD36B813E2C3A5A5F624651",
+				"29EC1DC8414FFFF257D35013",
+				"54489C304D6A67DB2FAC8BE1",
+				"99D7EB8CA1D22C046E06794A",
+				"ADC55FB4EB6B8BE0190EFE80",
+				"667860BD0D273F07D034D197",
+				"58BF24C476F6A8287A0D1D6B",
+				"9DBFF906DBDD52DFF423009C",
+				"7EC34FDF40B9C3FF8BFF15F2",
+				"9C5E41F073D85BE1704D1023",
+				"15C31C4B6B596EB1200BB19A",
+				"763E1BE7EDDC259E87716FBF",
+				"16F34F443C0051C564B32F02",
+				"3BC11016ABDAC11F31D2A610",
+				"6E81845CC8991F2800A507EF",
+				"2D55008ECF88E1DDF45E326D",
+				"338916377C8F7355D6524BC8",
+				"A7274243A29355CF2614C297");
+			name = "ceres";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		BFA3A29D17FD123C907B6E35 = {
+			isa = PBXGroup;
+			children = (
+				"CF7B803FE3C9F0CA6A6971C2");
+			name = "..";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		CF7B803FE3C9F0CA6A6971C2 = {
+			isa = PBXGroup;
+			children = (
+				"9BD23CED9D47D64548E040D9");
+			name = "libs";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		9BD23CED9D47D64548E040D9 = {
+			isa = PBXGroup;
+			children = (
+				"4A3FF501813D81D56D0596B3");
+			name = "libmv";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		4A3FF501813D81D56D0596B3 = {
+			isa = PBXGroup;
+			children = (
+				"7D473F009A54F269F1A973B9");
+			name = "third_party";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		7D473F009A54F269F1A973B9 = {
+			isa = PBXGroup;
+			children = (
+				"15E205B8E862C966E311E996");
+			name = "ceres";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		15E205B8E862C966E311E996 = {
+			isa = PBXGroup;
+			children = (
+				"9E75DAF017B7AF4C9E9BC0AF");
+			name = "internal";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		9E75DAF017B7AF4C9E9BC0AF = {
+			isa = PBXGroup;
+			children = (
+				"84D9B551661DD9BECFD17FF7",
+				"AAE99EADD12C277135D6F642",
+				"320E27C21A5999C070795193",
+				"67C38A02B0B3EEB2355BC42E",
+				"B599C79B48CAE49947D9E1F5",
+				"B6FFEA69861DA2F2029EA6B1",
+				"5224D969C5E2CAC2CA6DF317",
+				"646065A790D1252A894DE57E",
+				"7BE22E4C565FAAC33974B0C4",
+				"B4DA619D9BB859C9DD2F04D7",
+				"0F8475937B5C31C35D732E63",
+				"AB9624F845A2E28D27FDF182",
+				"CE66EE5FCD9F2D65B5FB3F4F",
+				"5D104905BCDC117D0E5B3ACA",
+				"E5EDD3EF9BB06CB9380264F4",
+				"0E56344B3DD401050A1E76CE",
+				"5B216E88AF3DF51721498CA0",
+				"A55389F7C5B3FF384C4BDCAB",
+				"E9F38368BBF59302DD5E2840",
+				"740BD9BFEFE5DB9B84234F54",
+				"2EF1828AFD1E6F2BA72923B0",
+				"31ECD7D2EAE344D0BA6B2610",
+				"4F58752746527250347DF46E",
+				"92D732AD7E8CE37584287794",
+				"C49F574402F4335D1571C657",
+				"798207DC65ED3AC193637EDF",
+				"C3F3AE93E440BAF903FC7CED",
+				"54723E9375016E9A4B7C249E",
+				"4E8940C695C973922F62F274",
+				"929D10DA7DB770C6F30DFAE7",
+				"D94C99D18BF7B1D9B40A39C1",
+				"5960383E3690015CF711DB5C",
+				"20597DDC00F9611B722E1128",
+				"C8A2C95C5786A77DBDA376A8",
+				"E6DC45F9B693392A8154267A",
+				"D33CABB006704C8D8D89E529",
+				"6DE9663521D9081BF595352C",
+				"0D68617C99E4E745B8D3FCF8",
+				"B34FF15B9C77511A9F968E9E",
+				"D09F746A4C8BD140154C812E",
+				"8129446D587C9175E52476A0",
+				"36613086616DD933D4F0345C",
+				"29419E8927C1728B28C8389F",
+				"FC00D84E5B9B9D0F97779708",
+				"7B634029053DE50A55F841DC",
+				"1A69F5F307C05845F9924A07",
+				"63B4430034FE8E939985D811",
+				"D18E6EF468A5A5D8EBE44F3D",
+				"D20C63362835EBF36AE5D1C8",
+				"B182145BDE6F86D118E07514",
+				"BA1321F538B2DDBA68C2935D",
+				"C12DA2574CDB1C7934B44079",
+				"71C83C1DB80E2E14355BE370",
+				"BBC0BBB04B28D0E87E208CE4",
+				"5C2D6F644A9DC2DF60B171E5",
+				"08AFC729362B72D47584B0EB",
+				"C75EF664A40F49355EB5905F",
+				"27DA9BC4EC6917A9C7A81038",
+				"D21F821D9688AAFA44BD962E",
+				"5E21DC8A9393858149F7A96D",
+				"00DC2D6C26F93111CF269430",
+				"400D1AFCE04543E139EB4E5C",
+				"F4292EC74F87CFAF9E93369C",
+				"DD415609E44FF97C1E2D74D1",
+				"FDD8407290EE01D09EC729A8",
+				"D57D1DA9329AA715CC6CABEC",
+				"B4A2640974DE8FE5E334C176",
+				"7380F8016D36C20F454B7E66",
+				"1284136AAD86D42F0838F586",
+				"76BFF47124330B43640E6B79",
+				"874310B9A59F6B6439B80210",
+				"3BB58E827B05B19B52B5B63F",
+				"42CA4DC3C440F02F1E3BAB29",
+				"8685B5183D585DD02B340BE6",
+				"F6B28A41BD9BCEF2F955384E",
+				"CD509A12D3E943E0C97BF616",
+				"5091910D4C62330CB1EBD22F",
+				"FDA0C72C7913CBFA90728933",
+				"7F68DEDEFE1537168B970D12",
+				"5D473BED760428A80417C46E",
+				"894D6B052650D865755912A4",
+				"E68ACD309867B48BCAD7C970",
+				"F33A4F096FC74F63D1B10BDD",
+				"0A3A3CB572009130F499B004",
+				"1E579F7042964512349D8971",
+				"5B15B23042D9B4BCAB429DFC");
+			name = "ceres";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		E6DC45F9B693392A8154267A = {
+			isa = PBXGroup;
+			children = (
+				"B6CE05B179BEF1709628EB00",
+				"D7A7AEC066FB3F8EC1E0C3A0");
+			name = "generated";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		FB61758D0F0FDA4BA867C3D5 = {
+			isa = PBXGroup;
+			children = (
+				"BFA3A29D17FD123C907B6E35");
+			name = "Sources";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		7CABE3C80E79AD2B307756D2 = {
+			isa = PBXGroup;
+			children = (
+				"FE2C65CCAA1B1916464BA502");
+			name = "Sources [qmake]";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		A0A52A2ADF7A1E2A99738674 = {
+			buildActionMask = 2147483647;
+			files = (
+				);
+			generatedFileNames = (
+				"C742954408B98ECDD2713531",
+				"F036A25AC4866E41415D627B",
+				"84FF5CF7319722287666C940",
+				"CA178A418095B644C5553059",
+				"52C4C6B68461732E36B3CC8E",
+				"F13567BD5160C4F4D0E5E9FB",
+				"51B634594F4D7B2222621D8E",
+				"88C882F5567663C1841327F1",
+				"AFE1CE08078EA8BC4E349C11",
+				"950B542B3093AF21ECF3873C",
+				"57F89DB395D1DF7DC28499ED",
+				"259464435A0CADFE48E1A724",
+				"6CABF0A0CF76174C00743AE7",
+				"CC2E2E7591AA0D0DFB5D661F",
+				"C172A7184B935B2516BE3F0A",
+				"7E37AC62EC3922E830CCB3ED",
+				"CA8CCBDF19F1026A57CF9ADE",
+				"448895E42E35E41DA8FFEAEE",
+				"51BE6DFF322AED039279EF7A",
+				"5BFACFD25C1017929402C8DA",
+				"D50A3E6D4DE8A2CB0AB88378",
+				"7D8CD866D856C2AB7C98B094",
+				"16A4991C63F4AF9C27A44CBC",
+				"FF7748B3B5539B6ABF06E34E",
+				"09946EE862401DCA2021BB3A",
+				"CEA1488F1FD09D7710085F79",
+				"B9985531B49A171E97D088E2",
+				"0649A3A696EB4C52491B61FF",
+				"8FB4E48018289B9D6EC9A83E",
+				"8CEC102B1ED783956C635642",
+				"64B3FEA32227FACB64E10A1F",
+				"4CA65B8A3387D42619FE7A13",
+				"E47BEAEE6BA0C93BDB451799",
+				"03506E16F57E4A1C07E2C9B6",
+				"A216B185673E9309CE484F89",
+				"5DF5929A8BB400EDDE93EE76",
+				"61B4FC864C3C31060EE300E0",
+				"F22BC735A62A0119FC44AD88",
+				"60F93D3CDA84413261E58C7F",
+				"3325848CF225154623C42406",
+				"BC64D64F738DA4DC5797A469",
+				"17076203E8F1069A4D05EF95",
+				"97A0F8B27563C9B5FEA9BDBD",
+				"5CC88364F81E9BC39E9A0A81",
+				"520C93DC893ACBC9622AF5FC",
+				"8255F4B36C64252C4FAAF1B8",
+				"164971DDF9523B79FAC647BC",
+				"97DC77BF33787A36665155DB",
+				"2B125C015B52637F9C8397D1",
+				"69ADAD69922EC09069242C60",
+				"BD83B9F17503C394E26C859C",
+				"C2D3EAD9E1071535AE018BC1",
+				"47E4BEC5C7D3A0BB199A82A7",
+				"84AB6EE9C2FA2D3FDF7C8CDB",
+				"31819AFE67A698D90F4EB517",
+				"CE7C1416FE7FA6047F2CADBE",
+				"A7D5DDA6C279B007D6A84233",
+				"ED0B9B94C95F87502B506844",
+				"CDDDE6FE14A770C8C3F9FA1F",
+				"DC926ADFADD1437A5AA57646",
+				"483A61B6F3160253B629BBF9",
+				"87BDDA20D85DFDB271F0349B",
+				"278D0F0D79737F65E2BBEA49",
+				"7F14FD98A2F1D47CFB7A9852",
+				"218B4C40B6456942F92FA691",
+				"FE4E2359C094933E53B34DB3",
+				"AC0915E9950208B6E17BF1C7",
+				"C44A500D2D8F17AF2715172C",
+				"C3C7E8154411718F0CE13A6C",
+				"AE8581797B0FFA9DFAB5DCD3",
+				"10E1165C22071665BF50D1D5",
+				"8BE16E5540488A24A5BDEC82",
+				"B5535D81EA74DBC146F1BE6D",
+				"E1A5726CE72A981E10E2AEBB",
+				"A1C0321C9C47A048305DF503",
+				"C0B74CA9A0B6274AFD0BA3AC",
+				"183EAE1CB9874A1B264B7047",
+				"07500657B0B669ABA5249182",
+				"6BEE49320F0FB7CFF5BDED58",
+				"ADE741C4DE279D348B236473",
+				"63C477340C01461B1963D591",
+				"59314DF2B041673F29F7B0AF",
+				"61202DCA9BA60698270FB3E3",
+				"FE3B29FC97CD97AB5DDFF6B5",
+				"0D8F06E9DDE1F79C2CD3695D",
+				"9547FFF314E67C8BCDCFB09E",
+				"3ADAE356193904E8213D1824");
+			isa = PBXShellScriptBuildPhase;
+			name = "Qt Preprocessors";
+			neededFileNames = (
+				"C742954408B98ECDD2713531",
+				"F036A25AC4866E41415D627B",
+				"84FF5CF7319722287666C940",
+				"CA178A418095B644C5553059",
+				"52C4C6B68461732E36B3CC8E",
+				"F13567BD5160C4F4D0E5E9FB",
+				"51B634594F4D7B2222621D8E",
+				"88C882F5567663C1841327F1",
+				"AFE1CE08078EA8BC4E349C11",
+				"950B542B3093AF21ECF3873C",
+				"57F89DB395D1DF7DC28499ED",
+				"259464435A0CADFE48E1A724",
+				"6CABF0A0CF76174C00743AE7",
+				"CC2E2E7591AA0D0DFB5D661F",
+				"C172A7184B935B2516BE3F0A",
+				"7E37AC62EC3922E830CCB3ED",
+				"CA8CCBDF19F1026A57CF9ADE",
+				"448895E42E35E41DA8FFEAEE",
+				"51BE6DFF322AED039279EF7A",
+				"5BFACFD25C1017929402C8DA",
+				"D50A3E6D4DE8A2CB0AB88378",
+				"7D8CD866D856C2AB7C98B094",
+				"16A4991C63F4AF9C27A44CBC",
+				"FF7748B3B5539B6ABF06E34E",
+				"09946EE862401DCA2021BB3A",
+				"CEA1488F1FD09D7710085F79",
+				"B9985531B49A171E97D088E2",
+				"0649A3A696EB4C52491B61FF",
+				"8FB4E48018289B9D6EC9A83E",
+				"8CEC102B1ED783956C635642",
+				"64B3FEA32227FACB64E10A1F",
+				"4CA65B8A3387D42619FE7A13",
+				"E47BEAEE6BA0C93BDB451799",
+				"03506E16F57E4A1C07E2C9B6",
+				"A216B185673E9309CE484F89",
+				"5DF5929A8BB400EDDE93EE76",
+				"61B4FC864C3C31060EE300E0",
+				"F22BC735A62A0119FC44AD88",
+				"60F93D3CDA84413261E58C7F",
+				"3325848CF225154623C42406",
+				"BC64D64F738DA4DC5797A469",
+				"17076203E8F1069A4D05EF95",
+				"97A0F8B27563C9B5FEA9BDBD",
+				"5CC88364F81E9BC39E9A0A81",
+				"520C93DC893ACBC9622AF5FC",
+				"8255F4B36C64252C4FAAF1B8",
+				"164971DDF9523B79FAC647BC",
+				"97DC77BF33787A36665155DB",
+				"2B125C015B52637F9C8397D1",
+				"69ADAD69922EC09069242C60",
+				"BD83B9F17503C394E26C859C",
+				"C2D3EAD9E1071535AE018BC1",
+				"47E4BEC5C7D3A0BB199A82A7",
+				"84AB6EE9C2FA2D3FDF7C8CDB",
+				"31819AFE67A698D90F4EB517",
+				"CE7C1416FE7FA6047F2CADBE",
+				"A7D5DDA6C279B007D6A84233",
+				"ED0B9B94C95F87502B506844",
+				"CDDDE6FE14A770C8C3F9FA1F",
+				"DC926ADFADD1437A5AA57646",
+				"483A61B6F3160253B629BBF9",
+				"87BDDA20D85DFDB271F0349B",
+				"278D0F0D79737F65E2BBEA49",
+				"7F14FD98A2F1D47CFB7A9852",
+				"218B4C40B6456942F92FA691",
+				"FE4E2359C094933E53B34DB3",
+				"AC0915E9950208B6E17BF1C7",
+				"C44A500D2D8F17AF2715172C",
+				"C3C7E8154411718F0CE13A6C",
+				"AE8581797B0FFA9DFAB5DCD3",
+				"10E1165C22071665BF50D1D5",
+				"8BE16E5540488A24A5BDEC82",
+				"B5535D81EA74DBC146F1BE6D",
+				"E1A5726CE72A981E10E2AEBB",
+				"A1C0321C9C47A048305DF503",
+				"C0B74CA9A0B6274AFD0BA3AC",
+				"183EAE1CB9874A1B264B7047",
+				"07500657B0B669ABA5249182",
+				"6BEE49320F0FB7CFF5BDED58",
+				"ADE741C4DE279D348B236473",
+				"63C477340C01461B1963D591",
+				"59314DF2B041673F29F7B0AF",
+				"61202DCA9BA60698270FB3E3",
+				"FE3B29FC97CD97AB5DDFF6B5",
+				"0D8F06E9DDE1F79C2CD3695D",
+				"9547FFF314E67C8BCDCFB09E",
+				"3ADAE356193904E8213D1824");
+			shellPath = "/bin/sh";
+			shellScript = "make\ -C\ /Users/alexandre/development/Natron/libmv\ -f\ \'LibMV.xcodeproj/qt_preprocess.mak\'";
+		};
+		C29B8785722055ED95EF7B57 = {
+			buildActionMask = 2147483647;
+			files = (
+				"C742954408B98ECDD2713531",
+				"F036A25AC4866E41415D627B",
+				"84FF5CF7319722287666C940",
+				"CA178A418095B644C5553059",
+				"52C4C6B68461732E36B3CC8E",
+				"F13567BD5160C4F4D0E5E9FB",
+				"51B634594F4D7B2222621D8E",
+				"88C882F5567663C1841327F1",
+				"AFE1CE08078EA8BC4E349C11",
+				"950B542B3093AF21ECF3873C",
+				"57F89DB395D1DF7DC28499ED",
+				"259464435A0CADFE48E1A724",
+				"6CABF0A0CF76174C00743AE7",
+				"CC2E2E7591AA0D0DFB5D661F",
+				"C172A7184B935B2516BE3F0A",
+				"7E37AC62EC3922E830CCB3ED",
+				"CA8CCBDF19F1026A57CF9ADE",
+				"448895E42E35E41DA8FFEAEE",
+				"51BE6DFF322AED039279EF7A",
+				"5BFACFD25C1017929402C8DA",
+				"D50A3E6D4DE8A2CB0AB88378",
+				"7D8CD866D856C2AB7C98B094",
+				"16A4991C63F4AF9C27A44CBC",
+				"FF7748B3B5539B6ABF06E34E",
+				"09946EE862401DCA2021BB3A",
+				"CEA1488F1FD09D7710085F79",
+				"B9985531B49A171E97D088E2",
+				"0649A3A696EB4C52491B61FF",
+				"8FB4E48018289B9D6EC9A83E",
+				"8CEC102B1ED783956C635642",
+				"64B3FEA32227FACB64E10A1F",
+				"4CA65B8A3387D42619FE7A13",
+				"E47BEAEE6BA0C93BDB451799",
+				"03506E16F57E4A1C07E2C9B6",
+				"A216B185673E9309CE484F89",
+				"5DF5929A8BB400EDDE93EE76",
+				"61B4FC864C3C31060EE300E0",
+				"F22BC735A62A0119FC44AD88",
+				"60F93D3CDA84413261E58C7F",
+				"3325848CF225154623C42406",
+				"BC64D64F738DA4DC5797A469",
+				"17076203E8F1069A4D05EF95",
+				"97A0F8B27563C9B5FEA9BDBD",
+				"5CC88364F81E9BC39E9A0A81",
+				"520C93DC893ACBC9622AF5FC",
+				"8255F4B36C64252C4FAAF1B8",
+				"164971DDF9523B79FAC647BC",
+				"97DC77BF33787A36665155DB",
+				"2B125C015B52637F9C8397D1",
+				"69ADAD69922EC09069242C60",
+				"BD83B9F17503C394E26C859C",
+				"C2D3EAD9E1071535AE018BC1",
+				"47E4BEC5C7D3A0BB199A82A7",
+				"84AB6EE9C2FA2D3FDF7C8CDB",
+				"31819AFE67A698D90F4EB517",
+				"CE7C1416FE7FA6047F2CADBE",
+				"A7D5DDA6C279B007D6A84233",
+				"ED0B9B94C95F87502B506844",
+				"CDDDE6FE14A770C8C3F9FA1F",
+				"DC926ADFADD1437A5AA57646",
+				"483A61B6F3160253B629BBF9",
+				"87BDDA20D85DFDB271F0349B",
+				"278D0F0D79737F65E2BBEA49",
+				"7F14FD98A2F1D47CFB7A9852",
+				"218B4C40B6456942F92FA691",
+				"FE4E2359C094933E53B34DB3",
+				"AC0915E9950208B6E17BF1C7",
+				"C44A500D2D8F17AF2715172C",
+				"C3C7E8154411718F0CE13A6C",
+				"AE8581797B0FFA9DFAB5DCD3",
+				"10E1165C22071665BF50D1D5",
+				"8BE16E5540488A24A5BDEC82",
+				"B5535D81EA74DBC146F1BE6D",
+				"E1A5726CE72A981E10E2AEBB",
+				"A1C0321C9C47A048305DF503",
+				"C0B74CA9A0B6274AFD0BA3AC",
+				"183EAE1CB9874A1B264B7047",
+				"07500657B0B669ABA5249182",
+				"6BEE49320F0FB7CFF5BDED58",
+				"ADE741C4DE279D348B236473",
+				"63C477340C01461B1963D591",
+				"59314DF2B041673F29F7B0AF",
+				"61202DCA9BA60698270FB3E3",
+				"FE3B29FC97CD97AB5DDFF6B5",
+				"0D8F06E9DDE1F79C2CD3695D",
+				"9547FFF314E67C8BCDCFB09E",
+				"3ADAE356193904E8213D1824");
+			isa = PBXSourcesBuildPhase;
+			name = "Build Sources";
+		};
+		2A1043669E6E5A7426EA502A = {
+			buildActionMask = 2147483647;
+			files = (
+				);
+			isa = PBXFrameworksBuildPhase;
+			name = "Frameworks & Libraries";
+		};
+		05596AB53D8D521C69802C27 = {
+			children = (
+				"FB61758D0F0FDA4BA867C3D5",
+				"883D7615C4D2DE3FA1218F12",
+				"7CABE3C80E79AD2B307756D2");
+			isa = PBXGroup;
+			name = "LibMV";
+			path = "";
+			refType = 4;
+			sourceTree = "<Group>";
+		};
+		CC15ED33F6091FED24565A31 = {
+			isa = PBXFileReference;
+			explicitFileType = "compiled.mach-o.dylib";
+			path = "libLibMV.a";
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		068F80C7519D0528FB08E821 = {
+			children = (
+				"CC15ED33F6091FED24565A31");
+			isa = PBXGroup;
+			name = "Products";
+			refType = 4;
+		};
+		DCBBF516A2BC6C05C579168E = {
+			buildPhases = (
+				"D7BA7D76DAB5DD13389D6332",
+				"A0A52A2ADF7A1E2A99738674",
+				"C29B8785722055ED95EF7B57",
+				"2A1043669E6E5A7426EA502A");
+			buildSettings = {
+				CC = "/usr/bin/clang";
+				CPLUSPLUS = "/usr/bin/clang++";
+				LEXFLAGS = "";
+				YACCFLAGS = "-d";
+				OTHER_REZFLAGS = "";
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "";
+				PREBINDING = NO;
+				BUILD_ROOT = "/Users/alexandre/development/Natron/libmv";
+				INSTALL_PATH = "";
+				DYLIB_CURRENT_VERSION = "1.0.0";
+				DYLIB_COMPATIBILITY_VERSION = "1.0";
+				MACOSX_DEPLOYMENT_TARGET = "10.10";
+				LIBRARY_STYLE = "STATIC";
+				PRODUCT_NAME = "LibMV";
+			};
+			conditionalBuildSettings = {
+			};
+			dependencies = (
+				);
+			productReference = "CC15ED33F6091FED24565A31";
+			shouldUseHeadermap = 1;
+			buildConfigurationList = 17B3380A4D6A7D415E7F2E1E;
+			isa = PBXNativeTarget;
+			name = "LibMV";
+			productName = "LibMV";
+			productType = "com.apple.product-type.library.static";
+			startupPath = "<<ProjectDirectory>>";
+		};
+		4B72B24813252891014BCF61 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = "NO";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = "YES";
+				GCC_OPTIMIZATION_LEVEL = "0";
+				PRODUCT_NAME = "LibMV";
+				HEADER_SEARCH_PATHS = (
+					"../libs/libmv/third_party/ceres/config",
+					"../libs/libmv/third_party/ceres/include",
+					"../libs/libmv/third_party/ceres/internal",
+					"../libs/libmv/third_party/gflags",
+					"../libs/libmv/third_party",
+					"../libs/libmv/third_party/Eigen3",
+					"../libs/libmv/third_party/glog/src",
+					"/usr/local/include",
+					"/System/Library/Frameworks/CarbonCore.framework/Headers",
+					"/opt/local/share/qt4/mkspecs/macx-xcode");
+				LIBRARY_SEARCH_PATHS = (
+					);
+				FRAMEWORK_SEARCH_PATHS = (
+					);
+				INFOPLIST_FILE = "Info.plist";
+				OTHER_CFLAGS = (
+					"-pipe",
+					"-g",
+					"-Wall",
+					"-W",
+					"-fPIC",
+					"-DOFX_EXTENSIONS_NUKE",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_VEGAS",
+					"-DOFX_SUPPORTS_PARAMETRIC",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_NATRON",
+					"-DOFX_SUPPORTS_MULTITHREAD",
+					"-DDEBUG",
+					"-DCERES_HAVE_PTHREAD",
+					"-DCERES_NO_SUITESPARSE",
+					"-DCERES_NO_CXSPARSE",
+					"-DCERES_NO_LAPACK",
+					"-DCERES_HAVE_RWLOCK",
+					"-DCERES_NO_UNORDERED_MAP");
+				OTHER_CPLUSPLUSFLAGS = (
+					"-pipe",
+					"-ftemplate-depth-1024",
+					"-g",
+					"-Wall",
+					"-W",
+					"-fPIC",
+					"-DOFX_EXTENSIONS_NUKE",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_VEGAS",
+					"-DOFX_SUPPORTS_PARAMETRIC",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_NATRON",
+					"-DOFX_SUPPORTS_MULTITHREAD",
+					"-DDEBUG",
+					"-DCERES_HAVE_PTHREAD",
+					"-DCERES_NO_SUITESPARSE",
+					"-DCERES_NO_CXSPARSE",
+					"-DCERES_NO_LAPACK",
+					"-DCERES_HAVE_RWLOCK",
+					"-DCERES_NO_UNORDERED_MAP");
+				ARCHS = "x86_64";
+			};
+			name = "Debug";
+		};
+		BEC09A62E69C3553534FF35E = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = "NO";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = "YES";
+				GCC_OPTIMIZATION_LEVEL = "0";
+				PRODUCT_NAME = "LibMV";
+				LIBRARY_STYLE = "STATIC";
+				PRODUCT_NAME = "LibMV";
+			};
+			name = "Debug";
+		};
+		2C641C3335766025DD51B7BD = {
+			buildRules = (
+				);
+			buildSettings = {
+				COPY_PHASE_STRIP = "NO";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = "YES";
+				GCC_OPTIMIZATION_LEVEL = "0";
+				PRODUCT_NAME = "LibMV";
+			};
+			isa = "PBXBuildStyle";
+			name = "Debug";
+		};
+		D70590BEB531B51029F711BB = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = "YES";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = "NO";
+				PRODUCT_NAME = "LibMV";
+				HEADER_SEARCH_PATHS = (
+					"../libs/libmv/third_party/ceres/config",
+					"../libs/libmv/third_party/ceres/include",
+					"../libs/libmv/third_party/ceres/internal",
+					"../libs/libmv/third_party/gflags",
+					"../libs/libmv/third_party",
+					"../libs/libmv/third_party/Eigen3",
+					"../libs/libmv/third_party/glog/src",
+					"/usr/local/include",
+					"/System/Library/Frameworks/CarbonCore.framework/Headers",
+					"/opt/local/share/qt4/mkspecs/macx-xcode");
+				LIBRARY_SEARCH_PATHS = (
+					);
+				FRAMEWORK_SEARCH_PATHS = (
+					);
+				INFOPLIST_FILE = "Info.plist";
+				OTHER_CFLAGS = (
+					"-pipe",
+					"-g",
+					"-Wall",
+					"-W",
+					"-fPIC",
+					"-DOFX_EXTENSIONS_NUKE",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_VEGAS",
+					"-DOFX_SUPPORTS_PARAMETRIC",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_NATRON",
+					"-DOFX_SUPPORTS_MULTITHREAD",
+					"-DDEBUG",
+					"-DCERES_HAVE_PTHREAD",
+					"-DCERES_NO_SUITESPARSE",
+					"-DCERES_NO_CXSPARSE",
+					"-DCERES_NO_LAPACK",
+					"-DCERES_HAVE_RWLOCK",
+					"-DCERES_NO_UNORDERED_MAP");
+				OTHER_CPLUSPLUSFLAGS = (
+					"-pipe",
+					"-ftemplate-depth-1024",
+					"-g",
+					"-Wall",
+					"-W",
+					"-fPIC",
+					"-DOFX_EXTENSIONS_NUKE",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_VEGAS",
+					"-DOFX_SUPPORTS_PARAMETRIC",
+					"-DOFX_EXTENSIONS_TUTTLE",
+					"-DOFX_EXTENSIONS_NATRON",
+					"-DOFX_SUPPORTS_MULTITHREAD",
+					"-DDEBUG",
+					"-DCERES_HAVE_PTHREAD",
+					"-DCERES_NO_SUITESPARSE",
+					"-DCERES_NO_CXSPARSE",
+					"-DCERES_NO_LAPACK",
+					"-DCERES_HAVE_RWLOCK",
+					"-DCERES_NO_UNORDERED_MAP");
+				ARCHS = "x86_64";
+			};
+			name = "Release";
+		};
+		8C7174830A1E4DCBA0332EC1 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = "YES";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = "NO";
+				PRODUCT_NAME = "LibMV";
+				LIBRARY_STYLE = "STATIC";
+				PRODUCT_NAME = "LibMV";
+			};
+			name = "Release";
+		};
+		26DE8D2AEA4B3714B41E931F = {
+			buildRules = (
+				);
+			buildSettings = {
+				COPY_PHASE_STRIP = "YES";
+				GCC_GENERATE_DEBUGGING_SYMBOLS = "NO";
+				PRODUCT_NAME = "LibMV";
+			};
+			isa = "PBXBuildStyle";
+			name = "Release";
+		};
+		CC82A9286117DFED018F418F = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				"4B72B24813252891014BCF61",
+				"D70590BEB531B51029F711BB");
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationIsName = "Debug";
+		};
+		17B3380A4D6A7D415E7F2E1E = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				"BEC09A62E69C3553534FF35E",
+				"8C7174830A1E4DCBA0332EC1");
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationIsName = "Debug";
+		};
+		91B15E841AA80083484172DE = {
+			buildStyles = (
+				"2C641C3335766025DD51B7BD",
+				"26DE8D2AEA4B3714B41E931F");
+			hasScannedForEncodings = 1;
+			isa = PBXProject;
+			mainGroup = "05596AB53D8D521C69802C27";
+			buildConfigurationList = "CC82A9286117DFED018F418F";
+			projectDirPath = "";
+			targets = (
+				"DCBBF516A2BC6C05C579168E");
+		};
+	};
+	rootObject = "91B15E841AA80083484172DE";
+}
