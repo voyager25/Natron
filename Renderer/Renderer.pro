@@ -102,6 +102,9 @@ win32-msvc*{
 ################
 # LibMV
 
+INCLUDEPATH += $$PWD/../libs/libmv
+DEPENDPATH += $$PWD/../libs/libmv
+
 win32-msvc*{
         CONFIG(64bit) {
                 CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../libmv/x64/release/ -lLibMV
