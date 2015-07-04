@@ -1222,7 +1222,7 @@ RotoGui::onToolActionTriggeredInternal(QAction* action,
         (_imp->selectedTool == eRotoToolDrawBezier || _imp->selectedTool == eRotoToolOpenBezier) &&
         _imp->rotoData->builtBezier &&
          ( (RotoToolEnum)data.x() != _imp->selectedTool ) ) {
-        if (_imp->selectedTool != eRotoToolDrawBezier) {
+        if (_imp->selectedTool == eRotoToolDrawBezier) {
             _imp->rotoData->builtBezier->setCurveFinished(true);
         }
         _imp->clearSelection();
@@ -3361,7 +3361,7 @@ RotoGui::keyDown(double /*scaleX*/,
             pushUndoCommand( new RemoveCurveUndoCommand(this,_imp->rotoData->selectedItems) );
             didSomething = true;
         }
-    } else if ( key == Qt::Key_Escape || isKeybind(kShortcutGroupRoto, kShortcutIDActionRotoCloseBezier, modifiers, key) ) {
+    } else if ( (key == Qt::Key_Escape && (_imp->selectedTool == eRotoToolDrawBezier || _imp->selectedTool == eRotoToolOpenBezier)) || isKeybind(kShortcutGroupRoto, kShortcutIDActionRotoCloseBezier, modifiers, key) ) {
         if ( (_imp->selectedTool == eRotoToolDrawBezier || _imp->selectedTool == eRotoToolOpenBezier) && _imp->rotoData->builtBezier && !_imp->rotoData->builtBezier->isCurveFinished() ) {
             
             if (!_imp->rotoData->builtBezier->isOpenBezier()) {

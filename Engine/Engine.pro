@@ -130,6 +130,7 @@ SOURCES += \
     StringAnimationManager.cpp \
     TimeLine.cpp \
     Timer.cpp \
+    TrackerContext.cpp \
     Transform.cpp \
     ViewerInstance.cpp \
     ../libs/SequenceParsing/SequenceParsing.cpp \
@@ -268,6 +269,7 @@ HEADERS += \
     ThreadStorage.h \
     TimeLine.h \
     Timer.h \
+    TrackerContext.h \
     Transform.h \
     Variant.h \
     ViewerInstance.h \
