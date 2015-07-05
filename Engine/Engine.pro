@@ -37,6 +37,18 @@ INCLUDEPATH += $$PWD/..
 INCLUDEPATH += $$PWD/../Global
 INCLUDEPATH += $$PWD/../libs/SequenceParsing
 
+
+#include libmv
+INCLUDEPATH += $$PWD/../libs/libmv
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/ceres/config
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/ceres/include
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/ceres/internal
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/gflags
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/gflags/gflags
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/glog/src
+INCLUDEPATH += $$PWD/../libs/libmv/third_party
+INCLUDEPATH += $$PWD/../libs/libmv/third_party/Eigen3
+
 #To overcome wrongly generated #include <...> by shiboken
 INCLUDEPATH += $$PWD
 INCLUDEPATH += $$PWD/NatronEngine

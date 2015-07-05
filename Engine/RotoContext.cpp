@@ -1602,7 +1602,7 @@ RotoItem::setScriptName(const std::string & name)
     {
         QMutexLocker l(&itemMutex);
         oldNameEmpty = _imp->scriptName.empty();
-        _imp->scriptName = name;
+        _imp->scriptName = cpy;
     }
     std::string newFullName = getFullyQualifiedName();
     
