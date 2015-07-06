@@ -30,6 +30,7 @@ class Double_Knob;
 class Bool_Knob;
 class Button_Knob;
 class Choice_Knob;
+class KnobI;
 class TimeLine;
 class TrackerContext;
 struct TrackMarkerPrivate;
@@ -58,11 +59,18 @@ public:
     boost::shared_ptr<Double_Knob> getWeightKnob() const;
     boost::shared_ptr<Double_Knob> getCenterKnob() const;
     boost::shared_ptr<Double_Knob> getOffsetKnob() const;
+    boost::shared_ptr<Double_Knob> getCorrelationKnob() const;
     boost::shared_ptr<Choice_Knob> getMotionModelKnob() const;
+    
+    const std::list<boost::shared_ptr<KnobI> >& getKnobs() const;
     
     int getReferenceFrame(int time, bool forward) const;
     
     bool isUserKeyframe(int time) const;
+    
+    bool isEnabled() const;
+    
+    void setEnabled(bool enabled);
     
 private:
     
@@ -71,9 +79,18 @@ private:
 };
 
 struct TrackerContextPrivate;
-class TrackerContext : public boost::enable_shared_from_this<TrackerContext>
+class TrackerContext : public QObject, public boost::enable_shared_from_this<TrackerContext>
 {
+    Q_OBJECT
+    
 public:
+    
+    enum TrackSelectionReason
+    {
+        eTrackSelectionSettingsPanel,
+        eTrackSelectionViewer,
+        eTrackSelectionInternal
+    };
     
     TrackerContext(const boost::shared_ptr<Natron::Node> &node);
     
@@ -92,7 +109,39 @@ public:
     int getTimeLineFirstFrame() const;
     int getTimeLineLastFrame() const;
     
+    /**
+     * @brief Tracks the selected markers over the range defined by [start,end[ (end pointing to the frame
+     * after the last one, a la STL).
+     **/
+    void trackSelectedMarkers(int start, int end, bool forward, bool updateViewer);
+    
+    void beginEditSelection();
+    
+    void endEditSelection(TrackSelectionReason reason);
+    
+    void addTracksToSelection(const std::list<boost::shared_ptr<TrackMarker> >& marks, TrackSelectionReason reason);
+    void addTrackToSelection(const boost::shared_ptr<TrackMarker>& mark, TrackSelectionReason reason);
+    
+    void removeTracksFromSelection(const std::list<boost::shared_ptr<TrackMarker> >& marks, TrackSelectionReason reason);
+    void removeTrackFromSelection(const boost::shared_ptr<TrackMarker>& mark, TrackSelectionReason reason);
+    
+    void clearSelection(TrackSelectionReason reason);
+    
+    void getSelectedMarkers(std::list<boost::shared_ptr<TrackMarker> >* markers) const;
+    
+public Q_SLOTS:
+    
+    void onSelectedKnobCurveChanged();
+    
+    
+Q_SIGNALS:
+    
+    //reason is of type TrackSelectionReason
+    void selectionChanged(int reason);
+    
 private:
+    
+    void endSelection(TrackSelectionReason reason);
     
     boost::scoped_ptr<TrackerContextPrivate> _imp;
 };

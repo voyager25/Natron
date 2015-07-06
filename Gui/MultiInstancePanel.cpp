@@ -1843,12 +1843,12 @@ TrackerPanel::appendExtraGui(QVBoxLayout* layout)
     _imp->exportLayout->setContentsMargins(0, 0, 0, 0);
 
     _imp->exportChoice = new ComboBox(_imp->exportContainer);
-    _imp->exportChoice->setToolTip( "<p><b>" + tr("CornerPinOFX (Use current frame):") + "</p></b>"
+    _imp->exportChoice->setToolTip( "<p><b>" + tr("CornerPin (Use current frame):") + "</p></b>"
                                        "<p>" + tr("Warp the image according to the relative transform using the current frame as reference.") + "</p>"
-                                       "<p><b>" + tr("CornerPinOFX (Use transform ref frame):") + "</p></b>"
+                                       "<p><b>" + tr("CornerPin (Use transform ref frame):") + "</p></b>"
                                        "<p>" + tr("Warp the image according to the relative transform using the "
                                        "reference frame specified in the transform tab.") + "</p>"
-                                       "<p><b>" + tr("CornerPinOFX (Stabilize):") + "</p></b>"
+                                       "<p><b>" + tr("CornerPin (Stabilize):") + "</p></b>"
                                        "<p>" + tr("Transform the image so that the tracked points do not move.") + "</p>"
 //                                      "<p><b>" + tr("Transform (Stabilize):</p></b>"
 //                                      "<p>" + tr("Transform the image so that the tracked points do not move.") + "</p>"
@@ -1860,25 +1860,25 @@ TrackerPanel::appendExtraGui(QVBoxLayout* layout)
     std::vector<std::string> choices;
     std::vector<std::string> helps;
 
-    choices.push_back(tr("CornerPinOFX (Use current frame. Linked)").toStdString());
+    choices.push_back(tr("CornerPin (Use current frame. Linked)").toStdString());
     helps.push_back(tr("Warp the image according to the relative transform using the current frame as reference.").toStdString());
 //
 //    choices.push_back(tr("CornerPinOFX (Use transform ref frame. Linked)").toStdString());
 //    helps.push_back(tr("Warp the image according to the relative transform using the "
 //                       "reference frame specified in the transform tab.").toStdString());
     
-    choices.push_back(tr("CornerPinOFX (Stabilize. Linked)").toStdString());
+    choices.push_back(tr("CornerPin (Stabilize. Linked)").toStdString());
     helps.push_back(tr("Transform the image so that the tracked points do not move.").toStdString());
 
-    choices.push_back( tr("CornerPinOFX (Use current frame. Copy)").toStdString() );
+    choices.push_back( tr("CornerPin (Use current frame. Copy)").toStdString() );
     helps.push_back( tr("Same as the linked version except that it copies values instead of "
                         "referencing them via a link to the track").toStdString() );
     
-    choices.push_back(tr("CornerPinOFX (Stabilize. Copy)").toStdString());
+    choices.push_back(tr("CornerPin (Stabilize. Copy)").toStdString());
     helps.push_back(tr("Same as the linked version except that it copies values instead of "
                        "referencing them via a link to the track").toStdString());
 
-    choices.push_back( tr("CornerPinOFX (Use transform ref frame. Copy)").toStdString() );
+    choices.push_back( tr("CornerPin (Use transform ref frame. Copy)").toStdString() );
     helps.push_back( tr("Same as the linked version except that it copies values instead of "
                         "referencing them via a link to the track").toStdString() );
     
