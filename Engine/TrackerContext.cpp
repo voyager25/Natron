@@ -606,9 +606,34 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
     }
 #endif
     
+    boost::shared_ptr<Double_Knob> searchBtmLeftKnob = track->natronMarker->getSearchWindowBottomLeftKnob();
+    boost::shared_ptr<Double_Knob> searchTopRightKnob = track->natronMarker->getSearchWindowTopRightKnob();
+    boost::shared_ptr<Double_Knob> offsetKnob = track->natronMarker->getOffsetKnob();
+    
+    Natron::Point offset;
+    offset.x = offsetKnob->getValueAtTime(time,0);
+    offset.y = offsetKnob->getValueAtTime(time,1);
+    
+    Natron::Point searchBtmLeft,searchTopRight;
+    searchBtmLeft.x = searchBtmLeftKnob->getValueAtTime(time, 0);
+    searchBtmLeft.y = searchBtmLeftKnob->getValueAtTime(time, 1);
+    
+    searchTopRight.x = searchTopRightKnob->getValueAtTime(time, 0);
+    searchTopRight.y = searchTopRightKnob->getValueAtTime(time, 1);
+    
+    
+    
+    track->mvMarker.search_region.min(0) = searchBtmLeft.x + track->mvMarker.center(0) + offset.x;
+    track->mvMarker.search_region.min(1) = searchTopRight.y + track->mvMarker.center(1) + offset.y;
+    track->mvMarker.search_region.max(0) = searchTopRight.x + track->mvMarker.center(0) + offset.x;
+    track->mvMarker.search_region.max(1) = searchBtmLeft.y + track->mvMarker.center(1) + offset.y;
+    
     track->mvMarker.reference_frame = track->natronMarker->getReferenceFrame(time, args.getForward());
     
-    if (track->mvMarker.reference_frame != track->mvMarker.frame) {
+    if (track->mvMarker.reference_frame == track->mvMarker.frame) {
+        // This is a user keyframe, we do not track it
+        assert(track->natronMarker->isUserKeyframe(track->mvMarker.frame));
+    } else {
         libmv::TrackRegionResult result;
         if (!autoTrack->TrackMarker(&track->mvMarker, &result, &track->mvOptions) || !result.is_usable()) {
             return false;
@@ -649,10 +674,7 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
         pntBtmLeftKnob->setValuesAtTime(time, btmLeftCorner.x, btmLeftCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
         pntBtmRightKnob->setValuesAtTime(time, btmRightCorner.x, btmRightCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
         
-    } else {
-        // This is a user keyframe, we do not track it
-        assert(track->natronMarker->isUserKeyframe(track->mvMarker.frame));
-    }
+    } // if (track->mvMarker.reference_frame == track->mvMarker.frame) {
     {
         QMutexLocker k(autoTrackMutex);
         autoTrack->AddMarker(track->mvMarker);
