@@ -408,7 +408,8 @@ public:
         ///for the File Dialog preview.
         if (viewerInput && !viewerInput->getGroup()) {
             viewerInputNode = viewerInput;
-            viewerInput->getLiveInstance()->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, viewerInput->getHashValue(), viewerInput->getRotoAge(), renderAge, renderRequester, textureIndex, timeline, isAnalysis, false, NodeList(), viewerInput->getCurrentRenderThreadSafety());
+            bool doNanHandling = appPTR->getCurrentSettings()->isNaNHandlingEnabled();
+            viewerInput->getLiveInstance()->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, viewerInput->getHashValue(), viewerInput->getRotoAge(), renderAge, renderRequester, textureIndex, timeline, isAnalysis, false, NodeList(), viewerInput->getCurrentRenderThreadSafety(), doNanHandling);
         }
     }
     
@@ -982,7 +983,7 @@ ViewerInstance::getRenderViewerArgsAndCheckCache(SequenceTime time,
                                     inArgs.params->cachedFrame->setAborted(true); \
                                     appPTR->removeFromViewerCache(inArgs.params->cachedFrame); \
                                 } \
-                                if (!isSequentialRender && canAbort) { \
+                                if (!isSequentialRender) { \
                                     _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge); \
                                 } \
                                 return eStatusReplyDefault; \
@@ -1017,8 +1018,8 @@ ViewerInstance::renderViewer_internal(int view,
      * only the viewer uses this when issuing renders due to a zoom or pan of the user. This is used to enable a trimap-caching technique
      * to optimize threads repartitions across tiles processing of the image.
      */
-    if (!isSequentialRender && canAbort) {
-        if (!_imp->addOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge)) {
+    if (!isSequentialRender) {
+        if (!_imp->addOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge, canAbort)) {
              return eStatusReplyDefault;
         }
     }
@@ -1043,7 +1044,7 @@ ViewerInstance::renderViewer_internal(int view,
 //        if (!isSequentialRender) {
 //            _imp->checkAndUpdateDisplayAge(inArgs.params->textureIndex,inArgs.params->renderAge);
 //        }
-        if (!isSequentialRender && canAbort) {
+        if (!isSequentialRender) {
             _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
         }
         return eStatusReplyDefault;
@@ -1141,7 +1142,7 @@ ViewerInstance::renderViewer_internal(int view,
         
         
         boost::shared_ptr<Natron::FrameParams> cachedFrameParams =
-        FrameEntry::makeParams(bounds,inArgs.key->getBitDepth(), inArgs.params->textureRect.w, inArgs.params->textureRect.h);
+        FrameEntry::makeParams(bounds,inArgs.key->getBitDepth(), inArgs.params->textureRect.w, inArgs.params->textureRect.h, ImagePtr());
         bool cached = Natron::getTextureFromCacheOrCreate(*(inArgs.key), cachedFrameParams,
                                                                    &inArgs.params->cachedFrame);
         if (!inArgs.params->cachedFrame) {
@@ -1152,7 +1153,7 @@ ViewerInstance::renderViewer_internal(int view,
             if (!isSequentialRender) {
                 _imp->checkAndUpdateDisplayAge(inArgs.params->textureIndex,inArgs.params->renderAge);
             }
-            if (!isSequentialRender && canAbort) {
+            if (!isSequentialRender) {
                 _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
             }
             return eStatusFailed;
@@ -1160,7 +1161,7 @@ ViewerInstance::renderViewer_internal(int view,
         
         if (!entryLocker.tryLock(inArgs.params->cachedFrame)) {
             ///Another thread is rendering it, just return it is not useful to keep this thread waiting.
-            if (!isSequentialRender && canAbort) {
+            if (!isSequentialRender) {
                 _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
             }
             inArgs.params.reset();
@@ -1228,7 +1229,7 @@ ViewerInstance::renderViewer_internal(int view,
                 _imp->checkAndUpdateDisplayAge(inArgs.params->textureIndex,inArgs.params->renderAge);
             }
         }
-        if (!isSequentialRender && canAbort) {
+        if (!isSequentialRender) {
             _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
         }
         Q_EMIT disconnectTextureRequest(inArgs.params->textureIndex);
@@ -1294,7 +1295,7 @@ ViewerInstance::renderViewer_internal(int view,
                     inArgs.params->cachedFrame->setAborted(true);
                     appPTR->removeFromViewerCache(inArgs.params->cachedFrame);
                 }
-                if (!isSequentialRender && canAbort) {
+                if (!isSequentialRender) {
                     _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
                 }
                 if (retCode != EffectInstance::eRenderRoIRetCodeAborted) {
@@ -1331,7 +1332,7 @@ ViewerInstance::renderViewer_internal(int view,
                 appPTR->removeFromViewerCache(inArgs.params->cachedFrame);
                 inArgs.params->cachedFrame.reset();
             }
-            if (!isSequentialRender && canAbort) {
+            if (!isSequentialRender) {
                 _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
             }
             return eStatusReplyDefault;
@@ -1339,7 +1340,7 @@ ViewerInstance::renderViewer_internal(int view,
         
         abortCheck(inArgs.activeInputToRender);
         
-        if (!isSequentialRender && canAbort) {
+        if (!isSequentialRender) {
             
             bool couldRemove = true;
             if (rectIndex == splitRoi.size() - 1) {
@@ -1487,6 +1488,11 @@ ViewerInstance::renderViewer_internal(int view,
         } // if (singleThreaded)
         
     } // for (std::vector<RectI>::iterator rect = splitRoi.begin(); rect != splitRoi.end(), ++rect) {
+    
+    if (inArgs.params->cachedFrame) {
+        inArgs.params->cachedFrame->setOriginalImage(inArgs.params->image);
+    }
+    
     return eStatusOK;
 } // renderViewer_internal
 
@@ -2253,16 +2259,24 @@ ViewerInstance::ViewerInstancePrivate::updateViewer(boost::shared_ptr<UpdateView
         doUpdate = false;
     }
     if (doUpdate) {
+        
+        ImagePtr image;
         Natron::ImageBitDepthEnum depth;
         if (params->cachedFrame) {
             depth = (Natron::ImageBitDepthEnum)params->cachedFrame->getKey().getBitDepth();
+            if (params->image) {
+                image = params->image;
+            } else {
+                image = params->cachedFrame->getOriginalImage();
+            }
         } else {
             assert(params->image);
+            image = params->image;
             depth = params->image->getBitDepth();
         }
         
         uiContext->transferBufferFromRAMtoGPU(params->ramBuffer,
-                                              params->image,
+                                              image,
                                               depth,
                                               params->time,
                                               params->rod,
