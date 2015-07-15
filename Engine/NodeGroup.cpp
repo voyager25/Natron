@@ -21,6 +21,7 @@
 #include <QThreadPool>
 #include <QCoreApplication>
 #include <QTextStream>
+#include <algorithm> // min, max
 
 #include "Engine/AppInstance.h"
 #include "Engine/Node.h"
@@ -35,6 +36,7 @@
 #include "Engine/NodeGuiI.h"
 #include "Engine/Curve.h"
 #include "Engine/NodeGraphI.h"
+#include "Engine/Settings.h"
 #include "Engine/RotoContext.h"
 
 #define NATRON_PYPLUG_EXPORTER_VERSION 1
@@ -254,6 +256,20 @@ NodeCollection::quitAnyProcessingForAllNodes()
     setMustQuitProcessingRecursive(true, this);
     quitAnyProcessingInternal(this);
     setMustQuitProcessingRecursive(false, this);
+}
+
+void
+NodeCollection::resetTotalTimeSpentRenderingForAllNodes()
+{
+    QMutexLocker k(&_imp->nodesMutex);
+    for (NodeList::iterator it = _imp->nodes.begin(); it != _imp->nodes.end(); ++it) {
+        Natron::EffectInstance* effect = (*it)->getLiveInstance();
+        effect->resetTotalTimeSpentRendering();
+        NodeGroup* isGroup = dynamic_cast<NodeGroup*>(effect);
+        if (isGroup) {
+            isGroup->resetTotalTimeSpentRenderingForAllNodes();
+        }
+    }
 }
 
 bool
@@ -829,13 +845,13 @@ NodeCollection::recomputeFrameRangeForAllReaders(int* firstFrame,int* lastFrame)
         if ((*it)->isActivated()) {
             
             if ((*it)->getLiveInstance()->isReader()) {
-                int thisFirst,thislast;
+                double thisFirst,thislast;
                 (*it)->getLiveInstance()->getFrameRange_public((*it)->getHashValue(), &thisFirst, &thislast);
                 if (thisFirst != INT_MIN) {
-                    *firstFrame = std::min(*firstFrame, thisFirst);
+                    *firstFrame = std::min(*firstFrame, (int)thisFirst);
                 }
                 if (thislast != INT_MAX) {
-                    *lastFrame = std::max(*lastFrame, thislast);
+                    *lastFrame = std::max(*lastFrame, (int)thislast);
                 }
             } else {
                 NodeGroup* isGrp = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
@@ -875,6 +891,9 @@ NodeCollection::setParallelRenderArgs(int time,
                                       const boost::shared_ptr<Natron::Node>& activeRotoPaintNode,
                                       bool isAnalysis)
 {
+    
+    bool doNanHandling = appPTR->getCurrentSettings()->isNaNHandlingEnabled();
+    
     NodeList nodes = getNodes();
     for (NodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
         assert(*it);
@@ -892,10 +911,10 @@ NodeCollection::setParallelRenderArgs(int time,
         }
         
         liveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it)->getHashValue(),
-                                               rotoAge,renderAge,renderRequester,textureIndex, timeline, isAnalysis,duringPaintStrokeCreation, rotoPaintNodes, safety);
+                                               rotoAge,renderAge,renderRequester,textureIndex, timeline, isAnalysis,duringPaintStrokeCreation, rotoPaintNodes, safety, doNanHandling);
         
         for (NodeList::iterator it2 = rotoPaintNodes.begin(); it2 != rotoPaintNodes.end(); ++it2) {
-            (*it2)->getLiveInstance()->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it2)->getHashValue(), (*it2)->getRotoAge(), renderAge, renderRequester, textureIndex, timeline, isAnalysis, activeRotoPaintNode && (*it2)->isDuringPaintStrokeCreation(), NodeList(), (*it2)->getCurrentRenderThreadSafety());
+            (*it2)->getLiveInstance()->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it2)->getHashValue(), (*it2)->getRotoAge(), renderAge, renderRequester, textureIndex, timeline, isAnalysis, activeRotoPaintNode && (*it2)->isDuringPaintStrokeCreation(), NodeList(), (*it2)->getCurrentRenderThreadSafety(), doNanHandling);
         }
         
         if ((*it)->isMultiInstance()) {
@@ -909,7 +928,7 @@ NodeCollection::setParallelRenderArgs(int time,
                 Natron::EffectInstance* childLiveInstance = (*it2)->getLiveInstance();
                 assert(childLiveInstance);
                 Natron::RenderSafetyEnum childSafety = (*it2)->getCurrentRenderThreadSafety();
-                childLiveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it2)->getHashValue(),0, renderAge,renderRequester, textureIndex, timeline, isAnalysis, false, std::list<boost::shared_ptr<Natron::Node> >(), childSafety);
+                childLiveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it2)->getHashValue(),0, renderAge,renderRequester, textureIndex, timeline, isAnalysis, false, std::list<boost::shared_ptr<Natron::Node> >(), childSafety, doNanHandling);
                 
             }
         }
@@ -1157,7 +1176,7 @@ NodeGroup::getInputLabel(int inputNb) const
     return inputName.toStdString();
 }
 
-SequenceTime
+double
 NodeGroup::getCurrentTime() const
 {
     NodePtr node = getOutputNodeInput();
@@ -1226,9 +1245,9 @@ NodeGroup::initializeKnobs()
     assert(nodePage);
     Page_Knob* isPage = dynamic_cast<Page_Knob*>(nodePage.get());
     assert(isPage);
-    _imp->exportAsTemplate = Natron::createKnob<Button_Knob>(this, "Export as Python plug-in");
-    _imp->exportAsTemplate->setName("exportAsGroup");
-    _imp->exportAsTemplate->setHintToolTip("Export this group as a Python group script that can be shared and/or later "
+    _imp->exportAsTemplate = Natron::createKnob<Button_Knob>(this, "Export as PyPlug");
+    _imp->exportAsTemplate->setName("exportAsPyPlug");
+    _imp->exportAsTemplate->setHintToolTip("Export this group as a Python group script (PyPlug) that can be shared and/or later "
                                            "on re-used as a plug-in.");
     isPage->addKnob(_imp->exportAsTemplate);
 }

@@ -17,6 +17,7 @@
 
 #include <limits>
 #include <locale>
+#include <algorithm> // min, max
 
 #include <QtCore/QDebug>
 #include <QtCore/QReadWriteLock>
@@ -1746,7 +1747,7 @@ Node::removeReferences(bool ensureThreadsFinished)
     if (isOutput) {
         isOutput->getRenderEngine()->quitEngine();
     }
-    appPTR->removeAllImagesFromCacheWithMatchingKey( getHashValue() );
+    appPTR->removeAllImagesFromCacheWithMatchingKey(true,  getHashValue() );
     deleteNodeVariableToPython(getFullyQualifiedName());
     
     int maxInputs = getMaxInputCount();
@@ -1987,7 +1988,7 @@ Node::getFullyQualifiedName() const
         prependGroupNameRecursive(parent, ret);
     } else {
         boost::shared_ptr<NodeCollection> hasParentGroup = getGroup();
-        boost::shared_ptr<NodeGroup> isGrp = boost::dynamic_pointer_cast<NodeGroup>(hasParentGroup);
+        NodeGroup* isGrp = dynamic_cast<NodeGroup*>(hasParentGroup.get());
         if (isGrp) {
             prependGroupNameRecursive(isGrp->getNode(), ret);
         }
@@ -2614,7 +2615,11 @@ Node::Implementation::createChannelSelector(int inputNb,const std::string & inpu
     sel.hasAllChoice = isOutput;
     boost::shared_ptr<Choice_Knob> layer = Natron::createKnob<Choice_Knob>(liveInstance.get(), isOutput ? "Channels" : inputName + " Channels", 1, false);
     layer->setHostCanAddOptions(isOutput);
-    layer->setName(inputName + "_channels");
+    if (!isOutput) {
+        layer->setName(inputName + std::string("_") + std::string(kOutputChannelsKnobName));
+    } else {
+        layer->setName(kOutputChannelsKnobName);
+    }
     if (isOutput) {
         layer->setHintToolTip("Select here the channels onto which the processing should occur.");
     } else {
@@ -4974,11 +4979,11 @@ Node::shouldDrawOverlay() const
 }
 
 void
-Node::drawDefaultOverlay(double scaleX, double scaleY)
+Node::drawDefaultOverlay(double time, double scaleX, double scaleY)
 {
     boost::shared_ptr<NodeGuiI> nodeGui = getNodeGui();
     if (nodeGui) {
-        nodeGui->drawDefaultOverlay(scaleX, scaleY);
+        nodeGui->drawDefaultOverlay(time, scaleX, scaleY);
     }
 }
 
@@ -5222,7 +5227,7 @@ Node::onEffectKnobValueChanged(KnobI* what,
         ///union the project frame range if not locked with the reader frame range
         bool isLocked = getApp()->getProject()->isFrameRangeLocked();
         if (!isLocked) {
-            int leftBound = INT_MIN,rightBound = INT_MAX;
+            double leftBound = INT_MIN,rightBound = INT_MAX;
             _imp->liveInstance->getFrameRange_public(getHashValue(), &leftBound, &rightBound, true);
     
             if (leftBound != INT_MIN && rightBound != INT_MAX) {
@@ -6355,7 +6360,7 @@ void
 Node::Implementation::runOnNodeCreatedCB(bool userEdited)
 {
     std::string cb = _publicInterface->getApp()->getProject()->getOnNodeCreatedCB();
-    if (cb.empty()) {
+    if (cb.empty() || !_publicInterface->getGroup()) {
         return;
     }
     

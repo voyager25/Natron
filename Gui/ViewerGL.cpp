@@ -16,6 +16,7 @@
 
 #include <cassert>
 #include <map>
+#include <algorithm> // min, max
 
 #include <QtCore/QEvent>
 #include <QtCore/QFile>
@@ -1104,6 +1105,7 @@ ViewerGL::paintGL()
     }
     if ( (zoomLeft == zoomRight) || (zoomTop == zoomBottom) ) {
         clearColorBuffer( _imp->clearColor.redF(),_imp->clearColor.greenF(),_imp->clearColor.blueF(),_imp->clearColor.alphaF() );
+        glCheckError();
 
         return;
     }
@@ -3345,6 +3347,12 @@ ViewerGL::mouseDoubleClickEvent(QMouseEvent* e)
     QGLWidget::mouseDoubleClickEvent(e);
 }
 
+QPointF
+ViewerGL::toZoomCoordinates(const QPointF& position) const
+{
+    QMutexLocker l(&_imp->zoomCtxMutex);
+    return _imp->zoomCtx.toZoomCoordinates(position.x(), position.y());
+}
 
 // used to update the information bar at the bottom of the viewer (not for the ctrl-click color picker)
 void
@@ -3375,19 +3383,31 @@ ViewerGL::updateColorPicker(int textureIndex,
         yInitialized = true;
         pos.setY(y);
     }
-    QPoint currentPos = mapFromGlobal( QCursor::pos() );
-    if (!xInitialized) {
-        pos.setX( currentPos.x() );
-    }
-    if (!yInitialized) {
-        pos.setY( currentPos.y() );
-    }
-    float r,g,b,a;
+    
     QPointF imgPosCanonical;
-    {
+    if (!xInitialized || !yInitialized) {
+        if (!_imp->viewerTab->isViewersSynchroEnabled()) {
+            pos = mapFromGlobal(QCursor::pos());
+            QMutexLocker l(&_imp->zoomCtxMutex);
+            imgPosCanonical = _imp->zoomCtx.toZoomCoordinates(pos.x(), pos.y());
+        } else {
+            ViewerTab* masterViewer = getViewerTab()->getGui()->getMasterSyncViewer();
+            if (masterViewer) {
+                pos = masterViewer->getViewer()->mapFromGlobal(QCursor::pos());
+                imgPosCanonical = masterViewer->getViewer()->toZoomCoordinates(pos);
+            } else {
+                pos = mapFromGlobal(QCursor::pos());
+                QMutexLocker l(&_imp->zoomCtxMutex);
+                imgPosCanonical = _imp->zoomCtx.toZoomCoordinates(pos.x(), pos.y());
+            }
+        }
+    } else {
         QMutexLocker l(&_imp->zoomCtxMutex);
-        imgPosCanonical = _imp->zoomCtx.toZoomCoordinates( pos.x(), pos.y() );
+        imgPosCanonical = _imp->zoomCtx.toZoomCoordinates(pos.x(), pos.y());
     }
+
+    float r,g,b,a;
+
     bool linear = appPTR->getCurrentSettings()->getColorPickerLinear();
     bool picked = false;
     RectD rod = getRoD(textureIndex);
@@ -3395,20 +3415,23 @@ ViewerGL::updateColorPicker(int textureIndex,
     _imp->getProjectFormatCanonical(projectCanonical);
     unsigned int mmLevel;
     if ( ( imgPosCanonical.x() >= rod.left() ) &&
-         ( imgPosCanonical.x() < rod.right() ) &&
-         ( imgPosCanonical.y() >= rod.bottom() ) &&
-         ( imgPosCanonical.y() < rod.top() ) &&
-         ( pos.x() >= 0) && ( pos.x() < width() ) &&
-         ( pos.y() >= 0) && ( pos.y() < height() ) ) {
-        ///if the clip to project format is enabled, make sure it is in the project format too
-        bool clipping = isClippingImageToProjectWindow();
-        if ( !clipping ||
-             ( ( imgPosCanonical.x() >= projectCanonical.left() ) &&
-               ( imgPosCanonical.x() < projectCanonical.right() ) &&
-               ( imgPosCanonical.y() >= projectCanonical.bottom() ) &&
-               ( imgPosCanonical.y() < projectCanonical.top() ) ) ) {
-            //imgPos must be in canonical coordinates
-            picked = getColorAt(imgPosCanonical.x(), imgPosCanonical.y(), linear, textureIndex, &r, &g, &b, &a,&mmLevel);
+        ( imgPosCanonical.x() < rod.right() ) &&
+        ( imgPosCanonical.y() >= rod.bottom() ) &&
+        ( imgPosCanonical.y() < rod.top() )) {
+        
+        if ((pos.x() >= 0) && ( pos.x() < width()) &&
+            (pos.y() >= 0) && ( pos.y() < height())) {
+            
+            ///if the clip to project format is enabled, make sure it is in the project format too
+            bool clipping = isClippingImageToProjectWindow();
+            if ( !clipping ||
+                ( ( imgPosCanonical.x() >= projectCanonical.left() ) &&
+                 ( imgPosCanonical.x() < projectCanonical.right() ) &&
+                 ( imgPosCanonical.y() >= projectCanonical.bottom() ) &&
+                 ( imgPosCanonical.y() < projectCanonical.top() ) ) ) {
+                    //imgPos must be in canonical coordinates
+                    picked = getColorAt(imgPosCanonical.x(), imgPosCanonical.y(), linear, textureIndex, &r, &g, &b, &a,&mmLevel);
+                }
         }
     }
     if (!picked) {
@@ -3429,11 +3452,11 @@ ViewerGL::wheelEvent(QWheelEvent* e)
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
     if (e->orientation() != Qt::Vertical) {
-        return;
+        return QGLWidget::wheelEvent(e);
     }
 
     if (!_imp->viewerTab) {
-        return;
+        return QGLWidget::wheelEvent(e);
     }
     if (modCASIsControl(e)) {
         _imp->wheelDeltaSeekFrame += e->delta();
@@ -3450,7 +3473,7 @@ ViewerGL::wheelEvent(QWheelEvent* e)
     
     Gui* gui = _imp->viewerTab->getGui();
     if (!gui) {
-        return;
+        return QGLWidget::wheelEvent(e);
     }
     
     boost::shared_ptr<NodeGuiI> nodeGui_i = _imp->viewerTab->getInternalNode()->getNode()->getNodeGui();
@@ -3737,10 +3760,6 @@ ViewerGL::onProjectFormatChangedInternal(const Format & format,bool triggerRende
     bool loadingProject = _imp->viewerTab->getGui()->getApp()->getProject()->isLoadingProject();
     if ( !loadingProject && triggerRender) {
         fitImageToFormat();
-        ViewerInstance* node = _imp->viewerTab->getInternalNode();
-        if (node) {
-            node->renderCurrentFrame(false);
-        }
     }
     
     
@@ -3885,60 +3904,40 @@ ViewerGL::keyPressEvent(QKeyEvent* e)
     
     Qt::KeyboardModifiers modifiers = e->modifiers();
     Qt::Key key = (Qt::Key)e->key();
-    bool accept = false;
+    double scale = 1. / (1 << getCurrentRenderScale());
 
-    if (key == Qt::Key_Escape) {
-        QGLWidget::keyPressEvent(e);
-    }
-    
     if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideOverlays, modifiers, key) ) {
         toggleOverlays();
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDToggleWipe, modifiers, key)) {
         toggleWipe();
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideAll, modifiers, key) ) {
         _imp->viewerTab->hideAllToolbars();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionShowAll, modifiers, key) ) {
         _imp->viewerTab->showAllToolbars();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHidePlayer, modifiers, key) ) {
         _imp->viewerTab->togglePlayerVisibility();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideTimeline, modifiers, key) ) {
         _imp->viewerTab->toggleTimelineVisibility();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideInfobar, modifiers, key) ) {
         _imp->viewerTab->toggleInfobarVisbility();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideLeft, modifiers, key) ) {
         _imp->viewerTab->toggleLeftToolbarVisiblity();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideRight, modifiers, key) ) {
         _imp->viewerTab->toggleRightToolbarVisibility();
-        accept = true;
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideTop, modifiers, key) ) {
         _imp->viewerTab->toggleTopToolbarVisibility();
-        accept = true;
+    } else if ( isKeybind(kShortcutGroupGlobal, kShortcutIDActionZoomIn, Qt::NoModifier, key) ) { // zoom in/out doesn't care about modifiers
+        QWheelEvent e(mapFromGlobal(QCursor::pos()), 120, Qt::NoButton, Qt::NoModifier); // one wheel click = +-120 delta
+        wheelEvent(&e);
+    } else if ( isKeybind(kShortcutGroupGlobal, kShortcutIDActionZoomOut, Qt::NoModifier, key) ) { // zoom in/out doesn't care about modifiers
+        QWheelEvent e(mapFromGlobal(QCursor::pos()), -120, Qt::NoButton, Qt::NoModifier); // one wheel click = +-120 delta
+        wheelEvent(&e);
+    } else if ( e->isAutoRepeat() && _imp->viewerTab->notifyOverlaysKeyRepeat(scale, scale, e) ) {
+        updateGL();
+    } else if ( _imp->viewerTab->notifyOverlaysKeyDown(scale, scale, e) ) {
+        updateGL();
     } else {
         QGLWidget::keyPressEvent(e);
-    }
-
-    double scale = 1. / (1 << getCurrentRenderScale());
-    if ( e->isAutoRepeat() ) {
-        if ( _imp->viewerTab->notifyOverlaysKeyRepeat(scale, scale, e) ) {
-            accept = true;
-            updateGL();
-        }
-    } else {
-        if ( _imp->viewerTab->notifyOverlaysKeyDown(scale, scale, e) ) {
-            accept = true;
-            updateGL();
-        }
-    }
-    if (accept) {
-        e->accept();
-    } else {
-        e->ignore();
     }
 }
 
@@ -3948,11 +3947,13 @@ ViewerGL::keyReleaseEvent(QKeyEvent* e)
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
     if (!_imp->viewerTab->getGui()) {
-        return;
+        return QGLWidget::keyPressEvent(e);
     }
     double scale = 1. / (1 << getCurrentRenderScale());
     if ( _imp->viewerTab->notifyOverlaysKeyUp(scale, scale, e) ) {
         updateGL();
+    } else {
+        QGLWidget::keyReleaseEvent(e);
     }
 }
 

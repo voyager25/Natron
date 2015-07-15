@@ -67,6 +67,7 @@ CLANG_DIAG_ON(unused-private-field)
 #include "Gui/ActionShortcuts.h"
 #include "Gui/Label.h"
 #include "Gui/Utils.h"
+#include "Gui/DopeSheet.h"
 
 #ifndef M_LN2
 #define M_LN2       0.693147180559945309417232121458176568  /* loge(2)        */
@@ -374,15 +375,23 @@ struct ViewerTabPrivate
     
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
     // return the tronsform to apply to the overlay as a 3x3 homography in canonical coordinates
-    bool getOverlayTransform(int time,
+    bool getOverlayTransform(double time,
                              int view,
                              const boost::shared_ptr<Natron::Node>& target,
                              Natron::EffectInstance* currentNode,
                              Transform::Matrix3x3* transform) const;
+    
+    bool getTimeTransform(double time,
+                          int view,
+                          const boost::shared_ptr<Natron::Node>& target,
+                          Natron::EffectInstance* currentNode,
+                          double *newTime) const;
+
 #endif
     
     void getComponentsAvailabel(std::set<ImageComponents>* comps) const;
-};
+    
+    };
 
 static void makeFullyQualifiedLabel(Natron::Node* node,std::string* ret)
 {
@@ -461,12 +470,12 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
                                        + tr("The channels to display on the viewer.") + "</p>");
     _imp->firstRowLayout->addWidget(_imp->viewerChannels);
     
-    QAction* lumiAction = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionLuminance,kShortcutDescActionLuminance,_imp->viewerChannels);
-    QAction* rgbAction = new QAction(QIcon(),tr("RGB"),_imp->viewerChannels);
-    QAction* rAction = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionR,kShortcutDescActionR,_imp->viewerChannels);
-    QAction* gAction = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionG,kShortcutDescActionG,_imp->viewerChannels);
-    QAction* bAction = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionB,kShortcutDescActionB,_imp->viewerChannels);
-    QAction* aAction = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionA,kShortcutDescActionA,_imp->viewerChannels);
+    QAction* lumiAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionLuminance, tr("Luminance"), _imp->viewerChannels);
+    QAction* rgbAction = new QAction(QIcon(), tr("RGB"), _imp->viewerChannels);
+    QAction* rAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionRed, tr("Red"), _imp->viewerChannels);
+    QAction* gAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionGreen, tr("Green"), _imp->viewerChannels);
+    QAction* bAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionBlue, tr("Blue"), _imp->viewerChannels);
+    QAction* aAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionAlpha, tr("Alpha"), _imp->viewerChannels);
 
     _imp->viewerChannels->addAction(lumiAction);
     _imp->viewerChannels->addAction(rgbAction);
@@ -480,11 +489,22 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->zoomCombobox = new ComboBox(_imp->firstSettingsRow);
     _imp->zoomCombobox->setToolTip( "<p><b>" + tr("Zoom:") + "</b></p>"
                                      + tr("The zoom applied to the image on the viewer.") + "</p>");
+
+#pragma message WARN("TODO: add zoom in/zoom out/fit to viewer zoom menu")
+    // Unfortunately, this require a bit of work, because zoomSlot(QString) *parses* the menu entry and thus expects all entries to have the form "xx%".
+    // Keyboard shortcuts should be made visible to the user, not only in the shortcut editor, but also at logical places in the GUI.
+
+    //ActionWithShortcut* zoomInAction = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionZoomIn, kShortcutDescActionZoomIn, this);
+    //_imp->zoomCombobox->addAction(zoomInAction);
+    //ActionWithShortcut* zoomOutAction = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionZoomOut, kShortcutDescActionZoomOut, this);
+    //_imp->zoomCombobox->addAction(zoomOutAction);
+    //ActionWithShortcut* zoomFitAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionFitViewer, kShortcutDescActionFitViewer, this);
+    //_imp->zoomCombobox->addAction(zoomFitAction);
     _imp->zoomCombobox->addItem("10%");
     _imp->zoomCombobox->addItem("25%");
     _imp->zoomCombobox->addItem("50%");
     _imp->zoomCombobox->addItem("75%");
-    ActionWithShortcut* level100Action = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionZoomLevel100,kShortcutDescActionZoomLevel100,this);
+    ActionWithShortcut* level100Action = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionZoomLevel100, "100%", this);
     _imp->zoomCombobox->addAction(level100Action);
     _imp->zoomCombobox->addItem("125%");
     _imp->zoomCombobox->addItem("150%");
@@ -559,19 +579,14 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
 
     _imp->renderScaleCombo = new ComboBox(_imp->firstSettingsRow);
     _imp->renderScaleCombo->setFocusPolicy(Qt::NoFocus);
-    _imp->renderScaleCombo->setToolTip(Natron::convertFromPlainText(tr("When proxy mode is activated, it scales down the rendered image by this factor \n"
+    _imp->renderScaleCombo->setToolTip(Natron::convertFromPlainText(tr("When proxy mode is activated, it scales down the rendered image by this factor "
                                             "to accelerate the rendering."), Qt::WhiteSpaceNormal));
     
-    QAction* proxy2 = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionProxyLevel2,kShortcutDescActionProxyLevel2,
-                                             _imp->renderScaleCombo);
-    QAction* proxy4 = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionProxyLevel4,kShortcutDescActionProxyLevel4,
-                                             _imp->renderScaleCombo);
-    QAction* proxy8 = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionProxyLevel8,kShortcutDescActionProxyLevel8,
-                                             _imp->renderScaleCombo);
-    QAction* proxy16 = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionProxyLevel16,kShortcutDescActionProxyLevel16,
-                                             _imp->renderScaleCombo);
-    QAction* proxy32 = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDActionProxyLevel32,kShortcutDescActionProxyLevel32,
-                                             _imp->renderScaleCombo);
+    QAction* proxy2 = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionProxyLevel2, "2", _imp->renderScaleCombo);
+    QAction* proxy4 = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionProxyLevel4, "4", _imp->renderScaleCombo);
+    QAction* proxy8 = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionProxyLevel8, "8", _imp->renderScaleCombo);
+    QAction* proxy16 = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionProxyLevel16, "16", _imp->renderScaleCombo);
+    QAction* proxy32 = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionProxyLevel32, "32", _imp->renderScaleCombo);
     _imp->renderScaleCombo->addAction(proxy2);
     _imp->renderScaleCombo->addAction(proxy4);
     _imp->renderScaleCombo->addAction(proxy8);
@@ -592,11 +607,11 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
 
     _imp->compositingOperator = new ComboBox(_imp->firstSettingsRow);
     QObject::connect( _imp->compositingOperator,SIGNAL( currentIndexChanged(int) ),this,SLOT( onCompositingOperatorIndexChanged(int) ) );
-    _imp->compositingOperator->addItem(" - ",QIcon(),QKeySequence(),"Only the A input is used.");
-    _imp->compositingOperator->addItem("Over",QIcon(),QKeySequence(),"A + B(1 - Aalpha)");
-    _imp->compositingOperator->addItem("Under",QIcon(),QKeySequence(),"A(1 - Balpha) + B");
-    _imp->compositingOperator->addItem("Minus",QIcon(),QKeySequence(),"A - B");
-    _imp->compositingOperator->addItem("Wipe",QIcon(),QKeySequence(),"Wipe betweens A and B");
+    _imp->compositingOperator->addItem(tr(" - "), QIcon(), QKeySequence(), tr("Only the A input is used."));
+    _imp->compositingOperator->addItem(tr("Over"), QIcon(), QKeySequence(), tr("A + B(1 - Aalpha)"));
+    _imp->compositingOperator->addItem(tr("Under"), QIcon(), QKeySequence(), tr("A(1 - Balpha) + B"));
+    _imp->compositingOperator->addItem(tr("Minus"), QIcon(), QKeySequence(), tr("A - B"));
+    _imp->compositingOperator->addItem(tr("Wipe"), QIcon(), QKeySequence(), tr("Wipe between A and B"));
     _imp->firstRowLayout->addWidget(_imp->compositingOperator);
 
     _imp->secondInputLabel = new Natron::Label("B:",_imp->firstSettingsRow);
@@ -933,7 +948,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->playbackMode_Button = new Button(_imp->playerButtonsContainer);
     _imp->playbackMode_Button->setFocusPolicy(Qt::NoFocus);
     _imp->playbackMode_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    _imp->playbackMode_Button->setToolTip(Natron::convertFromPlainText(tr("Behaviour to adopt when the playback\n hit the end of the range: loop,bounce or stop."), Qt::WhiteSpaceNormal));
+    _imp->playbackMode_Button->setToolTip(Natron::convertFromPlainText(tr("Behaviour to adopt when the playback hit the end of the range: loop,bounce or stop."), Qt::WhiteSpaceNormal));
     _imp->playerLayout->addWidget(_imp->playbackMode_Button);
 
 
@@ -1120,7 +1135,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     QObject::connect(gui->getApp()->getProject().get(), SIGNAL(frameRangeChanged(int,int)), _imp->timeLineGui, SLOT(onProjectFrameRangeChanged(int,int)));
     _imp->timeLineGui->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Minimum);
     _imp->mainLayout->addWidget(_imp->timeLineGui);
-    int leftBound,rightBound;
+    double leftBound,rightBound;
     gui->getApp()->getFrameRange(&leftBound, &rightBound);
     _imp->timeLineGui->setBoundaries(leftBound, rightBound);
     onTimelineBoundariesChanged(leftBound,rightBound);
@@ -1600,28 +1615,28 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
         } else {
             _imp->viewerChannels->setCurrentIndex(0);
         }
-    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionR, modifiers, key) ) {
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionRed, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 2) {
             _imp->viewerChannels->setCurrentIndex(1);
         } else {
             _imp->viewerChannels->setCurrentIndex(2);
         }
-    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionG, modifiers, key) ) {
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionGreen, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 3) {
             _imp->viewerChannels->setCurrentIndex(1);
         } else {
             _imp->viewerChannels->setCurrentIndex(3);
         }
-    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionB, modifiers, key) ) {
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionBlue, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 4) {
             _imp->viewerChannels->setCurrentIndex(1);
         } else {
             _imp->viewerChannels->setCurrentIndex(4);
         }
-    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionA, modifiers, key) ) {
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionAlpha, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 5) {
             _imp->viewerChannels->setCurrentIndex(1);
@@ -1679,6 +1694,8 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDActionZoomLevel100, modifiers, key) ) {
         _imp->viewer->zoomSlot(100);
         _imp->zoomCombobox->setCurrentIndex_no_emit(4);
+    } else {
+        QWidget::keyPressEvent(e);
     }
 } // keyPressEvent
 
@@ -1793,8 +1810,8 @@ ViewerTab::drawOverlays(double scaleX,
         return;
     }
     
+    double time = _imp->app->getTimeLine()->currentFrame();
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
-    int time = _imp->app->getTimeLine()->currentFrame();
     int view = getCurrentView();
 #endif
     
@@ -1805,8 +1822,14 @@ ViewerTab::drawOverlays(double scaleX,
     for (std::list<boost::shared_ptr<Natron::Node> >::reverse_iterator it = nodes.rbegin(); it != nodes.rend(); ++it) {
         
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
+        double transformedTime;
+        bool ok = _imp->getTimeTransform(time, view, *it, getInternalNode(), &transformedTime);
+        if (ok) {
+            time = transformedTime;
+        }
+        
         Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
-        bool ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
+        ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
         GLfloat oldMat[16];
         if (ok) {
             //Ok we've got a transform here, apply it to the OpenGL model view matrix
@@ -1814,25 +1837,26 @@ ViewerTab::drawOverlays(double scaleX,
             GLdouble oglMat[16];
             transformToOpenGLMatrix(mat,oglMat);
             glMatrixMode(GL_MODELVIEW);
-            glGetFloatv (GL_MODELVIEW_MATRIX, oldMat);
+            glGetFloatv(GL_MODELVIEW_MATRIX, oldMat);
             glMultMatrixd(oglMat);
         }
+        
 #endif
         
         if (_imp->currentRoto.first && (*it) == _imp->currentRoto.first->getNode()) {
             if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-                _imp->currentRoto.second->drawOverlays(scaleX, scaleY);
+                _imp->currentRoto.second->drawOverlays(time, scaleX, scaleY);
             }
         } else if (_imp->currentTracker.first && (*it) == _imp->currentTracker.first->getNode()) {
             if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-                _imp->currentTracker.second->drawOverlays(scaleX, scaleY);
+                _imp->currentTracker.second->drawOverlays(time, scaleX, scaleY);
             }
         } else {
             
             Natron::EffectInstance* effect = (*it)->getLiveInstance();
             assert(effect);
             effect->setCurrentViewportForOverlays_public(_imp->viewer);
-            effect->drawOverlay_public(scaleX,scaleY);
+            effect->drawOverlay_public(time, scaleX,scaleY);
         }
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
         if (ok) {
@@ -1858,11 +1882,21 @@ ViewerTab::notifyOverlaysPenDown_internal(const boost::shared_ptr<Natron::Node>&
 
     QPointF transformViewportPos;
     QPointF transformPos;
+    double time = _imp->app->getTimeLine()->currentFrame();
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
-    int time = _imp->app->getTimeLine()->currentFrame();
+    
+    
     int view = getCurrentView();
+    
+    double transformedTime;
+    bool ok = _imp->getTimeTransform(time, view, node, getInternalNode(), &transformedTime);
+    if (ok) {
+        time = transformedTime;
+    }
+    
+    
     Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
-    bool ok = _imp->getOverlayTransform(time, view, node, getInternalNode(), &mat);
+    ok = _imp->getOverlayTransform(time, view, node, getInternalNode(), &mat);
     if (!ok) {
         transformViewportPos = viewportPos;
         transformPos = pos;
@@ -1887,6 +1921,8 @@ ViewerTab::notifyOverlaysPenDown_internal(const boost::shared_ptr<Natron::Node>&
             transformPos.ry() = p.y / p.z;
         }
     }
+    
+   
 #else
     transformViewportPos = viewportPos;
     transformPos = pos;
@@ -1894,14 +1930,14 @@ ViewerTab::notifyOverlaysPenDown_internal(const boost::shared_ptr<Natron::Node>&
     
     if (_imp->currentRoto.first && node == _imp->currentRoto.first->getNode()) {
         if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentRoto.second->penDown(scaleX, scaleY, pen, isTabletEvent, transformViewportPos, transformPos, pressure, timestamp, e) ) {
+            if ( _imp->currentRoto.second->penDown(time, scaleX, scaleY, pen, isTabletEvent, transformViewportPos, transformPos, pressure, timestamp, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
         }
     } else if (_imp->currentTracker.first && node == _imp->currentTracker.first->getNode()) {
         if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentTracker.second->penDown(scaleX, scaleY, transformViewportPos, transformPos, pressure, e) ) {
+            if ( _imp->currentTracker.second->penDown(time, scaleX, scaleY, transformViewportPos, transformPos, pressure, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
@@ -1911,7 +1947,7 @@ ViewerTab::notifyOverlaysPenDown_internal(const boost::shared_ptr<Natron::Node>&
         Natron::EffectInstance* effect = node->getLiveInstance();
         assert(effect);
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        bool didSmthing = effect->onOverlayPenDown_public(scaleX, scaleY, transformViewportPos, transformPos, pressure);
+        bool didSmthing = effect->onOverlayPenDown_public(time, scaleX, scaleY, transformViewportPos, transformPos, pressure);
         if (didSmthing) {
             //http://openfx.sourceforge.net/Documentation/1.3/ofxProgrammingReference.html
             // if the instance returns kOfxStatOK, the host should not pass the pen motion
@@ -1992,11 +2028,18 @@ ViewerTab::notifyOverlaysPenDoubleClick(double scaleX,
     for (std::list<boost::shared_ptr<Natron::Node> >::reverse_iterator it = nodes.rbegin(); it != nodes.rend(); ++it) {
         QPointF transformViewportPos;
         QPointF transformPos;
+        double time = _imp->app->getTimeLine()->currentFrame();
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
-        int time = _imp->app->getTimeLine()->currentFrame();
         int view = getCurrentView();
+        
+        double transformedTime;
+        bool ok = _imp->getTimeTransform(time, view, *it, getInternalNode(), &transformedTime);
+        if (ok) {
+            time = transformedTime;
+        }
+        
         Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
-        bool ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
+        ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
         if (!ok) {
             transformViewportPos = viewportPos;
             transformPos = pos;
@@ -2021,20 +2064,23 @@ ViewerTab::notifyOverlaysPenDoubleClick(double scaleX,
                 transformPos.ry() = p.y / p.z;
             }
         }
+        
+        
+
 #else
         transformViewportPos = viewportPos;
         transformPos = pos;
 #endif
         
         if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentRoto.second->penDoubleClicked(scaleX, scaleY, transformViewportPos, transformPos, e) ) {
+            if ( _imp->currentRoto.second->penDoubleClicked(time, scaleX, scaleY, transformViewportPos, transformPos, e) ) {
                 _imp->lastOverlayNode = _imp->currentRoto.first->getNode();
                 return true;
             }
         }
         
         if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentTracker.second->penDoubleClicked(scaleX, scaleY, transformViewportPos, transformPos, e) ) {
+            if ( _imp->currentTracker.second->penDoubleClicked(time, scaleX, scaleY, transformViewportPos, transformPos, e) ) {
                 _imp->lastOverlayNode = _imp->currentRoto.first->getNode();
                 return true;
             }
@@ -2057,11 +2103,20 @@ ViewerTab::notifyOverlaysPenMotion_internal(const boost::shared_ptr<Natron::Node
     
     QPointF transformViewportPos;
     QPointF transformPos;
+    double time = _imp->app->getTimeLine()->currentFrame();
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
-    int time = _imp->app->getTimeLine()->currentFrame();
     int view = getCurrentView();
+    
+    double transformedTime;
+    bool ok = _imp->getTimeTransform(time, view, node, getInternalNode(), &transformedTime);
+    if (ok) {
+        time = transformedTime;
+    }
+    
+
+    
     Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
-    bool ok = _imp->getOverlayTransform(time, view, node, getInternalNode(), &mat);
+    ok = _imp->getOverlayTransform(time, view, node, getInternalNode(), &mat);
     if (!ok) {
         transformViewportPos = viewportPos;
         transformPos = pos;
@@ -2086,6 +2141,7 @@ ViewerTab::notifyOverlaysPenMotion_internal(const boost::shared_ptr<Natron::Node
             transformPos.ry() = p.y / p.z;
         }
     }
+    
 #else
     transformViewportPos = viewportPos;
     transformPos = pos;
@@ -2093,14 +2149,14 @@ ViewerTab::notifyOverlaysPenMotion_internal(const boost::shared_ptr<Natron::Node
     
     if (_imp->currentRoto.first && node == _imp->currentRoto.first->getNode()) {
         if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentRoto.second->penMotion(scaleX, scaleY, transformViewportPos, transformPos, pressure, timestamp, e) ) {
+            if ( _imp->currentRoto.second->penMotion(time, scaleX, scaleY, transformViewportPos, transformPos, pressure, timestamp, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
         }
     } else if (_imp->currentTracker.first && node == _imp->currentTracker.first->getNode()) {
         if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentTracker.second->penMotion(scaleX, scaleY, transformViewportPos, transformPos, pressure, e) ) {
+            if ( _imp->currentTracker.second->penMotion(time, scaleX, scaleY, transformViewportPos, transformPos, pressure, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
@@ -2110,7 +2166,7 @@ ViewerTab::notifyOverlaysPenMotion_internal(const boost::shared_ptr<Natron::Node
         Natron::EffectInstance* effect = node->getLiveInstance();
         assert(effect);
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        bool didSmthing = effect->onOverlayPenMotion_public(scaleX, scaleY, transformViewportPos, transformPos, pressure);
+        bool didSmthing = effect->onOverlayPenMotion_public(time, scaleX, scaleY, transformViewportPos, transformPos, pressure);
         if (didSmthing) {
             //http://openfx.sourceforge.net/Documentation/1.3/ofxProgrammingReference.html
             // if the instance returns kOfxStatOK, the host should not pass the pen motion
@@ -2197,11 +2253,19 @@ ViewerTab::notifyOverlaysPenUp(double scaleX,
         
         QPointF transformViewportPos;
         QPointF transformPos;
+        double time = _imp->app->getTimeLine()->currentFrame();
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
-        int time = _imp->app->getTimeLine()->currentFrame();
         int view = getCurrentView();
+        
+        
+        double transformedTime;
+        bool ok = _imp->getTimeTransform(time, view, *it, getInternalNode(), &transformedTime);
+        if (ok) {
+            time = transformedTime;
+        }
+        
         Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
-        bool ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
+        ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
         if (!ok) {
             transformViewportPos = viewportPos;
             transformPos = pos;
@@ -2226,6 +2290,9 @@ ViewerTab::notifyOverlaysPenUp(double scaleX,
                 transformPos.ry() = p.y / p.z;
             }
         }
+        
+        
+
 #else
         transformViewportPos = viewportPos;
         transformPos = pos;
@@ -2235,19 +2302,19 @@ ViewerTab::notifyOverlaysPenUp(double scaleX,
         if (_imp->currentRoto.first && (*it) == _imp->currentRoto.first->getNode()) {
             
             if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-                didSomething |= _imp->currentRoto.second->penUp(scaleX, scaleY, transformViewportPos, transformPos, pressure, timestamp, e);
+                didSomething |= _imp->currentRoto.second->penUp(time, scaleX, scaleY, transformViewportPos, transformPos, pressure, timestamp, e);
             }
         }
         if (_imp->currentTracker.first && (*it) == _imp->currentTracker.first->getNode()) {
             if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-                didSomething |=  _imp->currentTracker.second->penUp(scaleX, scaleY, transformViewportPos, transformPos, pressure, e)  ;
+                didSomething |=  _imp->currentTracker.second->penUp(time, scaleX, scaleY, transformViewportPos, transformPos, pressure, e)  ;
             }
         }
         
         Natron::EffectInstance* effect = (*it)->getLiveInstance();
         assert(effect);
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        didSomething |= effect->onOverlayPenUp_public(scaleX, scaleY, transformViewportPos, transformPos, pressure);
+        didSomething |= effect->onOverlayPenUp_public(time, scaleX, scaleY, transformViewportPos, transformPos, pressure);
         
         
     }
@@ -2267,28 +2334,39 @@ ViewerTab::notifyOverlaysKeyDown_internal(const boost::shared_ptr<Natron::Node>&
                                           Natron::Key k,
                                           Natron::KeyboardModifiers km)
 {
+    
+    double time = _imp->app->getTimeLine()->currentFrame();
+#ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
+    double transformedTime;
+    bool ok = _imp->getTimeTransform(time, 0, node, getInternalNode(), &transformedTime);
+    if (ok) {
+        time = transformedTime;
+    }
+#endif
+    
+    
     if (_imp->currentRoto.first && node == _imp->currentRoto.first->getNode()) {
         
         if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentRoto.second->keyDown(scaleX, scaleY, e) ) {
+            if ( _imp->currentRoto.second->keyDown(time, scaleX, scaleY, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
         }
     } else if (_imp->currentTracker.first && node == _imp->currentTracker.first->getNode()) {
         if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentTracker.second->keyDown(scaleX, scaleY, e) ) {
+            if ( _imp->currentTracker.second->keyDown(time, scaleX, scaleY, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
         }
         
     } else {
-        
+   
         Natron::EffectInstance* effect = node->getLiveInstance();
         assert(effect);
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        bool didSmthing = effect->onOverlayKeyDown_public(scaleX,scaleY,k,km);
+        bool didSmthing = effect->onOverlayKeyDown_public(time, scaleX,scaleY,k,km);
         if (didSmthing) {
             //http://openfx.sourceforge.net/Documentation/1.3/ofxProgrammingReference.html
             // if the instance returns kOfxStatOK, the host should not pass the pen motion
@@ -2363,25 +2441,35 @@ ViewerTab::notifyOverlaysKeyUp(double scaleX,
     _imp->lastOverlayNode.reset();
 
 
+    double time = _imp->app->getTimeLine()->currentFrame();
+
     std::list<boost::shared_ptr<Natron::Node> >  nodes;
     getGui()->getNodesEntitledForOverlays(nodes);
     for (std::list<boost::shared_ptr<Natron::Node> >::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
         Natron::EffectInstance* effect = (*it)->getLiveInstance();
         assert(effect);
         
+#ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
+        double transformedTime;
+        bool ok = _imp->getTimeTransform(time, 0, *it, getInternalNode(), &transformedTime);
+        if (ok) {
+            time = transformedTime;
+        }
+#endif
+        
         if (_imp->currentRoto.first && (*it) == _imp->currentRoto.first->getNode()) {
             if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-                didSomething |= _imp->currentRoto.second->keyUp(scaleX, scaleY, e);
+                didSomething |= _imp->currentRoto.second->keyUp(time, scaleX, scaleY, e);
             }
         }
         if (_imp->currentTracker.first && (*it) == _imp->currentTracker.first->getNode()) {
             if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-                didSomething |= _imp->currentTracker.second->keyUp(scaleX, scaleY, e);
+                didSomething |= _imp->currentTracker.second->keyUp(time, scaleX, scaleY, e);
             }
         }
         
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        didSomething |= effect->onOverlayKeyUp_public( scaleX,scaleY,
+        didSomething |= effect->onOverlayKeyUp_public( time, scaleX,scaleY,
                                             QtEnumConvert::fromQtKey( (Qt::Key)e->key() ),QtEnumConvert::fromQtModifiers( e->modifiers() ) );
         
     }
@@ -2400,10 +2488,20 @@ bool
 ViewerTab::notifyOverlaysKeyRepeat_internal(const boost::shared_ptr<Natron::Node>& node,double scaleX,double scaleY,QKeyEvent* e,Natron::Key k,
                                       Natron::KeyboardModifiers km)
 {
+    
+    double time = _imp->app->getTimeLine()->currentFrame();
+#ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
+    double transformedTime;
+    bool ok = _imp->getTimeTransform(time, 0, node, getInternalNode(), &transformedTime);
+    if (ok) {
+        time = transformedTime;
+    }
+#endif
+    
     if (_imp->currentRoto.first && node == _imp->currentRoto.first->getNode()) {
         
         if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-            if ( _imp->currentRoto.second->keyRepeat(scaleX, scaleY, e) ) {
+            if ( _imp->currentRoto.second->keyRepeat(time, scaleX, scaleY, e) ) {
                 _imp->lastOverlayNode = node;
                 return true;
             }
@@ -2417,7 +2515,7 @@ ViewerTab::notifyOverlaysKeyRepeat_internal(const boost::shared_ptr<Natron::Node
         Natron::EffectInstance* effect = node->getLiveInstance();
         assert(effect);
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        bool didSmthing = effect->onOverlayKeyRepeat_public( scaleX,scaleY,k,km);
+        bool didSmthing = effect->onOverlayKeyRepeat_public(time, scaleX,scaleY,k,km);
         if (didSmthing) {
             //http://openfx.sourceforge.net/Documentation/1.3/ofxProgrammingReference.html
             // if the instance returns kOfxStatOK, the host should not pass the pen motion
@@ -2483,6 +2581,10 @@ ViewerTab::notifyOverlaysFocusGained(double scaleX,
     if ( !_imp->app || _imp->app->isClosing() ) {
         return false;
     }
+    
+    double time = _imp->app->getTimeLine()->currentFrame();
+
+    
     bool ret = false;
     std::list<boost::shared_ptr<Natron::Node> >  nodes;
     getGui()->getNodesEntitledForOverlays(nodes);
@@ -2490,8 +2592,16 @@ ViewerTab::notifyOverlaysFocusGained(double scaleX,
         Natron::EffectInstance* effect = (*it)->getLiveInstance();
         assert(effect);
         
+#ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
+        double transformedTime;
+        bool ok = _imp->getTimeTransform(time, 0, *it, getInternalNode(), &transformedTime);
+        if (ok) {
+            time = transformedTime;
+        }
+#endif
+        
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        bool didSmthing = effect->onOverlayFocusGained_public(scaleX,scaleY);
+        bool didSmthing = effect->onOverlayFocusGained_public(time, scaleX,scaleY);
         if (didSmthing) {
             ret = true;
         }
@@ -2513,20 +2623,30 @@ ViewerTab::notifyOverlaysFocusLost(double scaleX,
     if ( !_imp->app || _imp->app->isClosing() ) {
         return false;
     }
+    
+    double time = _imp->app->getTimeLine()->currentFrame();
+    
     bool ret = false;
     std::list<boost::shared_ptr<Natron::Node> >  nodes;
     getGui()->getNodesEntitledForOverlays(nodes);
     for (std::list<boost::shared_ptr<Natron::Node> >::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
         
+#ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
+        double transformedTime;
+        bool ok = _imp->getTimeTransform(time, 0, *it, getInternalNode(), &transformedTime);
+        if (ok) {
+            time = transformedTime;
+        }
+#endif
         
         if (_imp->currentRoto.first && (*it) == _imp->currentRoto.first->getNode()) {
             
             if ( _imp->currentRoto.second && _imp->currentRoto.first->isSettingsPanelVisible() ) {
-                _imp->currentRoto.second->focusOut();
+                _imp->currentRoto.second->focusOut(time);
             }
         } else if (_imp->currentTracker.first && (*it) == _imp->currentTracker.first->getNode()) {
             if ( _imp->currentTracker.second && _imp->currentTracker.first->isSettingsPanelVisible() ) {
-                if ( _imp->currentTracker.second->loseFocus(scaleX, scaleY) ) {
+                if ( _imp->currentTracker.second->loseFocus(time, scaleX, scaleY) ) {
                     return true;
                 }
             }
@@ -2536,7 +2656,7 @@ ViewerTab::notifyOverlaysFocusLost(double scaleX,
         assert(effect);
         
         effect->setCurrentViewportForOverlays_public(_imp->viewer);
-        bool didSmthing = effect->onOverlayFocusLost_public(scaleX,scaleY);
+        bool didSmthing = effect->onOverlayFocusLost_public(time, scaleX,scaleY);
         if (didSmthing) {
             ret = true;
         }
@@ -4141,7 +4261,7 @@ ViewerTab::onInternalNodeScriptNameChanged(const QString& /*name*/)
 
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
 bool
-ViewerTabPrivate::getOverlayTransform(int time,
+ViewerTabPrivate::getOverlayTransform(double time,
                                       int view,
                                       const boost::shared_ptr<Natron::Node>& target,
                                       Natron::EffectInstance* currentNode,
@@ -4220,8 +4340,94 @@ ViewerTabPrivate::getOverlayTransform(int time,
         return isOk;
     }
     return false;
-
+    
 }
+
+static double transformTimeForNode(Natron::EffectInstance* currentNode, double inTime)
+{
+    U64 nodeHash = currentNode->getHash();
+    EffectInstance::FramesNeededMap framesNeeded = currentNode->getFramesNeeded_public(nodeHash, inTime, 0, 0);
+    EffectInstance::FramesNeededMap::iterator foundInput0 = framesNeeded.find(0);
+    if (foundInput0 == framesNeeded.end()) {
+        return inTime;
+    }
+    
+    std::map<int,std::vector<OfxRangeD> >::iterator foundView0 = foundInput0->second.find(0);
+    if (foundView0 == foundInput0->second.end()) {
+        return inTime;
+    }
+    
+    if (foundView0->second.empty()) {
+        return inTime;
+    } else {
+        return (foundView0->second.front().min);
+    }
+}
+
+bool
+ViewerTabPrivate::getTimeTransform(double time,
+                                   int view,
+                                   const boost::shared_ptr<Natron::Node>& target,
+                                   Natron::EffectInstance* currentNode,
+                                   double *newTime) const
+{
+    if (currentNode == target->getLiveInstance()) {
+        *newTime = time;
+        return true;
+    }
+    
+    if (!currentNode->getNode()->isNodeDisabled()) {
+        *newTime = transformTimeForNode(currentNode, time);
+    } else {
+        *newTime = time;
+    }
+    
+    ///Test all inputs recursively, going from last to first, preferring non optional inputs.
+    std::list<Natron::EffectInstance*> nonOptionalInputs;
+    std::list<Natron::EffectInstance*> optionalInputs;
+    int maxInp = currentNode->getMaxInputCount();
+    
+    ///We cycle in reverse by default. It should be a setting of the application.
+    ///In this case it will return input B instead of input A of a merge for example.
+    for (int i = maxInp - 1; i >= 0; --i) {
+        Natron::EffectInstance* inp = currentNode->getInput(i);
+        bool optional = currentNode->isInputOptional(i);
+        if (inp) {
+            if (optional) {
+                optionalInputs.push_back(inp);
+            } else {
+                nonOptionalInputs.push_back(inp);
+            }
+        }
+    }
+    
+    if (nonOptionalInputs.empty() && optionalInputs.empty()) {
+        return false;
+    }
+    
+    ///Cycle through all non optional inputs first
+    for (std::list<Natron::EffectInstance*> ::iterator it = nonOptionalInputs.begin(); it != nonOptionalInputs.end(); ++it) {
+        double inputTime;
+        bool isOk = getTimeTransform(*newTime, view, target, *it, &inputTime);
+        if (isOk) {
+            *newTime = inputTime;
+            return true;
+        }
+    }
+    
+    ///Cycle through optional inputs...
+    for (std::list<Natron::EffectInstance*> ::iterator it = optionalInputs.begin(); it != optionalInputs.end(); ++it) {
+        double inputTime;
+        bool isOk = getTimeTransform(*newTime, view, target, *it, &inputTime);
+        if (isOk) {
+            *newTime = inputTime;
+            return true;
+        }
+        
+    }
+    return false;
+}
+
 #endif
 
 void
@@ -4561,7 +4767,8 @@ ViewerTab::isViewersSynchroEnabled() const
 void
 ViewerTab::synchronizeOtherViewersProjection()
 {
-    
+    assert(_imp->gui);
+    _imp->gui->setMasterSyncViewer(this);
     double left,bottom,factor,par;
     _imp->viewer->getProjection(&left, &bottom, &factor, &par);
     const std::list<ViewerTab*>& viewers = _imp->gui->getViewersList();

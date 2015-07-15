@@ -246,7 +246,7 @@ public:
 
     bool isFrameRangeLocked() const;
     
-    void getFrameRange(int* first,int* last) const;
+    void getFrameRange(double* first,double* last) const;
     
     void unionFrameRangeWith(int first,int last);
     
@@ -282,6 +282,8 @@ public:
     {
         reset(aboutToQuit);
     }
+    
+    bool addFormat(const std::string& formatSpec);
     
 public Q_SLOTS:
 

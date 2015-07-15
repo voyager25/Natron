@@ -6,6 +6,7 @@
 #include <Python.h>
 
 #include <vector>
+#include <map>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/shared_ptr.hpp>
@@ -13,17 +14,18 @@
 #endif
 #include "Global/Enums.h"
 #include "Global/Macros.h"
+#include "Engine/Transform.h"
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QUndoCommand> // in QtGui on Qt4, in QtWidgets on Qt5
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-class DopeSheet;
+class DopeSheetEditor;
 class DSNode;
-
+class Curve;
+class DSKnob;
 struct DopeSheetKey;
-
 namespace Natron {
 class Node;
 }
@@ -93,17 +95,18 @@ typedef std::list<DSKeyPtr> DSKeyPtrList;
 
 
 /**
- * @brief The DSMoveKeysCommand class describes an undoable action that move
+ * @brief The DSMoveKeysAndNodesCommand class describes an action that moves
  * the current selected keyframes on the dope sheet timeline.
  */
-class DSMoveKeysCommand : public QUndoCommand
+class DSMoveKeysAndNodesCommand : public QUndoCommand
 {
 public:
-    DSMoveKeysCommand(const DSKeyPtrList &keys,
-                      double dt,
-                      DopeSheet *model,
-                      QUndoCommand *parent = 0);
-
+    DSMoveKeysAndNodesCommand(const DSKeyPtrList &keys,
+                                const std::vector<boost::shared_ptr<DSNode> >& nodes,
+                                double dt,
+                                DopeSheetEditor *model,
+                                QUndoCommand *parent = 0);
+    
     void undo() OVERRIDE FINAL;
     void redo() OVERRIDE FINAL;
 
@@ -114,13 +117,55 @@ private:
     /**
      * @brief Move the selected keyframes by 'dt' on the dope sheet timeline.
      */
-    void moveSelectedKeyframes(double dt);
+    void moveSelection(double dt);
 
 private:
     DSKeyPtrList _keys;
+    std::vector<boost::shared_ptr<DSNode> > _nodes;
+    std::list<boost::weak_ptr<Natron::Node> >  _allDifferentNodes;
     double _dt;
-    DopeSheet *_model;
+    DopeSheetEditor *_model;
 };
+
+
+class DSTransformKeysCommand : public QUndoCommand
+{
+public:
+    DSTransformKeysCommand(const DSKeyPtrList &keys,
+                           const Transform::Matrix3x3& transform,
+                           DopeSheetEditor *model,
+                           QUndoCommand *parent = 0);
+    
+    void undo() OVERRIDE FINAL;
+    void redo() OVERRIDE FINAL;
+    
+    int id() const OVERRIDE FINAL;
+    bool mergeWith(const QUndoCommand *other) OVERRIDE FINAL;
+    
+private:
+    /**
+     * @brief Move the selected keyframes by 'dt' on the dope sheet timeline.
+     */
+    void transformKey(const DSKeyPtr& key);
+    
+private:
+    
+    
+    struct TransformKeyData
+    {
+        DSKeyPtrList keys;
+        boost::shared_ptr<Curve> oldCurve;
+        boost::shared_ptr<Curve> newCurve;
+    };
+    
+    typedef std::map<boost::shared_ptr<DSKnob>,TransformKeyData> TransformKeys;
+    
+    bool _firstRedoCalled;
+    Transform::Matrix3x3 _transform;
+    TransformKeys _keys;
+    DopeSheetEditor *_model;
+};
+
 
 
 /**
@@ -164,7 +209,7 @@ public:
     DSRightTrimReaderCommand(const boost::shared_ptr<DSNode> &reader,
                              double oldTime,
                              double newTime,
-                             DopeSheet * /*model*/,
+                             DopeSheetEditor * /*model*/,
                              QUndoCommand *parent = 0);
 
     void undo() OVERRIDE FINAL;
@@ -194,7 +239,7 @@ class DSSlipReaderCommand : public QUndoCommand
 public:
     DSSlipReaderCommand(const boost::shared_ptr<DSNode> &reader,
                         double dt,
-                        DopeSheet * /*model*/,
+                        DopeSheetEditor *model,
                         QUndoCommand *parent = 0);
 
     void undo() OVERRIDE FINAL;
@@ -212,31 +257,9 @@ private:
 private:
     boost::weak_ptr<DSNode> _readerContext;
     double _dt;
+    DopeSheetEditor *_model;
 };
 
-
-/**
- * @brief The DSMoveReaderCommand class describes an undoable action that move
- * a reader on the dope sheet timeline.
- */
-class DSMoveReaderCommand : public QUndoCommand
-{
-public:
-    DSMoveReaderCommand(const boost::shared_ptr<DSNode> &reader,
-                        double dt,
-                        DopeSheet * /*model*/,
-                        QUndoCommand *parent = 0);
-
-    void undo() OVERRIDE FINAL;
-    void redo() OVERRIDE FINAL;
-
-    int id() const OVERRIDE FINAL;
-    bool mergeWith(const QUndoCommand *other) OVERRIDE FINAL;
-
-private:
-    boost::weak_ptr<DSNode> _readerContext;
-    double _dt;
-};
 
 
 /**
@@ -249,7 +272,7 @@ class DSRemoveKeysCommand : public QUndoCommand
 {
 public:
     DSRemoveKeysCommand(const std::vector<DopeSheetKey> &keys,
-                        DopeSheet *model,
+                        DopeSheetEditor *model,
                         QUndoCommand *parent = 0);
 
     void undo() OVERRIDE FINAL;
@@ -260,41 +283,9 @@ private:
 
 private:
     std::vector<DopeSheetKey> _keys;
-    DopeSheet *_model;
+    DopeSheetEditor *_model;
 };
 
-
-/**
- * @brief The DSMoveGroupCommand class describes an undoable action that move
- * the keyframes and the readers contained in a group node on the dope sheet
- * timeline.
- */
-class DSMoveGroupCommand : public QUndoCommand
-{
-public:
-    DSMoveGroupCommand(const boost::shared_ptr<DSNode> &group,
-                       double dt,
-                       DopeSheet *model,
-                       QUndoCommand *parent = 0);
-
-    void undo() OVERRIDE FINAL;
-    void redo() OVERRIDE FINAL;
-
-    int id() const OVERRIDE FINAL;
-    bool mergeWith(const QUndoCommand *other) OVERRIDE FINAL;
-
-private:
-    /**
-     * @brief  Offset the time of all inner keyframes by 'dt'.
-     * Offset the starting time of the readers by the same value.
-     */
-    void moveGroup(double dt);
-
-private:
-    boost::weak_ptr<DSNode> _groupContext;
-    double _dt;
-    DopeSheet *_model;
-};
 
 
 /**
@@ -326,7 +317,7 @@ class DSSetSelectedKeysInterpolationCommand : public QUndoCommand
 {
 public:
     DSSetSelectedKeysInterpolationCommand(const std::list<DSKeyInterpolationChange> &changes,
-                                          DopeSheet *model,
+                                          DopeSheetEditor *model,
                                           QUndoCommand *parent = 0);
 
     void undo() OVERRIDE FINAL;
@@ -337,7 +328,7 @@ private:
 
 private:
     std::list<DSKeyInterpolationChange> _changes;
-    DopeSheet *_model;
+    DopeSheetEditor *_model;
 };
 
 
@@ -351,7 +342,7 @@ class DSPasteKeysCommand : public QUndoCommand
 {
 public:
     DSPasteKeysCommand(const std::vector<DopeSheetKey> &keys,
-                       DopeSheet *model,
+                       DopeSheetEditor *model,
                        QUndoCommand *parent = 0);
 
     void undo() OVERRIDE FINAL;
@@ -368,7 +359,7 @@ private:
 
 private:
     std::vector<DopeSheetKey> _keys;
-    DopeSheet *_model;
+    DopeSheetEditor *_model;
 };
 
 #endif // DOPESHEETEDITORUNDOREDO_H

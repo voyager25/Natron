@@ -18,7 +18,7 @@
 
 #include <list>
 #include <map>
-#include <algorithm>
+#include <algorithm> // min, max
 
 #include "Global/GlobalDefines.h"
 
@@ -190,7 +190,7 @@ namespace Natron {
 
         static ImageKey makeKey(U64 nodeHashKey,
                                 bool frameVaryingOrAnimated,
-                                SequenceTime time,
+                                double time,
                                 int view);
         static boost::shared_ptr<ImageParams> makeParams(int cost,
                                                          const RectD & rod,    // the image rod in canonical coordinates
@@ -571,8 +571,9 @@ namespace Natron {
                 return;
             }
             QWriteLocker locker(&_entryLock);
-
-            _bitmap.markForRendered(roi);
+            RectI intersection;
+            _bounds.intersect(roi, &intersection);
+            _bitmap.markForRendered(intersection);
         }
         
 #if NATRON_ENABLE_TRIMAP
@@ -583,8 +584,9 @@ namespace Natron {
                 return;
             }
             QWriteLocker locker(&_entryLock);
-            
-            _bitmap.markForRendering(roi);
+            RectI intersection;
+            _bounds.intersect(roi, &intersection);
+            _bitmap.markForRendering(intersection);
         }
 #endif
 

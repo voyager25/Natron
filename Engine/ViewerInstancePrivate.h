@@ -21,6 +21,8 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
+#include <algorithm> // min, max
+
 #include <QtCore/QMutex>
 #include <QtCore/QWaitCondition>
 #include <QtCore/QThread>
@@ -272,17 +274,31 @@ public:
     }
     
     /**
-     * @brief We keep track of ongoing renders internally. This is used for abortable renders 
-     * (scrubbing the timeline, moving a slider...) to keep always at least 1 thread computing
-     * so that not all threads are always aborted.
+     * @brief We keep track of ongoing renders internally. This function is called only by non 
+     * abortable renders to determine if we should abort anyway because the render is no longer interesting.
      **/
     bool isRenderAbortable(int texIndex,U64 age) const
     {
         QMutexLocker k(&renderAgeMutex);
-        if (!currentRenderAges[texIndex].empty() && currentRenderAges[texIndex].front() == age) {
-            return false;
+        if (currentRenderAges[texIndex].empty()) {
+            //huh something is wrong
+            return true;
         }
-        return true;
+        for (std::list<OnGoingRenderInfo>::const_reverse_iterator it = currentRenderAges[texIndex].rbegin();
+             it != currentRenderAges[texIndex].rend(); ++it) {
+            
+            
+            if (it->age == age) {
+                // We just hit that render and there's no newer render that is non-abortable, then do not abort
+                return false;
+            } else if (it->canAbort) {
+                // Ok a newer render is abortable, this render is then useless
+                return true;
+            }
+        }
+        //Hmm the render since to be no longer active...
+        assert(false);
+        return false;
     }
     
     /**
@@ -319,23 +335,24 @@ public:
         return true;
     }
     
-    bool addOngoingRender(int texIndex, U64 age) {
+    bool addOngoingRender(int texIndex, U64 age, bool canAbort) {
         QMutexLocker k(&renderAgeMutex);
-        if (!currentRenderAges[texIndex].empty() && currentRenderAges[texIndex].back() >= age) {
+        if (!currentRenderAges[texIndex].empty() && currentRenderAges[texIndex].back().age >= age) {
             return false;
         }
-        if (currentRenderAges[texIndex].size() > 1) {
-            currentRenderAges[texIndex].resize(1);
-        }
-        currentRenderAges[texIndex].push_back(age);
+       
+        OnGoingRenderInfo info;
+        info.age = age;
+        info.canAbort = canAbort;
+        currentRenderAges[texIndex].push_back(info);
         return true;
     }
     
     bool removeOngoingRender(int texIndex, U64 age) {
         QMutexLocker k(&renderAgeMutex);
         int i = 0;
-        for (std::list<U64>::iterator it = currentRenderAges[texIndex].begin(); it != currentRenderAges[texIndex].end(); ++it, ++i) {
-            if (*it == age) {
+        for (std::list<OnGoingRenderInfo>::iterator it = currentRenderAges[texIndex].begin(); it != currentRenderAges[texIndex].end(); ++it, ++i) {
+            if (it->age == age) {
                 currentRenderAges[texIndex].erase(it);
                 return true;
             }
@@ -433,6 +450,13 @@ public:
     
     mutable QMutex currentlyUpdatingOpenGLViewerMutex;
     bool currentlyUpdatingOpenGLViewer;
+    
+    struct OnGoingRenderInfo
+    {
+        U64 age;
+        bool canAbort;
+    };
+    
 private:
     
     mutable QMutex renderAgeMutex; // protects renderAge lastRenderAge currentRenderAges
@@ -441,7 +465,8 @@ private:
     
     //A priority list recording the ongoing renders. This is used for abortable renders (i.e: when moving a slider or scrubbing the timeline)
     //The purpose of this is to always at least keep 1 active render (non abortable) and abort more recent renders that do no longer make sense
-    std::list<U64> currentRenderAges[2];
+    
+    std::list<OnGoingRenderInfo> currentRenderAges[2];
 };
 
 

@@ -45,6 +45,7 @@ CLANG_DIAG_ON(deprecated)
 #define kEnableMaskKnobName "enableMask"
 #define kMaskChannelKnobName "maskChannel"
 #define kEnablePreviewKnobName "enablePreview"
+#define kOutputChannelsKnobName "channels"
 
 class AppInstance;
 class NodeSettingsPanel;
@@ -915,7 +916,7 @@ public:
     bool shouldDrawOverlay() const;
     
     
-    void drawDefaultOverlay(double scaleX,double scaleY);
+    void drawDefaultOverlay(double time, double scaleX,double scaleY);
     
     bool onOverlayPenDownDefault(double scaleX,double scaleY,const QPointF & viewportPos, const QPointF & pos, double pressure) WARN_UNUSED_RETURN;
     

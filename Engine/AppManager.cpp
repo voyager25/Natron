@@ -158,6 +158,12 @@ struct AppManagerPrivate
 #endif
     
     QMutex natronPythonGIL;
+
+#ifdef Q_OS_WIN32
+	//On Windows only, track the UNC path we came across because the WIN32 API does not provide any function to map
+	//from UNC path to path with drive letter.
+	std::map<QChar,QString> uncPathMapping;
+#endif
     
     AppManagerPrivate();
     
@@ -331,6 +337,8 @@ struct CLArgsPrivate
     
     bool isPythonScript;
     
+    QString defaultOnProjectLoadedScript;
+    
     std::list<CLArgs::WriterArg> writers;
     
     bool isBackground;
@@ -350,6 +358,7 @@ struct CLArgsPrivate
     : args()
     , filename()
     , isPythonScript(false)
+    , defaultOnProjectLoadedScript()
     , writers()
     , isBackground(false)
     , ipcPipe()
@@ -369,7 +378,7 @@ struct CLArgsPrivate
     
     QStringList::iterator hasOutputToken(QString& indexStr);
     
-    QStringList::iterator hasFileNameWithExtension(const QString& extension);
+    QStringList::iterator findFileNameWithExtension(const QString& extension);
     
 };
 
@@ -387,7 +396,15 @@ CLArgs::CLArgs(int& argc,char* argv[],bool forceBackground)
         _imp->isBackground = true;
     }
     for (int i = 0; i < argc; ++i) {
-        _imp->args.push_back( QString(argv[i]) );
+        QString str = argv[i];
+        if (str.size() >= 2 && str[0] == '"' && str[str.size() - 1] == '"') {
+            str.remove(0, 1);
+            str.remove(str.size() - 1, 1);
+        }
+#ifdef DEBUG
+        std::cout << "argv[" << i << "] = " << str.toStdString() << std::endl;
+#endif
+        _imp->args.push_back(str);
     }
     
     _imp->parse();
@@ -400,7 +417,14 @@ CLArgs::CLArgs(const QStringList &arguments, bool forceBackground)
     if (forceBackground) {
         _imp->isBackground = true;
     }
-    _imp->args = arguments;
+    for (int i = 0; i < arguments.size(); ++i) {
+        QString str = arguments[i];
+        if (str.size() >= 2 && str[0] == '"' && str[str.size() - 1] == '"') {
+            str.remove(0, 1);
+            str.remove(str.size() - 1, 1);
+        }
+        _imp->args.push_back(str);
+    }
     _imp->parse();
 }
 
@@ -421,6 +445,7 @@ CLArgs::operator=(const CLArgs& other)
     _imp->args = other._imp->args;
     _imp->filename = other._imp->filename;
     _imp->isPythonScript = other._imp->isPythonScript;
+    _imp->defaultOnProjectLoadedScript = other._imp->defaultOnProjectLoadedScript;
     _imp->writers = other._imp->writers;
     _imp->isBackground = other._imp->isBackground;
     _imp->ipcPipe = other._imp->ipcPipe;
@@ -481,12 +506,18 @@ CLArgs::printUsage(const std::string& programName)
               " firstFrame-lastFrame (e.g: 10-40). \n"
               "Note that several -w options can be set to specify multiple Write nodes to render.\n"
               "Note that if specified, then the frame range will be the same for all Write nodes that will render.");
+    W_LINE("\n");
+    W_TR_LINE("[--onload] or [-l] <python script file path> specifies a Python script to be executed after a project is created or loaded.");
+    W_TR_LINE("Note that this will be executed in GUI mode or with NatronRenderer and it will be executed after any Python "
+              "function set to the callback onProjectLoaded or onProjectCreated.");
+    W_TR_LINE("The same rules apply to this script as the rules below on the execution of Python scripts.");
     W_TR_LINE("Some examples of usage of the tool:\n");
     W_LINE("./Natron /Users/Me/MyNatronProjects/MyProject.ntp");
     W_LINE("./Natron -b -w MyWriter /Users/Me/MyNatronProjects/MyProject.ntp");
     W_LINE("./NatronRenderer -w MyWriter /Users/Me/MyNatronProjects/MyProject.ntp");
     W_LINE("./NatronRenderer -w MyWriter /FastDisk/Pictures/sequence###.exr 1-100 /Users/Me/MyNatronProjects/MyProject.ntp");
     W_LINE("./NatronRenderer -w MyWriter -w MySecondWriter 1-10 /Users/Me/MyNatronProjects/MyProject.ntp");
+    W_LINE("./NatronRenderer -w MyWriter 1-10 -l /Users/Me/Scripts/onProjectLoaded.py /Users/Me/MyNatronProjects/MyProject.ntp");
     W_LINE("\n");
     W_TR_LINE("- Options for the execution of Python scripts:\n");
     W_LINE(programName + " <Python script path>");
@@ -497,6 +528,7 @@ CLArgs::printUsage(const std::string& programName)
               "def createInstance(app,group):\n"
               "If this function is found, it will be executed, otherwise the whole content "
               "of the script will be interpreted as though it were given to Python natively.\n"
+              "Either cases, the \"app\" variable will always be defined and pointing to the correct application instance."
               "Note that if you are using " NATRON_APPLICATION_NAME " it will source the script before creating the graphical user interface "
               "and will not start rendering. "
               "If in background mode you must specify the nodes to render either with the [-w] option as described above "
@@ -574,6 +606,12 @@ CLArgs::getFilename() const
 }
 
 const QString&
+CLArgs::getDefaultOnProjectLoadedScript() const
+{
+    return _imp->defaultOnProjectLoadedScript;
+}
+
+const QString&
 CLArgs::getIPCPipeName() const
 {
     return _imp->ipcPipe;
@@ -586,13 +624,24 @@ CLArgs::isPythonScript() const
 }
 
 QStringList::iterator
-CLArgsPrivate::hasFileNameWithExtension(const QString& extension)
+CLArgsPrivate::findFileNameWithExtension(const QString& extension)
 {
+    bool isPython = extension == "py";
     for (QStringList::iterator it = args.begin(); it != args.end() ; ++it) {
+        if (isPython) {
+            //Check that we do not take the python script specified for the --onload argument as the file to execute
+            if (it == args.begin()) {
+                continue;
+            }
+            QStringList::iterator prev = it;
+            --prev;
+            if (*prev == "--onload" || *prev == "-l") {
+                continue;
+            }
+        }
         if (it->endsWith("." + extension)) {
             return it;
         }
-        
     }
     return args.end();
 }
@@ -637,6 +686,10 @@ CLArgsPrivate::hasOutputToken(QString& indexStr)
         } else {
             indexOf = it->indexOf(outputShort);
             if (indexOf != -1) {
+                if (it->size() > 2 && !it->at(2).isDigit()) {
+                    //This is probably the --onload option
+                    return args.end();
+                }
                 indexOf += outputShort.size();
                 if (indexOf < it->size()) {
                     indexStr = it->mid(indexOf);
@@ -692,15 +745,48 @@ CLArgsPrivate::parse()
     {
         QStringList::iterator it = hasToken("IPCpipe", "");
         if (it != args.end()) {
-            ipcPipe = *it;
-            args.erase(it);
+            ++it;
+            if (it != args.end()) {
+                ipcPipe = *it;
+                args.erase(it);
+            } else {
+                std::cout << QObject::tr("You must specify the IPC pipe filename").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
         }
     }
     
     {
-        QStringList::iterator it = hasFileNameWithExtension(NATRON_PROJECT_FILE_EXT);
+        QStringList::iterator it = hasToken("onload", "l");
+        if (it != args.end()) {
+            ++it;
+            if (it != args.end()) {
+                defaultOnProjectLoadedScript = *it;
+#ifdef __NATRON_UNIX__
+                defaultOnProjectLoadedScript = AppManager::qt_tildeExpansion(defaultOnProjectLoadedScript);
+#endif
+                args.erase(it);
+                if (!defaultOnProjectLoadedScript.endsWith(".py")) {
+                    std::cout << QObject::tr("The optional on project load script must be a Python script (.py).").toStdString() << std::endl;
+                    error = 1;
+                    return;
+                }
+                if (!QFile::exists(defaultOnProjectLoadedScript)) {
+                    std::cout << QObject::tr("WARNING: --onload %1 ignored because the file does not exist.").arg(defaultOnProjectLoadedScript).toStdString() << std::endl;
+                }
+            } else {
+                std::cout << QObject::tr("--onload or -l specified, you must enter a script filename afterwards.").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
+        }
+    }
+    
+    {
+        QStringList::iterator it = findFileNameWithExtension(NATRON_PROJECT_FILE_EXT);
         if (it == args.end()) {
-            it = hasFileNameWithExtension("py");
+            it = findFileNameWithExtension("py");
             if (it == args.end() && !isInterpreterMode && isBackground) {
                 std::cout << QObject::tr("You must specify the filename of a script or " NATRON_APPLICATION_NAME " project. (." NATRON_PROJECT_FILE_EXT
                                          ")").toStdString() << std::endl;
@@ -1655,7 +1741,7 @@ AppManager::loadBuiltinNodePlugins(std::map<std::string,std::vector< std::pair<s
             qgrouping.push_back( it->c_str() );
         }
         registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(),
-                       NATRON_IMAGES_PATH "GroupingIcons/Set3/paint_grouping_3.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), true);
+                       NATRON_IMAGES_PATH "GroupingIcons/Set2/paint_grouping_2.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), true);
     }
     {
         boost::shared_ptr<EffectInstance> node( RotoNode::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
@@ -1703,9 +1789,38 @@ static void findAndRunScriptFile(const QString& path,const QStringList& files,co
                 QTextStream ts(&file);
                 QString content = ts.readAll();
                 PyRun_SimpleString(content.toStdString().c_str());
-                if (PyErr_Occurred()) {
-                    PyErr_Print();
+
+                PyObject* mainModule = getMainModule();
+                std::string error;
+                ///Gui session, do stdout, stderr redirection
+                PyObject *errCatcher = 0;
+                
+                if (PyObject_HasAttrString(mainModule, "catchErr")) {
+                    errCatcher = PyObject_GetAttrString(mainModule,"catchErr"); //get our catchOutErr created above, new ref
                 }
+                
+                PyErr_Print(); //make python print any errors
+                
+                PyObject *errorObj = 0;
+                if (errCatcher) {
+                    errorObj = PyObject_GetAttrString(errCatcher,"value"); //get the  stderr from our catchErr object, new ref
+                    assert(errorObj);
+                    error = PY3String_asString(errorObj);
+                    PyObject* unicode = PyUnicode_FromString("");
+                    PyObject_SetAttrString(errCatcher, "value", unicode);
+                    Py_DECREF(errorObj);
+                    Py_DECREF(errCatcher);
+                }
+
+                if (!error.empty()) {
+                    QString message("Failed to load ");
+                    message.append(script);
+                    message.append(": ");
+                    message.append(error.c_str());
+                    appPTR->writeToOfxLog_mt_safe(message);
+                    std::cerr << message.toStdString() << std::endl;
+                }
+
             }
             break;
         }
@@ -1793,7 +1908,7 @@ AppManager::loadPythonGroups()
     std::string err;
     
     QStringList allPlugins;
-
+    
     ///For all search paths, first add the path to the python path, then run in order the init.py and initGui.py
     for (int i = 0; i < templatesSearchPath.size(); ++i) {
         
@@ -1837,6 +1952,31 @@ AppManager::loadPythonGroups()
                     allPlugins.push_back(d.absolutePath() + "/" + *it);
                 }
             }
+        }
+    }
+    
+    // Now that init.py and InitGui.py have run, we need to set the search path again for the PyPlug
+    // as the user might have called appendToNatronPath
+    
+    QStringList newTemplatesSearchPath = getAllNonOFXPluginsPaths();
+    {
+        QStringList diffSearch;
+        for (int i = 0; i < newTemplatesSearchPath.size(); ++i) {
+            if (!templatesSearchPath.contains(newTemplatesSearchPath[i])) {
+                diffSearch.push_back(newTemplatesSearchPath[i]);
+            }
+        }
+        
+        //Add only paths that did not exist so far
+        for (int i = 0; i < diffSearch.size(); ++i) {
+            
+            std::string addToPythonPath("sys.path.append(\"");
+            addToPythonPath += diffSearch[i].toStdString();
+            addToPythonPath += "\")\n";
+            
+            bool ok  = interpretPythonScript(addToPythonPath, &err, 0);
+            assert(ok);
+            (void)ok;
         }
     }
     
@@ -2185,21 +2325,21 @@ AppManager::removeFromViewerCache(U64 hash)
 }
 
 void
-AppManager::removeAllImagesFromCacheWithMatchingKey(U64 treeVersion)
+AppManager::removeAllImagesFromCacheWithMatchingKey(bool useTreeVersion, U64 treeVersion)
 {
-    _imp->_nodeCache->removeAllImagesFromCacheWithMatchingKey(treeVersion);
+    _imp->_nodeCache->removeAllImagesFromCacheWithMatchingKey(useTreeVersion, treeVersion);
 }
 
 void
-AppManager::removeAllImagesFromDiskCacheWithMatchingKey(U64 treeVersion)
+AppManager::removeAllImagesFromDiskCacheWithMatchingKey(bool useTreeVersion, U64 treeVersion)
 {
-    _imp->_diskCache->removeAllImagesFromCacheWithMatchingKey(treeVersion);
+    _imp->_diskCache->removeAllImagesFromCacheWithMatchingKey(useTreeVersion, treeVersion);
 }
 
 void
-AppManager::removeAllTexturesFromCacheWithMatchingKey(U64 treeVersion)
+AppManager::removeAllTexturesFromCacheWithMatchingKey(bool useTreeVersion, U64 treeVersion)
 {
-    _imp->_viewerCache->removeAllImagesFromCacheWithMatchingKey(treeVersion);
+    _imp->_viewerCache->removeAllImagesFromCacheWithMatchingKey(useTreeVersion, treeVersion);
 }
 
 const QString &
@@ -3191,12 +3331,16 @@ AppManager::initPython(int argc,char* argv[])
     bool ok = interpretPythonScript("import sys\nfrom math import *\nimport " + std::string(NATRON_ENGINE_PYTHON_MODULE_NAME), &err, 0);
     assert(ok);
     
+    ok = interpretPythonScript(std::string(NATRON_ENGINE_PYTHON_MODULE_NAME) + ".natron = " + std::string(NATRON_ENGINE_PYTHON_MODULE_NAME) + ".PyCoreApplication()\n" , &err, 0);
+    assert(ok);
+    
     if (!isBackground()) {
         
         ok = interpretPythonScript("import sys\nimport " + std::string(NATRON_GUI_PYTHON_MODULE_NAME), &err, 0);
         assert(ok);
         
-        ok = interpretPythonScript("natron = " + std::string(NATRON_GUI_PYTHON_MODULE_NAME) + ".PyGuiApplication()\n" , &err, 0);
+        ok = interpretPythonScript(std::string(NATRON_GUI_PYTHON_MODULE_NAME) + ".natron = " +
+                                   std::string(NATRON_GUI_PYTHON_MODULE_NAME) + ".PyGuiApplication()\n" , &err, 0);
         assert(ok);
         
         //redirect stdout/stderr
@@ -3214,15 +3358,7 @@ AppManager::initPython(int argc,char* argv[])
         "sys.stderr = catchErr\n");
         ok = interpretPythonScript(script,&err,0);
         assert(ok);
-    } else {
-        ok = interpretPythonScript("natron = " + std::string(NATRON_ENGINE_PYTHON_MODULE_NAME) + ".PyCoreApplication()\n" , &err, 0);
-        assert(ok);
     }
-    
-#ifndef NDEBUG
-    Natron::PythonGILLocker pgl;
-    assert(PyObject_HasAttrString(_imp->mainModule, "natron") == 1);
-#endif
 }
 
 void
@@ -3298,10 +3434,11 @@ void
 AppManagerPrivate::declareSettingsToPython()
 {
     std::stringstream ss;
-    ss << "natron.settings = natron.getSettings()\n";
+    ss <<  NATRON_ENGINE_PYTHON_MODULE_NAME << ".natron.settings = " << NATRON_ENGINE_PYTHON_MODULE_NAME << ".natron.getSettings()\n";
     const std::vector<boost::shared_ptr<KnobI> >& knobs = _settings->getKnobs();
     for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it = knobs.begin(); it != knobs.end(); ++it) {
-        ss << "natron.settings." << (*it)->getName() << " = natron.settings.getParam('" << (*it)->getName() << "')\n";
+        ss <<  NATRON_ENGINE_PYTHON_MODULE_NAME << ".natron.settings." <<
+        (*it)->getName() << " = " << NATRON_ENGINE_PYTHON_MODULE_NAME << ".natron.settings.getParam('" << (*it)->getName() << "')\n";
     }
 }
 
@@ -3378,6 +3515,71 @@ AppManager::onNewCrashReporterConnectionPending()
 }
 #endif
 
+void
+AppManager::setOnProjectLoadedCallback(const std::string& pythonFunc)
+{
+    _imp->_settings->setOnProjectLoadedCB(pythonFunc);
+}
+
+void
+AppManager::setOnProjectCreatedCallback(const std::string& pythonFunc)
+{
+    _imp->_settings->setOnProjectCreatedCB(pythonFunc);
+}
+
+std::list<std::string>
+AppManager::getNatronPath()
+{
+    std::list<std::string> ret;
+    QStringList p = appPTR->getAllNonOFXPluginsPaths();
+    for (QStringList::iterator it = p.begin(); it != p.end(); ++it) {
+        ret.push_back(it->toStdString());
+    }
+    return ret;
+}
+
+void
+AppManager::appendToNatronPath(const std::string& path)
+{
+    appPTR->getCurrentSettings()->appendPythonGroupsPath(path);
+}
+
+
+#ifdef __NATRON_WIN32__
+void
+AppManager::registerUNCPath(const QString& path, const QChar& driveLetter)
+{
+	assert(QThread::currentThread() == qApp->thread());
+	_imp->uncPathMapping[driveLetter] = path;
+}
+
+QString
+AppManager::mapUNCPathToPathWithDriveLetter(const QString& uncPath) const
+{
+	assert(QThread::currentThread() == qApp->thread());
+	if (uncPath.isEmpty()) {
+		return uncPath;
+	}
+	for (std::map<QChar,QString>::const_iterator it = _imp->uncPathMapping.begin(); it!= _imp->uncPathMapping.end(); ++it) {
+		int index = uncPath.indexOf(it->second);
+		if (index == 0) {
+			//We found the UNC mapping at the start of the path, replace it with a drive letter
+			QString ret = uncPath;
+			ret.remove(0,it->second.size());
+			QString drive;
+			drive.append(it->first);
+			drive.append(':');
+			if (!ret.isEmpty() && !ret.startsWith('/')) {
+				drive.append('/');
+			}
+			ret.prepend(drive);
+			return ret;
+		}
+	}
+	return uncPath;
+}
+#endif
+
 namespace Natron {
 void
 errorDialog(const std::string & title,
@@ -3389,7 +3591,7 @@ errorDialog(const std::string & title,
     if ( topLvlInstance && !appPTR->isBackground() ) {
         topLvlInstance->errorDialog(title,message,useHtml);
     } else {
-        std::cout << "ERROR: " << title << ": " <<  message << std::endl;
+        std::cerr << "ERROR: " << title << ": " <<  message << std::endl;
     }
 }
 
@@ -3404,7 +3606,7 @@ errorDialog(const std::string & title,
     if ( topLvlInstance && !appPTR->isBackground() ) {
         topLvlInstance->errorDialog(title,message,stopAsking,useHtml);
     } else {
-        std::cout << "ERROR: " << title << ": " <<  message << std::endl;
+        std::cerr << "ERROR: " << title << ": " <<  message << std::endl;
     }
 }
 
@@ -3418,7 +3620,7 @@ warningDialog(const std::string & title,
     if ( topLvlInstance && !appPTR->isBackground() ) {
         topLvlInstance->warningDialog(title,message,useHtml);
     } else {
-        std::cout << "WARNING: " << title << ": " << message << std::endl;
+        std::cerr << "WARNING: " << title << ": " << message << std::endl;
     }
 }
 void
@@ -3432,7 +3634,7 @@ warningDialog(const std::string & title,
     if ( topLvlInstance && !appPTR->isBackground() ) {
         topLvlInstance->warningDialog(title,message, stopAsking,useHtml);
     } else {
-        std::cout << "WARNING: " << title << " :" << message << std::endl;
+        std::cerr << "WARNING: " << title << " :" << message << std::endl;
     }
 }
 
@@ -3633,22 +3835,7 @@ void compilePyScript(const std::string& script,PyObject** code)
     }
 }
     
-std::list<std::string>
-getNatronPath()
-{
-    std::list<std::string> ret;
-    QStringList p = appPTR->getAllNonOFXPluginsPaths();
-    for (QStringList::iterator it = p.begin(); it != p.end(); ++it) {
-        ret.push_back(it->toStdString());
-    }
-    return ret;
-}
-    
-void
-appendToNatronPath(const std::string& path)
-{
-    appPTR->getCurrentSettings()->appendPythonGroupsPath(path);
-}
+
     
 std::string
 makeNameScriptFriendly(const std::string& str)
@@ -3750,7 +3937,9 @@ getGroupInfos(const std::string& modulePath,
     
     std::string err;
     if (!interpretPythonScript(toRun, &err, 0)) {
-        QString logStr("Python group load failure: ");
+        QString logStr("Failure when loading ");
+        logStr.append(pythonModule.c_str());
+        logStr.append(": ");
         logStr.append(err.c_str());
         appPTR->writeToOfxLog_mt_safe(logStr);
         qDebug() << logStr;

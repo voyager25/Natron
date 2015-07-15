@@ -56,6 +56,36 @@ using std::endl;
 using Natron::Label;
 
 
+class CurveEditorTreeWidget : public QTreeWidget
+{
+    Gui* _gui;
+    bool _canResizeOtherWidget;
+public:
+    
+    CurveEditorTreeWidget(Gui* gui, QWidget* parent)
+    : QTreeWidget(parent)
+    , _gui(gui)
+    , _canResizeOtherWidget(true)
+    {
+        
+    }
+    
+    void setCanResizeOtherWidget(bool canResize) {
+        _canResizeOtherWidget = canResize;
+    }
+    
+    virtual ~CurveEditorTreeWidget() {}
+    
+private:
+    
+    virtual void resizeEvent(QResizeEvent* e) {
+        QTreeWidget::resizeEvent(e);
+        if (_canResizeOtherWidget && _gui->isTripleSyncEnabled()) {
+            _gui->setDopeSheetTreeWidth(e->size().width());
+        }
+    }
+};
+
 struct CurveEditorPrivate
 {
     
@@ -67,7 +97,7 @@ struct CurveEditorPrivate
     QSplitter* splitter;
     CurveWidget* curveWidget;
     
-    QTreeWidget* tree;
+    CurveEditorTreeWidget* tree;
     QWidget* filterContainer;
     QHBoxLayout* filterLayout;
     Natron::Label* filterLabel;
@@ -157,7 +187,7 @@ CurveEditor::CurveEditor(Gui* gui,
     
     _imp->leftPaneLayout->addWidget(_imp->filterContainer);
     
-    _imp->tree = new QTreeWidget(_imp->leftPaneContainer);
+    _imp->tree = new CurveEditorTreeWidget(gui,_imp->leftPaneContainer);
     _imp->tree->setObjectName("tree");
     _imp->tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     _imp->tree->setColumnCount(1);
@@ -211,6 +241,16 @@ CurveEditor::~CurveEditor()
         delete *it;
     }
     _imp->rotos.clear();
+}
+
+void
+CurveEditor::setTreeWidgetWidth(int width)
+{
+    _imp->tree->setCanResizeOtherWidget(false);
+    QList<int> sizes;
+    sizes << width << _imp->curveWidget->width();
+    _imp->splitter->setSizes(sizes);
+    _imp->tree->setCanResizeOtherWidget(true);
 }
 
 void
@@ -283,7 +323,8 @@ CurveEditor::addNode(boost::shared_ptr<NodeGui> node)
 {
     const std::vector<boost::shared_ptr<KnobI> > & knobs = node->getNode()->getKnobs();
 
-    if ( knobs.empty() || !node->getSettingPanel() ) {
+    //Don't add to the curveeditor nodes that are used by Natron internally (such as rotopaint nodes or file dialog preview nodes)
+    if ( knobs.empty() || !node->getSettingPanel() || !node->getNode()->getGroup() ) {
         return;
     }
     bool hasKnobsAnimating = false;
@@ -1238,8 +1279,8 @@ BezierEditorContext::BezierEditorContext(QTreeWidget* tree,
     
     CurveWidget* cw = widget->getCurveWidget();
     
-    QObject::connect(curve.get(), SIGNAL(keyframeSet(int)), this, SLOT(onKeyframeAdded()));
-    QObject::connect(curve.get(), SIGNAL(keyframeRemoved(int)), this, SLOT(onKeyframeRemoved()));
+    QObject::connect(curve.get(), SIGNAL(keyframeSet(double)), this, SLOT(onKeyframeAdded()));
+    QObject::connect(curve.get(), SIGNAL(keyframeRemoved(double)), this, SLOT(onKeyframeRemoved()));
     
     boost::shared_ptr<RotoContext> roto = context->getNode()->getNode()->getRotoContext();
     _imp->animCurve.reset(new BezierCPCurveGui(cw, curve, roto, getName(), QColor(255,255,255), 1.));
@@ -1481,6 +1522,8 @@ CurveEditor::keyPressEvent(QKeyEvent* e)
 {
     if (e->key() == Qt::Key_F && modCASIsControl(e)) {
         _imp->filterEdit->setFocus();
+    } else {
+        QWidget::keyPressEvent(e);
     }
 }
 

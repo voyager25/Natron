@@ -83,7 +83,7 @@ struct CreateNodeArgs
                             double yPosHint, //< yPosition in the nodegraph DEFAULT = INT_MIN
                             bool pushUndoRedoCommand , //< should we push a new undo/redo command on the GUI? DEFAULT = true
                             bool addToProject, //< should we add the node to the project ? DEFAULT = true
-                            bool userEdited, //< was it called from userAction ?
+                            bool userEdited, //< was it called from userAction ? (used to show file dialogs)
                             const QString & fixedName,  //< if non empty, this will be the name of the node DEFAULT = empty
                             const DefaultValuesList& paramValues,  //< parameters to set before creating the plugin
                             const boost::shared_ptr<NodeCollection>& group) //< the group into which to create this node
@@ -346,7 +346,7 @@ public:
     
     virtual void printAutoDeclaredVariable(const std::string& str);
     
-    void getFrameRange(int* first,int* last) const;
+    void getFrameRange(double* first,double* last) const;
     
     virtual void setLastViewerUsingTimeline(const boost::shared_ptr<Natron::Node>& /*node*/) {}
     
@@ -381,6 +381,7 @@ public:
     
     virtual void setUserIsPainting(const boost::shared_ptr<Natron::Node>& /*rotopaintNode*/) {}
     virtual boost::shared_ptr<Natron::Node> getIsUserPainting() const { return boost::shared_ptr<Natron::Node>(); }
+    
     
 public Q_SLOTS:
     

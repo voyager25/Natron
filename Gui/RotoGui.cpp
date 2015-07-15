@@ -15,6 +15,8 @@
 
 #include "RotoGui.h"
 
+#include <algorithm> // min, max
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QString>
@@ -355,7 +357,7 @@ struct RotoGui::RotoGuiPrivate
                         const Transform::Matrix3x3& transform);
 
     std::pair<boost::shared_ptr<BezierCP>,boost::shared_ptr<BezierCP> >
-    isNearbyFeatherBar(int time,const std::pair<double,double> & pixelScale,const QPointF & pos) const;
+    isNearbyFeatherBar(double time,const std::pair<double,double> & pixelScale,const QPointF & pos) const;
 
     bool isNearbySelectedCpsCrossHair(const QPointF & pos) const;
     
@@ -521,7 +523,7 @@ RotoGui::RotoGui(NodeGui* node,
     QPixmap pixRippleEnabled,pixRippleDisabled;
     QPixmap pixFeatherEnabled,pixFeatherDisabled;
     QPixmap pixBboxClickEnabled,pixBboxClickDisabled;
-    QPixmap pixPaintBrush,pixEraser,pixBlur,pixSmear,pixSharpen,pixDodge,pixBurn,pixClone,pixReveal;
+    QPixmap pixPaintBrush,pixEraser,pixBlur,pixSmear,pixSharpen,pixDodge,pixBurn,pixClone,pixReveal,pixPencil;
 
     appPTR->getIcon(Natron::NATRON_PIXMAP_BEZIER_32, &pixBezier);
     appPTR->getIcon(Natron::NATRON_PIXMAP_ELLIPSE,&pixEllipse);
@@ -559,6 +561,7 @@ RotoGui::RotoGui(NodeGui* node,
     appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BURN, &pixBurn);
     appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_CLONE, &pixClone);
     appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_REVEAL, &pixReveal);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PENCIL, &pixPencil);
     
     _imp->toolbar = new QToolBar(parent);
     _imp->toolbar->setOrientation(Qt::Vertical);
@@ -940,7 +943,7 @@ RotoGui::RotoGui(NodeGui* node,
     _imp->paintBrushTool->setDown(!hasShapes && effectIsPaint);
     QKeySequence brushPaintShortcut(Qt::Key_N);
     QAction* brushPaintAct = createToolAction(_imp->paintBrushTool, QIcon(pixPaintBrush), tr("Brush"), tr("Freehand painting"), brushPaintShortcut, eRotoToolSolidBrush);
-    createToolAction(_imp->paintBrushTool, QIcon(), tr("Pencil"), tr("Freehand painting based on bezier curves"), brushPaintShortcut, eRotoToolOpenBezier);
+    createToolAction(_imp->paintBrushTool, QIcon(pixPencil), tr("Pencil"), tr("Freehand painting based on bezier curves"), brushPaintShortcut, eRotoToolOpenBezier);
     _imp->eraserAction = createToolAction(_imp->paintBrushTool, QIcon(pixEraser), tr("Eraser"), tr("Erase previous paintings"), brushPaintShortcut, eRotoToolEraserBrush);
     _imp->paintBrushTool->setDefaultAction(brushPaintAct);
     _imp->allTools.push_back(_imp->paintBrushTool);
@@ -1222,9 +1225,8 @@ RotoGui::onToolActionTriggeredInternal(QAction* action,
         (_imp->selectedTool == eRotoToolDrawBezier || _imp->selectedTool == eRotoToolOpenBezier) &&
         _imp->rotoData->builtBezier &&
          ( (RotoToolEnum)data.x() != _imp->selectedTool ) ) {
-        if (_imp->selectedTool == eRotoToolDrawBezier) {
-            _imp->rotoData->builtBezier->setCurveFinished(true);
-        }
+        _imp->rotoData->builtBezier->setCurveFinished(true);
+        
         _imp->clearSelection();
     }
 
@@ -1360,11 +1362,11 @@ drawEllipse(double x, double y, double radiusX, double radiusY, int l, double r,
 }
 
 void
-RotoGui::drawOverlays(double /*scaleX*/,
+RotoGui::drawOverlays(double time,
+                      double /*scaleX*/,
                       double /*scaleY*/) const
 {
     std::list< boost::shared_ptr<RotoDrawableItem> > drawables = _imp->context->getCurvesByRenderOrder();
-    int time = _imp->context->getTimelineCurrentTime();
     std::pair<double,double> pixelScale;
     std::pair<double,double> viewportSize;
     
@@ -1715,7 +1717,7 @@ RotoGui::drawOverlays(double /*scaleX*/,
                                     featherPoint.y = yF;
                                     
                                     
-                                    Bezier::expandToFeatherDistance(controlPoint, &featherPoint, distFeatherX, time, clockWise, prevCp, it2, nextCp);
+                                    Bezier::expandToFeatherDistance(controlPoint, &featherPoint, distFeatherX, time, clockWise, transform, prevCp, it2, nextCp);
                                     
                                     if ( ( (_imp->state == eEventStateDraggingFeatherBar) &&
                                           ( ( *itF == _imp->rotoData->featherBarBeingDragged.first) ||
@@ -2285,7 +2287,8 @@ RotoGui::RotoGuiPrivate::handleControlPointSelection(const std::pair<boost::shar
 }
 
 bool
-RotoGui::penDown(double /*scaleX*/,
+RotoGui::penDown(double time,
+                 double /*scaleX*/,
                  double /*scaleY*/,
                  Natron::PenType pen,
                  bool isTabletEvent,
@@ -2300,7 +2303,6 @@ RotoGui::penDown(double /*scaleX*/,
     _imp->viewer->getPixelScale(pixelScale.first, pixelScale.second);
     
     bool didSomething = false;
-    int time = _imp->context->getTimelineCurrentTime();
     double tangentSelectionTol = kTangentHandleSelectionTolerance * pixelScale.first;
     double cpSelectionTolerance = kControlPointSelectionTolerance * pixelScale.first;
     
@@ -2681,7 +2683,8 @@ RotoGui::penDown(double /*scaleX*/,
 } // penDown
 
 bool
-RotoGui::penDoubleClicked(double /*scaleX*/,
+RotoGui::penDoubleClicked(double /*time*/,
+                          double /*scaleX*/,
                           double /*scaleY*/,
                           const QPointF & /*viewportPos*/,
                           const QPointF & pos,
@@ -2723,7 +2726,8 @@ RotoGui::penDoubleClicked(double /*scaleX*/,
 }
 
 bool
-RotoGui::penMotion(double /*scaleX*/,
+RotoGui::penMotion(double time,
+                   double /*scaleX*/,
                    double /*scaleY*/,
                    const QPointF & /*viewportPos*/,
                    const QPointF & pos,
@@ -2737,7 +2741,6 @@ RotoGui::penMotion(double /*scaleX*/,
 
     bool didSomething = false;
     HoverStateEnum lastHoverState = _imp->hoverState;
-    int time = _imp->context->getTimelineCurrentTime();
     ///Set the cursor to the appropriate case
     bool cursorSet = false;
     
@@ -3140,7 +3143,8 @@ RotoGui::autoSaveAndRedraw()
 }
 
 bool
-RotoGui::penUp(double /*scaleX*/,
+RotoGui::penUp(double /*time*/,
+               double /*scaleX*/,
                double /*scaleY*/,
                const QPointF & /*viewportPos*/,
                const QPointF & /*pos*/,
@@ -3330,7 +3334,8 @@ RotoGui::removeCurve(const boost::shared_ptr<RotoDrawableItem>& curve)
 }
 
 bool
-RotoGui::keyDown(double /*scaleX*/,
+RotoGui::keyDown(double /*time*/,
+                 double /*scaleX*/,
                  double /*scaleY*/,
                  QKeyEvent* e)
 {
@@ -3364,9 +3369,8 @@ RotoGui::keyDown(double /*scaleX*/,
     } else if ( (key == Qt::Key_Escape && (_imp->selectedTool == eRotoToolDrawBezier || _imp->selectedTool == eRotoToolOpenBezier)) || isKeybind(kShortcutGroupRoto, kShortcutIDActionRotoCloseBezier, modifiers, key) ) {
         if ( (_imp->selectedTool == eRotoToolDrawBezier || _imp->selectedTool == eRotoToolOpenBezier) && _imp->rotoData->builtBezier && !_imp->rotoData->builtBezier->isCurveFinished() ) {
             
-            if (!_imp->rotoData->builtBezier->isOpenBezier()) {
-                pushUndoCommand( new OpenCloseUndoCommand(this,_imp->rotoData->builtBezier) );
-            }
+            pushUndoCommand( new OpenCloseUndoCommand(this,_imp->rotoData->builtBezier) );
+            
             _imp->rotoData->builtBezier.reset();
             _imp->rotoData->selectedCps.clear();
             onToolActionTriggered(_imp->selectAllAction);
@@ -3460,7 +3464,8 @@ RotoGui::keyDown(double /*scaleX*/,
 } // keyDown
 
 bool
-RotoGui::keyRepeat(double /*scaleX*/,
+RotoGui::keyRepeat(double /*time*/,
+                   double /*scaleX*/,
                    double /*scaleY*/,
                    QKeyEvent* e)
 {
@@ -3484,14 +3489,15 @@ RotoGui::keyRepeat(double /*scaleX*/,
 }
 
 void
-RotoGui::focusOut()
+RotoGui::focusOut(double /*time*/)
 {
     _imp->shiftDown = 0;
     _imp->ctrlDown = 0;
 }
 
 bool
-RotoGui::keyUp(double /*scaleX*/,
+RotoGui::keyUp(double /*time*/,
+               double /*scaleX*/,
                double /*scaleY*/,
                QKeyEvent* e)
 {
@@ -3835,7 +3841,7 @@ RotoGui::RotoGuiPrivate::isNearbySelectedCpsBoundingBox(const QPointF & pos,
 }
 
 std::pair<boost::shared_ptr<BezierCP>,boost::shared_ptr<BezierCP> >
-RotoGui::RotoGuiPrivate::isNearbyFeatherBar(int time,
+RotoGui::RotoGuiPrivate::isNearbyFeatherBar(double time,
                                             const std::pair<double,double> & pixelScale,
                                             const QPointF & pos) const
 {
@@ -3846,7 +3852,7 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(int time,
         
         Bezier* isBezier = dynamic_cast<Bezier*>(it->get());
         RotoStrokeItem* isStroke = dynamic_cast<RotoStrokeItem*>(it->get());
-        if (isStroke) {
+        if (isStroke || (isBezier && isBezier->isOpenBezier())) {
             continue;
         }
         
@@ -3859,7 +3865,9 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(int time,
             hence in this loop we compute the polygon for each bezier.
          */
 
-
+        Transform::Matrix3x3 transform;
+        isBezier->getTransformAtTime(time, &transform);
+        
         const std::list<boost::shared_ptr<BezierCP> > & fps = isBezier->getFeatherPoints();
         const std::list<boost::shared_ptr<BezierCP> > & cps = isBezier->getControlPoints();
         assert( cps.size() == fps.size() );
@@ -3897,11 +3905,23 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(int time,
             }
             assert(itF != fps.end()); // because cps.size() == fps.size()
 
-            Point controlPoint,featherPoint;
+            Transform::Point3D controlPoint,featherPoint;
+            controlPoint.z = featherPoint.z = 1;
             (*itCp)->getPositionAtTime(time, &controlPoint.x, &controlPoint.y);
             (*itF)->getPositionAtTime(time, &featherPoint.x, &featherPoint.y);
 
-            Bezier::expandToFeatherDistance(controlPoint, &featherPoint, distFeatherX, time, isClockWiseOriented, prevF, itF, nextF);
+            controlPoint = Transform::matApply(transform, controlPoint);
+            featherPoint = Transform::matApply(transform, featherPoint);
+            {
+                Natron::Point cp,fp;
+                cp.x = controlPoint.x;
+                cp.y = controlPoint.y;
+                fp.x = featherPoint.x;
+                fp.y = featherPoint.y;
+                Bezier::expandToFeatherDistance(cp, &fp, distFeatherX, time, isClockWiseOriented, transform, prevF, itF, nextF);
+                featherPoint.x = fp.x;
+                featherPoint.y = fp.y;
+            }
             assert(featherPoint.x != controlPoint.x || featherPoint.y != controlPoint.y);
 
             ///Now test if the user mouse click is on the line using bounding box and cross product.

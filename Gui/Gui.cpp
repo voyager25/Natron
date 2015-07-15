@@ -16,6 +16,7 @@
 
 #include <cassert>
 #include <fstream>
+#include <algorithm> // min, max
 
 #include <QtCore/QTextStream>
 #include <QWaitCondition>
@@ -268,6 +269,7 @@ struct GuiPrivate
     ActionWithShortcut* actionExportLayout;
     ActionWithShortcut* actionRestoreDefaultLayout;
     ActionWithShortcut* actionNextTab;
+    ActionWithShortcut* actionPrevTab;
     ActionWithShortcut* actionCloseTab;
 
     ///the main "central" widget
@@ -293,6 +295,9 @@ struct GuiPrivate
     ///a list of ptrs to all the viewer tabs.
     mutable QMutex _viewerTabsMutex;
     std::list<ViewerTab*> _viewerTabs;
+    
+    ///Used when all viewers are synchronized to determine which one triggered the sync
+    ViewerTab* _masterSyncViewer;
 
     ///a list of ptrs to all histograms
     mutable QMutex _histogramsMutex;
@@ -438,6 +443,7 @@ struct GuiPrivate
         , actionExportLayout(0)
         , actionRestoreDefaultLayout(0)
         , actionNextTab(0)
+        , actionPrevTab(0)
         , actionCloseTab(0)
         , _centralWidget(0)
         , _mainLayout(0)
@@ -450,6 +456,7 @@ struct GuiPrivate
         , _leftRightSplitter(0)
         , _viewerTabsMutex()
         , _viewerTabs()
+        , _masterSyncViewer(0)
         , _histogramsMutex()
         , _histograms()
         , _nextHistogramIndex(1)
@@ -704,10 +711,18 @@ Gui::abortProject(bool quitApp)
         _imp->notifyGuiClosing();
         _imp->_appInstance->quit();
     } else {
+        {
+            QMutexLocker l(&_imp->aboutToCloseMutex);
+            _imp->_aboutToClose = true;
+        }
         _imp->_appInstance->resetPreviewProvider();
         _imp->_appInstance->getProject()->closeProject(false);
         centerAllNodeGraphsWithTimer();
         restoreDefaultLayout();
+        {
+            QMutexLocker l(&_imp->aboutToCloseMutex);
+            _imp->_aboutToClose = false;
+        }
     }
 
     ///Reset current undo/reso actions
@@ -1015,6 +1030,8 @@ Gui::createMenuActions()
     _imp->actionRestoreDefaultLayout = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionDefaultLayout, kShortcutDescActionDefaultLayout, this);
     QObject::connect( _imp->actionRestoreDefaultLayout, SIGNAL( triggered() ), this, SLOT( restoreDefaultLayout() ) );
 
+    _imp->actionPrevTab = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionPrevTab, kShortcutDescActionPrevTab, this);
+    QObject::connect( _imp->actionPrevTab, SIGNAL( triggered() ), this, SLOT( onPrevTabTriggered() ) );
     _imp->actionNextTab = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionNextTab, kShortcutDescActionNextTab, this);
     QObject::connect( _imp->actionNextTab, SIGNAL( triggered() ), this, SLOT( onNextTabTriggered() ) );
     _imp->actionCloseTab = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionCloseTab, kShortcutDescActionCloseTab, this);
@@ -1050,6 +1067,7 @@ Gui::createMenuActions()
     _imp->menuLayout->addAction(_imp->actionImportLayout);
     _imp->menuLayout->addAction(_imp->actionExportLayout);
     _imp->menuLayout->addAction(_imp->actionRestoreDefaultLayout);
+    _imp->menuLayout->addAction(_imp->actionPrevTab);
     _imp->menuLayout->addAction(_imp->actionNextTab);
     _imp->menuLayout->addAction(_imp->actionCloseTab);
 
@@ -3372,6 +3390,13 @@ Gui::saveProjectGui(boost::archive::xml_oarchive & archive)
     _imp->_projectGui->save(archive);
 }
 
+bool
+Gui::isAboutToClose() const
+{
+    QMutexLocker l(&_imp->aboutToCloseMutex);
+    return _imp->_aboutToClose;
+}
+
 void
 Gui::errorDialog(const std::string & title,
                  const std::string & text,
@@ -4289,6 +4314,20 @@ Gui::getViewersList_mt_safe() const
 }
 
 void
+Gui::setMasterSyncViewer(ViewerTab* master)
+{
+    QMutexLocker l(&_imp->_viewerTabsMutex);
+    _imp->_masterSyncViewer = master;
+}
+
+ViewerTab*
+Gui::getMasterSyncViewer() const
+{
+    QMutexLocker l(&_imp->_viewerTabsMutex);
+    return _imp->_masterSyncViewer;
+}
+
+void
 Gui::activateViewerTab(ViewerInstance* viewer)
 {
     OpenGLViewerI* viewport = viewer->getUiContext();
@@ -4319,6 +4358,10 @@ Gui::deactivateViewerTab(ViewerInstance* viewer)
                 v = *it;
                 break;
             }
+        }
+        
+        if (v && v == _imp->_masterSyncViewer) {
+            _imp->_masterSyncViewer = 0;
         }
     }
 
@@ -4609,6 +4652,7 @@ Gui::onWriterRenderStarted(const QString & sequenceName,
     RenderEngine* engine = writer->getRenderEngine();
     QObject::connect( dialog, SIGNAL( canceled() ), engine, SLOT( abortRendering_Blocking() ) );
     QObject::connect( engine, SIGNAL( frameRendered(int) ), dialog, SLOT( onFrameRendered(int) ) );
+    QObject::connect( engine, SIGNAL( frameRenderedWithTimer(int,double,double) ), dialog, SLOT( onFrameRenderedWithTimer(int,double,double) ) );
     QObject::connect( engine, SIGNAL( renderFinished(int) ), dialog, SLOT( onVideoEngineStopped(int) ) );
     QObject::connect(dialog,SIGNAL(accepted()),this,SLOT(onRenderProgressDialogFinished()));
     QObject::connect(dialog,SIGNAL(rejected()),this,SLOT(onRenderProgressDialogFinished()));
@@ -5399,6 +5443,17 @@ Gui::getLastEnteredTabWidget() const
 }
 
 void
+Gui::onPrevTabTriggered()
+{
+    TabWidget* t = getLastEnteredTabWidget();
+    
+    if (t) {
+        t->moveToPreviousTab();
+    }
+
+}
+
+void
 Gui::onNextTabTriggered()
 {
     TabWidget* t = getLastEnteredTabWidget();
@@ -5560,6 +5615,18 @@ Gui::addMenuEntry(const QString & menuGrouping,
             _imp->pythonCommands.insert( std::make_pair(aws, script) );
         }
     }
+}
+
+void
+Gui::setDopeSheetTreeWidth(int width)
+{
+    _imp->_dopeSheetEditor->setTreeWidgetWidth(width);
+}
+
+void
+Gui::setCurveEditorTreeWidth(int width)
+{
+    _imp->_curveEditor->setTreeWidgetWidth(width);
 }
 
 void Gui::setTripleSyncEnabled(bool enabled)

@@ -20,6 +20,7 @@ CLANG_DIAG_ON(uninitialized)
 
 class DopeSheetEditorPrivate;
 class Gui;
+class DopeSheetView;
 class NodeGui;
 class TimeLine;
 
@@ -83,6 +84,14 @@ public:
      * ['xMin', 'xMax'].
      */
     void centerOn(double xMin, double xMax);
+    
+    void refreshSelectionBboxAndRedrawView();
+    
+    int getTimelineCurrentTime() const;
+    
+    DopeSheetView* getDopesheetView() const;
+    
+    void setTreeWidgetWidth(int width);
 
 public Q_SLOTS:
     /**

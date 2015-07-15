@@ -23,6 +23,8 @@ CLANG_DIAG_OFF(deprecated)
 #include <QtCore/QObject>
 CLANG_DIAG_ON(deprecated)
 #include <QtCore/QStringList>
+#include <QtCore/QString>
+#include <QtCore/QChar>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN) 
 #include <boost/scoped_ptr.hpp>
@@ -124,6 +126,8 @@ public:
     bool isInterpreterMode() const;
     
     const QString& getFilename() const;
+    
+    const QString& getDefaultOnProjectLoadedScript() const;
     
     const QString& getIPCPipeName() const;
     
@@ -265,9 +269,9 @@ public:
      * @brief Given the following tree version, removes all images from the node cache with a matching
      * tree version. This is useful to wipe the cache for one particular node.
      **/
-    void  removeAllImagesFromCacheWithMatchingKey(U64 treeVersion);
-    void  removeAllImagesFromDiskCacheWithMatchingKey(U64 treeVersion);
-    void  removeAllTexturesFromCacheWithMatchingKey(U64 treeVersion);
+    void  removeAllImagesFromCacheWithMatchingKey(bool useTreeVersion, U64 treeVersion);
+    void  removeAllImagesFromDiskCacheWithMatchingKey(bool useTreeVersion, U64 treeVersion);
+    void  removeAllTexturesFromCacheWithMatchingKey(bool useTreeVersion, U64 treeVersion);
 
     boost::shared_ptr<Settings> getCurrentSettings() const WARN_UNUSED_RETURN;
     const KnobFactory & getKnobFactory() const WARN_UNUSED_RETURN;
@@ -436,6 +440,10 @@ public:
     
     void releaseNatronGIL();
     
+#ifdef __NATRON_WIN32__
+	void registerUNCPath(const QString& path, const QChar& driveLetter);
+	QString mapUNCPathToPathWithDriveLetter(const QString& uncPath) const;
+#endif
     
 #ifdef Q_OS_UNIX
     static QString qt_tildeExpansion(const QString &path, bool *expanded = 0);
@@ -472,8 +480,27 @@ public Q_SLOTS:
 
     void onMaxPanelsOpenedChanged(int maxPanels);
 
+    
+    /**
+     * @brief Return the concatenation of all search paths of Natron, i.e:
+     - The bundled plug-ins path: ../Plugin relative to the binary
+     - The system wide data for Natron (architecture dependent), this is the same location as autosaves
+     - The content of the NATRON_PLUGIN_PATH environment variable
+     - The content of the search paths defined in the Preferences-->Plugins--> Group plugins search path
+     *
+     * This does not apply for OpenFX plug-ins which have their own search path.
+     **/
+    std::list<std::string> getNatronPath();
+    
+    /**
+     * @brief Add a new path to the Natron search path
+     **/
+    void appendToNatronPath(const std::string& path);
 
-
+    virtual void addCommand(const QString& /*grouping*/,const std::string& /*pythonFunction*/, Qt::Key /*key*/,const Qt::KeyboardModifiers& /*modifiers*/) {}
+    
+    void setOnProjectLoadedCallback(const std::string& pythonFunc);
+    void setOnProjectCreatedCallback(const std::string& pythonFunc);
     
 Q_SIGNALS:
 
@@ -617,44 +644,7 @@ getTextureFromCacheOrCreate(const Natron::FrameKey & key,
     return appPTR->getTextureOrCreate(key,params, returnValue);
 }
     
-/**
-* @brief Returns a list of IDs of all the plug-ins currently loaded.
-* Each ID can be passed to the AppInstance::createNode function to instantiate a node
-* with a plug-in.
-**/
-inline std::list<std::string>
-getPluginIDs()
-{
-    return appPTR->getPluginIDs();
-}
-    
-inline AppInstance*
-getInstance(int idx)
-{
-    return appPTR->getAppInstance(idx);
-}
-    
-inline int
-getNumInstances()
-{
-    return appPTR->getNumInstances();
-}
 
-/**
- * @brief Return the concatenation of all search paths of Natron, i.e:
- - The bundled plug-ins path: ../Plugin relative to the binary
- - The system wide data for Natron (architecture dependent), this is the same location as autosaves
- - The content of the NATRON_PLUGIN_PATH environment variable
- - The content of the search paths defined in the Preferences-->Plugins--> Group plugins search path
- *
- * This does not apply for OpenFX plug-ins which have their own search path.
- **/
-std::list<std::string> getNatronPath();
-
-/**
- * @brief Add a new path to the Natron search path
- **/
-void appendToNatronPath(const std::string& path);
 
 
 /**
