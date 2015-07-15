@@ -492,7 +492,7 @@ NodeGui::createPanel(QVBoxLayout* container,
         assert(container);
         boost::shared_ptr<MultiInstancePanel> multiPanel;
         if ( node->isTrackerNode() && node->isMultiInstance() && node->getParentMultiInstanceName().empty() ) {
-            multiPanel.reset( new TrackerPanel(thisAsShared) );
+            multiPanel.reset( new TrackerPanelV1(thisAsShared) );
 
             ///This is valid only if the node is a multi-instance and this is the main instance.
             ///The "real" panel showed on the gui will be the _settingsPanel, but we still need to create

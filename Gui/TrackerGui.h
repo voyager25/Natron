@@ -24,7 +24,7 @@ CLANG_DIAG_ON(uninitialized)
 
 class QWidget;
 class ViewerTab;
-class TrackerPanel;
+class TrackerPanelV1;
 class QKeyEvent;
 class QPointF;
 class QMouseEvent;
@@ -38,7 +38,7 @@ class TrackerGui
 
 public:
 
-    TrackerGui(const boost::shared_ptr<TrackerPanel> & panel,
+    TrackerGui(const boost::shared_ptr<TrackerPanelV1> & panel,
                ViewerTab* parent);
 
     virtual ~TrackerGui();

@@ -2963,7 +2963,7 @@ ViewerTab::createTrackerInterface(NodeGui* n)
         return;
     }
     
-    boost::shared_ptr<TrackerPanel> trackPanel = boost::dynamic_pointer_cast<TrackerPanel>(multiPanel);
+    boost::shared_ptr<TrackerPanelV1> trackPanel = boost::dynamic_pointer_cast<TrackerPanelV1>(multiPanel);
 
     assert(trackPanel);
     TrackerGui* tracker = new TrackerGui(trackPanel,this);

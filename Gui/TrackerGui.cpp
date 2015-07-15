@@ -41,7 +41,7 @@ using namespace Natron;
 
 struct TrackerGuiPrivate
 {
-    boost::shared_ptr<TrackerPanel> panel;
+    boost::shared_ptr<TrackerPanelV1> panel;
     ViewerTab* viewer;
     QWidget* buttonsBar;
     QHBoxLayout* buttonsLayout;
@@ -61,7 +61,7 @@ struct TrackerGuiPrivate
     QRectF selectionRectangle;
     int controlDown;
 
-    TrackerGuiPrivate(const boost::shared_ptr<TrackerPanel> & panel,
+    TrackerGuiPrivate(const boost::shared_ptr<TrackerPanelV1> & panel,
                       ViewerTab* parent)
         : panel(panel)
           , viewer(parent)
@@ -86,7 +86,7 @@ struct TrackerGuiPrivate
     }
 };
 
-TrackerGui::TrackerGui(const boost::shared_ptr<TrackerPanel> & panel,
+TrackerGui::TrackerGui(const boost::shared_ptr<TrackerPanelV1> & panel,
                        ViewerTab* parent)
     : QObject()
       , _imp( new TrackerGuiPrivate(panel,parent) )

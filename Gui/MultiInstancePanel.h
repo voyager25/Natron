@@ -150,17 +150,17 @@ private:
     boost::scoped_ptr<MultiInstancePanelPrivate> _imp;
 };
 
-struct TrackerPanelPrivate;
-class TrackerPanel
+struct TrackerPanelPrivateV1;
+class TrackerPanelV1
     : public MultiInstancePanel
 {
     Q_OBJECT
 
 public:
 
-    TrackerPanel(const boost::shared_ptr<NodeGui> & node);
+    TrackerPanelV1(const boost::shared_ptr<NodeGui> & node);
 
-    virtual ~TrackerPanel();
+    virtual ~TrackerPanelV1();
 
     ///Each function below returns true if there is a selection, false otherwise
     bool trackBackward();
@@ -202,7 +202,7 @@ private:
     virtual void onButtonTriggered(Button_Knob* button) OVERRIDE FINAL;
     virtual void showMenuForInstance(Natron::Node* item) OVERRIDE FINAL;
 
-    boost::scoped_ptr<TrackerPanelPrivate> _imp;
+    boost::scoped_ptr<TrackerPanelPrivateV1> _imp;
 };
 
 

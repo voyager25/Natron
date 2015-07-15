@@ -1770,9 +1770,9 @@ handleTrackNextAndPrevious(int trackIndex, const TrackArgsV1& args, int time)
 }
 
 /////////////// Tracker panel
-struct TrackerPanelPrivate
+struct TrackerPanelPrivateV1
 {
-    TrackerPanel* publicInterface;
+    TrackerPanelV1* publicInterface;
     Button* averageTracksButton;
     
     mutable QMutex updateViewerMutex;
@@ -1791,7 +1791,7 @@ struct TrackerPanelPrivate
 
     
 
-    TrackerPanelPrivate(TrackerPanel* publicInterface)
+    TrackerPanelPrivateV1(TrackerPanelV1* publicInterface)
         : publicInterface(publicInterface)
           , averageTracksButton(0)
           , updateViewerMutex()
@@ -1814,22 +1814,22 @@ struct TrackerPanelPrivate
     bool getTrackInstancesForButton(std::vector<Button_Knob*>* trackButtons,const std::string& buttonName);
 };
 
-TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui> & node)
+TrackerPanelV1::TrackerPanelV1(const boost::shared_ptr<NodeGui> & node)
     : MultiInstancePanel(node)
-      , _imp( new TrackerPanelPrivate(this) )
+      , _imp( new TrackerPanelPrivateV1(this) )
 {
     QObject::connect(&_imp->scheduler, SIGNAL(trackingStarted()), this, SLOT(onTrackingStarted()));
     QObject::connect(&_imp->scheduler, SIGNAL(trackingFinished()), this, SLOT(onTrackingFinished()));
     QObject::connect(&_imp->scheduler, SIGNAL(progressUpdate(double)), this, SLOT(onTrackingProgressUpdate(double)));
 }
 
-TrackerPanel::~TrackerPanel()
+TrackerPanelV1::~TrackerPanelV1()
 {
     _imp->scheduler.quitThread();
 }
 
 void
-TrackerPanel::appendExtraGui(QVBoxLayout* layout)
+TrackerPanelV1::appendExtraGui(QVBoxLayout* layout)
 {
     if (!getMainInstance()->isPointTrackerNode()) {
         return;
@@ -1909,7 +1909,7 @@ TrackerPanel::appendExtraGui(QVBoxLayout* layout)
 } // appendExtraGui
 
 void
-TrackerPanel::appendButtons(QHBoxLayout* buttonLayout)
+TrackerPanelV1::appendButtons(QHBoxLayout* buttonLayout)
 {
     if (!getMainInstance()->isPointTrackerNode()) {
         return;
@@ -1921,7 +1921,7 @@ TrackerPanel::appendButtons(QHBoxLayout* buttonLayout)
 }
 
 void
-TrackerPanel::initializeExtraKnobs()
+TrackerPanelV1::initializeExtraKnobs()
 {
     if (!getMainInstance()->isPointTrackerNode()) {
         return;
@@ -1935,7 +1935,7 @@ TrackerPanel::initializeExtraKnobs()
 }
 
 void
-TrackerPanel::setIconForButton(Button_Knob* knob)
+TrackerPanelV1::setIconForButton(Button_Knob* knob)
 {
     const std::string name = knob->getName();
 
@@ -1951,7 +1951,7 @@ TrackerPanel::setIconForButton(Button_Knob* knob)
 }
 
 void
-TrackerPanel::onAverageTracksButtonClicked()
+TrackerPanelV1::onAverageTracksButtonClicked()
 {
     std::list<Natron::Node*> selectedInstances;
 
@@ -2031,7 +2031,7 @@ TrackerPanel::onAverageTracksButtonClicked()
 } // onAverageTracksButtonClicked
 
 void
-TrackerPanel::onButtonTriggered(Button_Knob* button)
+TrackerPanelV1::onButtonTriggered(Button_Knob* button)
 {
     std::string name = button->getName();
 
@@ -2050,7 +2050,7 @@ TrackerPanel::onButtonTriggered(Button_Knob* button)
 
 
 void
-TrackerPanel::onTrackingStarted()
+TrackerPanelV1::onTrackingStarted()
 {
     ///freeze the tracker node
     setKnobsFrozen(true);
@@ -2061,7 +2061,7 @@ TrackerPanel::onTrackingStarted()
 }
 
 void
-TrackerPanel::onTrackingFinished()
+TrackerPanelV1::onTrackingFinished()
 {
     setKnobsFrozen(false);
     Q_EMIT trackingEnded();
@@ -2071,7 +2071,7 @@ TrackerPanel::onTrackingFinished()
 }
 
 void
-TrackerPanel::onTrackingProgressUpdate(double progress)
+TrackerPanelV1::onTrackingProgressUpdate(double progress)
 {
     if (getGui()) {
         if (!getGui()->progressUpdate(getMainInstance()->getLiveInstance(), progress)) {
@@ -2081,7 +2081,7 @@ TrackerPanel::onTrackingProgressUpdate(double progress)
 }
 
 bool
-TrackerPanelPrivate::getTrackInstancesForButton(std::vector<Button_Knob*>* trackButtons,const std::string& buttonName)
+TrackerPanelPrivateV1::getTrackInstancesForButton(std::vector<Button_Knob*>* trackButtons,const std::string& buttonName)
 {
     std::list<Node*> selectedInstances;
     
@@ -2110,7 +2110,7 @@ TrackerPanelPrivate::getTrackInstancesForButton(std::vector<Button_Knob*>* track
 }
 
 bool
-TrackerPanel::trackBackward()
+TrackerPanelV1::trackBackward()
 {
     assert(QThread::currentThread() == qApp->thread());
     
@@ -2131,7 +2131,7 @@ TrackerPanel::trackBackward()
 } // trackBackward
 
 bool
-TrackerPanel::trackForward()
+TrackerPanelV1::trackForward()
 {
     assert(QThread::currentThread() == qApp->thread());
     
@@ -2154,13 +2154,13 @@ TrackerPanel::trackForward()
 } // trackForward
 
 void
-TrackerPanel::stopTracking()
+TrackerPanelV1::stopTracking()
 {
     _imp->scheduler.abortTracking();
 }
 
 bool
-TrackerPanel::trackPrevious()
+TrackerPanelV1::trackPrevious()
 {
     std::list<Node*> selectedInstances;
 
@@ -2186,7 +2186,7 @@ TrackerPanel::trackPrevious()
 }
 
 bool
-TrackerPanel::trackNext()
+TrackerPanelV1::trackNext()
 {
     std::list<Node*> selectedInstances;
     
@@ -2212,7 +2212,7 @@ TrackerPanel::trackNext()
 }
 
 void
-TrackerPanel::clearAllAnimationForSelection()
+TrackerPanelV1::clearAllAnimationForSelection()
 {
     std::list<Node*> selectedInstances;
 
@@ -2228,7 +2228,7 @@ TrackerPanel::clearAllAnimationForSelection()
 }
 
 void
-TrackerPanel::clearBackwardAnimationForSelection()
+TrackerPanelV1::clearBackwardAnimationForSelection()
 {
     int time = getApp()->getTimeLine()->currentFrame();
     std::list<Node*> selectedInstances;
@@ -2245,7 +2245,7 @@ TrackerPanel::clearBackwardAnimationForSelection()
 }
 
 void
-TrackerPanel::clearForwardAnimationForSelection()
+TrackerPanelV1::clearForwardAnimationForSelection()
 {
     int time = getApp()->getTimeLine()->currentFrame();
     std::list<Node*> selectedInstances;
@@ -2262,21 +2262,21 @@ TrackerPanel::clearForwardAnimationForSelection()
 }
 
 void
-TrackerPanel::setUpdateViewerOnTracking(bool update)
+TrackerPanelV1::setUpdateViewerOnTracking(bool update)
 {
     QMutexLocker k(&_imp->updateViewerMutex);
     _imp->updateViewerOnTrackingEnabled = update;
 }
 
 bool
-TrackerPanel::isUpdateViewerOnTrackingEnabled() const
+TrackerPanelV1::isUpdateViewerOnTrackingEnabled() const
 {
     QMutexLocker k(&_imp->updateViewerMutex);
     return _imp->updateViewerOnTrackingEnabled;
 }
 
 void
-TrackerPanel::onExportButtonClicked()
+TrackerPanelV1::onExportButtonClicked()
 {
     int index = _imp->exportChoice->activeIndex();
     std::list<Node*> selection;
@@ -2333,7 +2333,7 @@ TrackerPanel::onExportButtonClicked()
 }
 
 void
-TrackerPanelPrivate::createTransformFromSelection(const std::list<Node*> & /*selection*/,
+TrackerPanelPrivateV1::createTransformFromSelection(const std::list<Node*> & /*selection*/,
                                                   bool /*linked*/,
                                                   ExportTransformTypeEnum /*type*/)
 {
@@ -2357,7 +2357,7 @@ getCornerPinPoint(Natron::Node* node,
 }
 
 void
-TrackerPanelPrivate::createCornerPinFromSelection(const std::list<Node*> & selection,
+TrackerPanelPrivateV1::createCornerPinFromSelection(const std::list<Node*> & selection,
                                                   bool linked,
                                                   bool useTransformRefFrame,
                                                   bool invert)
@@ -2453,7 +2453,7 @@ TrackerPanelPrivate::createCornerPinFromSelection(const std::list<Node*> & selec
 } // createCornerPinFromSelection
 
 void
-TrackerPanel::showMenuForInstance(Natron::Node* instance)
+TrackerPanelV1::showMenuForInstance(Natron::Node* instance)
 {
     if (!getMainInstance()->isPointTrackerNode()) {
         return;
