@@ -415,6 +415,13 @@ TrackMarker::isUserKeyframe(int time) const
     return _imp->userKeyframes.find(time) != _imp->userKeyframes.end();
 }
 
+void
+TrackMarker::getUserKeyframes(std::set<int>* keyframes) const
+{
+    QMutexLocker k(&_imp->trackMutex);
+    *keyframes = _imp->userKeyframes;
+}
+
 bool
 TrackMarker::isEnabled() const
 {
@@ -582,6 +589,53 @@ public:
     }
 };
 
+/**
+ * @brief Set keyframes on knobs from Marker data
+ **/
+static void setKnobKeyframesFromMarker(const mv::Marker& mvMarker,
+                                       const libmv::TrackRegionResult* result,
+                                       const boost::shared_ptr<TrackMarker>& natronMarker)
+{
+    int time = mvMarker.frame;
+    boost::shared_ptr<Double_Knob> correlationKnob = natronMarker->getCorrelationKnob();
+    if (result) {
+        correlationKnob->setValueAtTime(time, result->correlation, 0);
+    } else {
+        correlationKnob->setValueAtTime(time, 0., 0);
+    }
+    
+    Natron::Point center;
+    center.x = (double)mvMarker.center(0);
+    center.y = (double)mvMarker.center(1);
+    
+    // Set the center
+    boost::shared_ptr<Double_Knob> centerKnob = natronMarker->getCenterKnob();
+    centerKnob->setValuesAtTime(time, center.x, center.y, Natron::eValueChangedReasonNatronInternalEdited);
+    
+    Natron::Point topLeftCorner,topRightCorner,btmRightCorner,btmLeftCorner;
+    topLeftCorner.x = mvMarker.patch.coordinates(0,0) - center.x;
+    topLeftCorner.y = mvMarker.patch.coordinates(0,1) - center.y;
+    
+    topRightCorner.x = mvMarker.patch.coordinates(1,0) - center.x;
+    topRightCorner.y = mvMarker.patch.coordinates(1,1) - center.y;
+    
+    btmRightCorner.x = mvMarker.patch.coordinates(2,0) - center.x;
+    btmRightCorner.y = mvMarker.patch.coordinates(2,1) - center.y;
+    
+    btmLeftCorner.x = mvMarker.patch.coordinates(3,0) - center.x;
+    btmLeftCorner.y = mvMarker.patch.coordinates(3,1) - center.y;
+    
+    boost::shared_ptr<Double_Knob> pntTopLeftKnob = natronMarker->getPatternTopLeftKnob();
+    boost::shared_ptr<Double_Knob> pntTopRightKnob = natronMarker->getPatternTopRightKnob();
+    boost::shared_ptr<Double_Knob> pntBtmLeftKnob = natronMarker->getPatternBtmLeftKnob();
+    boost::shared_ptr<Double_Knob> pntBtmRightKnob = natronMarker->getPatternBtmRightKnob();
+    
+    // Set the pattern Quad
+    pntTopLeftKnob->setValuesAtTime(time, topLeftCorner.x, topLeftCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
+    pntTopRightKnob->setValuesAtTime(time, topRightCorner.x, topRightCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
+    pntBtmLeftKnob->setValuesAtTime(time, btmLeftCorner.x, btmLeftCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
+    pntBtmRightKnob->setValuesAtTime(time, btmRightCorner.x, btmRightCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
+}
 
 static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
 {
@@ -591,7 +645,6 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
     const boost::shared_ptr<TrackMarkerAndOptions>& track = tracks[trackIndex];
     
     boost::shared_ptr<mv::AutoTrack> autoTrack = args.getLibMVAutoTrack();
-    
     QMutex* autoTrackMutex = args.getAutoTrackMutex();
     
     assert(track->mvMarker.frame == time);
@@ -606,79 +659,57 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
     }
 #endif
     
-    boost::shared_ptr<Double_Knob> searchBtmLeftKnob = track->natronMarker->getSearchWindowBottomLeftKnob();
-    boost::shared_ptr<Double_Knob> searchTopRightKnob = track->natronMarker->getSearchWindowTopRightKnob();
-    boost::shared_ptr<Double_Knob> offsetKnob = track->natronMarker->getOffsetKnob();
     
-    Natron::Point offset;
-    offset.x = offsetKnob->getValueAtTime(time,0);
-    offset.y = offsetKnob->getValueAtTime(time,1);
-    
-    Natron::Point searchBtmLeft,searchTopRight;
-    searchBtmLeft.x = searchBtmLeftKnob->getValueAtTime(time, 0);
-    searchBtmLeft.y = searchBtmLeftKnob->getValueAtTime(time, 1);
-    
-    searchTopRight.x = searchTopRightKnob->getValueAtTime(time, 0);
-    searchTopRight.y = searchTopRightKnob->getValueAtTime(time, 1);
-    
-    
-    
-    track->mvMarker.search_region.min(0) = searchBtmLeft.x + track->mvMarker.center(0) + offset.x;
-    track->mvMarker.search_region.min(1) = searchTopRight.y + track->mvMarker.center(1) + offset.y;
-    track->mvMarker.search_region.max(0) = searchTopRight.x + track->mvMarker.center(0) + offset.x;
-    track->mvMarker.search_region.max(1) = searchBtmLeft.y + track->mvMarker.center(1) + offset.y;
-    
-    track->mvMarker.reference_frame = track->natronMarker->getReferenceFrame(time, args.getForward());
-    
-    if (track->mvMarker.reference_frame == track->mvMarker.frame) {
-        // This is a user keyframe, we do not track it
-        assert(track->natronMarker->isUserKeyframe(track->mvMarker.frame));
+    if (track->mvMarker.source == mv::Marker::MANUAL) {
+        // This is a user keyframe or the first frame, we do not track it
+        assert(time == args.getStart() || track->natronMarker->isUserKeyframe(track->mvMarker.frame));
     } else {
+        
+        // Set the reference rame
+        track->mvMarker.reference_frame = track->natronMarker->getReferenceFrame(time, args.getForward());
+        assert(track->mvMarker.reference_frame != track->mvMarker.frame);
+        
+        // Set the search-region since all markers stored in the auto-track have for search-region the pattern-region instead.
+        // we do this because otherwise inside Autotrack::TrackMarker it will try to fetch the whole search-region for the reference marker
+        boost::shared_ptr<Double_Knob> searchBtmLeftKnob = track->natronMarker->getSearchWindowBottomLeftKnob();
+        boost::shared_ptr<Double_Knob> searchTopRightKnob = track->natronMarker->getSearchWindowTopRightKnob();
+        boost::shared_ptr<Double_Knob> offsetKnob = track->natronMarker->getOffsetKnob();
+        
+        Natron::Point offset;
+        offset.x = offsetKnob->getValueAtTime(time,0);
+        offset.y = offsetKnob->getValueAtTime(time,1);
+        
+        Natron::Point searchBtmLeft,searchTopRight;
+        searchBtmLeft.x = searchBtmLeftKnob->getValueAtTime(time, 0);
+        searchBtmLeft.y = searchBtmLeftKnob->getValueAtTime(time, 1);
+        
+        searchTopRight.x = searchTopRightKnob->getValueAtTime(time, 0);
+        searchTopRight.y = searchTopRightKnob->getValueAtTime(time, 1);
+        
+        
+        
+        track->mvMarker.search_region.min(0) = searchBtmLeft.x + track->mvMarker.center(0) + offset.x;
+        track->mvMarker.search_region.min(1) = searchTopRight.y + track->mvMarker.center(1) + offset.y;
+        track->mvMarker.search_region.max(0) = searchTopRight.x + track->mvMarker.center(0) + offset.x;
+        track->mvMarker.search_region.max(1) = searchBtmLeft.y + track->mvMarker.center(1) + offset.y;
+        
         libmv::TrackRegionResult result;
         if (!autoTrack->TrackMarker(&track->mvMarker, &result, &track->mvOptions) || !result.is_usable()) {
             return false;
         }
         
-        boost::shared_ptr<Double_Knob> correlationKnob = track->natronMarker->getCorrelationKnob();
-        correlationKnob->setValueAtTime(time, result.correlation, 0);
+        //Ok the tracking has succeeded, now the marker is in this state:
+        //the source is TRACKED, the search_window has been offset by the center delta,  the center has been offset
+        //We reset back the search_window to the pattern window before it gets added to the tracks. We do this
+        //because this track will probably be used as reference later on.
         
-        Natron::Point center;
-        center.x = (double)track->mvMarker.center(0);
-        center.y = (double)track->mvMarker.center(1);
-        boost::shared_ptr<Double_Knob> centerKnob = track->natronMarker->getCenterKnob();
-        centerKnob->setValuesAtTime(time,
-                                    center.x,
-                                    center.y,
-                                    Natron::eValueChangedReasonNatronInternalEdited);
-        
-        Natron::Point topLeftCorner,topRightCorner,btmRightCorner,btmLeftCorner;
-        topLeftCorner.x = track->mvMarker.patch.coordinates(0,0) - center.x;
-        topLeftCorner.y = track->mvMarker.patch.coordinates(0,1) - center.y;
-        
-        topRightCorner.x = track->mvMarker.patch.coordinates(1,0) - center.x;
-        topRightCorner.y = track->mvMarker.patch.coordinates(1,1) - center.y;
-        
-        btmRightCorner.x = track->mvMarker.patch.coordinates(2,0) - center.x;
-        btmRightCorner.y = track->mvMarker.patch.coordinates(2,1) - center.y;
-        
-        btmLeftCorner.x = track->mvMarker.patch.coordinates(3,0) - center.x;
-        btmLeftCorner.y = track->mvMarker.patch.coordinates(3,1) - center.y;
-        
-        boost::shared_ptr<Double_Knob> pntTopLeftKnob = track->natronMarker->getPatternTopLeftKnob();
-        boost::shared_ptr<Double_Knob> pntTopRightKnob = track->natronMarker->getPatternTopRightKnob();
-        boost::shared_ptr<Double_Knob> pntBtmLeftKnob = track->natronMarker->getPatternBtmLeftKnob();
-        boost::shared_ptr<Double_Knob> pntBtmRightKnob = track->natronMarker->getPatternBtmRightKnob();
-        
-        pntTopLeftKnob->setValuesAtTime(time, topLeftCorner.x, topLeftCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
-        pntTopRightKnob->setValuesAtTime(time, topRightCorner.x, topRightCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
-        pntBtmLeftKnob->setValuesAtTime(time, btmLeftCorner.x, btmLeftCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
-        pntBtmRightKnob->setValuesAtTime(time, btmRightCorner.x, btmRightCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
-        
-    } // if (track->mvMarker.reference_frame == track->mvMarker.frame) {
-    {
-        QMutexLocker k(autoTrackMutex);
-        autoTrack->AddMarker(track->mvMarker);
-    }
+        setKnobKeyframesFromMarker(track->mvMarker, &result, track->natronMarker);
+        {
+            QMutexLocker k(autoTrackMutex);
+            autoTrack->AddMarker(track->mvMarker);
+        }
+    } // if (track->mvMarker.source == mv::Marker::MANUAL) {
+    
     
     return true;
 }
@@ -971,6 +1002,7 @@ struct TrackerContextPrivate
     /// Converts a Natron track marker to the one used in LibMV. This is expensive: many calls to getValue are made
     void natronTrackerToLibMVTracker(bool trackChannels[3],
                                      const TrackMarker& marker,
+                                     int trackIndex,
                                      int time,
                                      bool forward,
                                      mv::Marker* mvMarker) const;
@@ -1123,14 +1155,15 @@ TrackerContext::getTimeLineLastFrame() const
 void
 TrackerContextPrivate::natronTrackerToLibMVTracker(bool trackChannels[3],
                                                    const TrackMarker& marker,
+                                                   int trackIndex,
                                                    int time,
                                                    bool forward,
                                                    mv::Marker* mvMarker) const
 {
     
     
-    boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
-    boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
+    //boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
+    //boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
     boost::shared_ptr<Double_Knob> patternTopLeftKnob = marker.getPatternTopLeftKnob();
     boost::shared_ptr<Double_Knob> patternTopRightKnob = marker.getPatternTopRightKnob();
     boost::shared_ptr<Double_Knob> patternBtmRightKnob = marker.getPatternBtmRightKnob();
@@ -1154,23 +1187,24 @@ TrackerContextPrivate::natronTrackerToLibMVTracker(bool trackChannels[3],
     mvMarker->center(1) = centerKnob->getValueAtTime(time, 1);
     mvMarker->model_type = mv::Marker::POINT;
     mvMarker->model_id = 0;
+    mvMarker->track = trackIndex;
     
     mvMarker->disabled_channels =
     (trackChannels[0] ? LIBMV_MARKER_CHANNEL_R : 0) |
     (trackChannels[1] ? LIBMV_MARKER_CHANNEL_G : 0) |
     (trackChannels[2] ? LIBMV_MARKER_CHANNEL_B : 0);
     
-    Natron::Point searchWndBtmLeft,searchWndTopRight;
+    /*Natron::Point searchWndBtmLeft,searchWndTopRight;
     searchWndBtmLeft.x = searchWindowBtmLeftKnob->getValueAtTime(time, 0);
     searchWndBtmLeft.y = searchWindowBtmLeftKnob->getValueAtTime(time, 1);
     
     searchWndTopRight.x = searchWindowTopRightKnob->getValueAtTime(time, 0);
-    searchWndTopRight.y = searchWindowTopRightKnob->getValueAtTime(time, 1);
+    searchWndTopRight.y = searchWindowTopRightKnob->getValueAtTime(time, 1);*/
     
-    mvMarker->search_region.min(0) = searchWndBtmLeft.x + mvMarker->center(0);
-    mvMarker->search_region.min(1) = searchWndTopRight.y + mvMarker->center(1);
-    mvMarker->search_region.max(0) = searchWndTopRight.x + mvMarker->center(0);
-    mvMarker->search_region.max(1) = searchWndBtmLeft.y + mvMarker->center(1);
+    Natron::Point offset;
+    offset.x = offsetKnob->getValueAtTime(time,0);
+    offset.y = offsetKnob->getValueAtTime(time,1);
+    
     
     Natron::Point tl,tr,br,bl;
     tl.x = patternTopLeftKnob->getValueAtTime(time, 0);
@@ -1184,6 +1218,15 @@ TrackerContextPrivate::natronTrackerToLibMVTracker(bool trackChannels[3],
     
     bl.x = patternBtmLeftKnob->getValueAtTime(time, 0);
     bl.y = patternBtmLeftKnob->getValueAtTime(time, 1);
+    
+    // Set the search-region since all markers stored in the auto-track have for search-region the pattern-region instead.
+    // we do this because otherwise inside Autotrack::TrackMarker it will try to fetch the whole search-region for the reference marker
+    RectD patternBbox;
+    patternBbox.setupInfinity();
+    mvMarker->search_region.min(0) = tl.x + mvMarker->center(0) + offset.x;
+    mvMarker->search_region.min(1) = tl.y + mvMarker->center(1) + offset.y;
+    mvMarker->search_region.max(0) = br.x + mvMarker->center(0) + offset.x;
+    mvMarker->search_region.max(1) = br.y + mvMarker->center(1) + offset.y;
     
     mvMarker->patch.coordinates(0,0) = tl.x + mvMarker->center(0);
     mvMarker->patch.coordinates(0,1) = tl.y + mvMarker->center(1);
@@ -1650,13 +1693,46 @@ TrackerContext::trackSelectedMarkers(int start, int end, bool forward, bool upda
     for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it!= markers.end(); ++it, ++trackIndex) {
         boost::shared_ptr<TrackMarkerAndOptions> t(new TrackMarkerAndOptions);
         t->natronMarker = *it;
-        _imp->natronTrackerToLibMVTracker(enabledChannels, *t->natronMarker, start, forward, &t->mvMarker);
-        t->mvMarker.track = trackIndex;
+        
+        std::set<int> userKeys;
+        t->natronMarker->getUserKeyframes(&userKeys);
+        
+        // Add a libmv marker for all keyframes
+        bool isStartingTimeKeyframe = false;
+        for (std::set<int>::iterator it2 = userKeys.begin(); it2 != userKeys.end(); ++it2) {
+            
+            if (*it2 == start) {
+                isStartingTimeKeyframe = true;
+                _imp->natronTrackerToLibMVTracker(enabledChannels, *t->natronMarker, trackIndex, *it2, forward, &t->mvMarker);
+                assert(t->mvMarker.source == mv::Marker::MANUAL);
+                trackContext->AddMarker(t->mvMarker);
+            } else {
+                mv::Marker marker;
+                _imp->natronTrackerToLibMVTracker(enabledChannels, *t->natronMarker, trackIndex, *it2, forward, &marker);
+                assert(marker.source == mv::Marker::MANUAL);
+                trackContext->AddMarker(marker);
+            }
+            
+            
+        }
+        
+        if (!isStartingTimeKeyframe) {
+            // Also add a marker for the start time if it has not yet been added
+            _imp->natronTrackerToLibMVTracker(enabledChannels, *t->natronMarker, trackIndex, start, forward, &t->mvMarker);
+            assert(t->mvMarker.source != mv::Marker::MANUAL);
+            
+            // Force its reference frame to the "start" so we do not track it since the user started on this frame
+            t->mvMarker.reference_frame = start;
+            
+            // Set knob values at this time with a 0 correlation score
+            setKnobKeyframesFromMarker(t->mvMarker, NULL, t->natronMarker);
+            
+            trackContext->AddMarker(t->mvMarker);
+        }
+        
+                
         t->mvOptions = mvOptions;
         _imp->endLibMVOptionsForTrack(*t->natronMarker, &t->mvOptions);
-        
-        trackContext->AddMarker(t->mvMarker);
-        
         trackAndOptions.push_back(t);
     }
     

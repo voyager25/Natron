@@ -11,6 +11,8 @@
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
 
+#include <set>
+
 #include "Global/GlobalDefines.h"
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
@@ -67,6 +69,8 @@ public:
     int getReferenceFrame(int time, bool forward) const;
     
     bool isUserKeyframe(int time) const;
+    
+    void getUserKeyframes(std::set<int>* keyframes) const;
     
     bool isEnabled() const;
     
