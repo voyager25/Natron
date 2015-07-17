@@ -15,7 +15,7 @@
 #include "Project.h"
 
 #include <fstream>
-#include <algorithm>
+#include <algorithm> // min, max
 #include <ios>
 #include <cstdlib> // strtoul
 #include <cerrno> // errno
@@ -337,18 +337,8 @@ Project::loadProjectInternal(const QString & path,
         }
     }
     
-    std::string onProjectLoad = getOnProjectLoadCB();
-    if (!onProjectLoad.empty()) {
-        std::string err,output;
-        std::string appID = getApp()->getAppIDString();
-        onProjectLoad.insert(0, "app = " + appID + "\n");
-        if (!Natron::interpretPythonScript(onProjectLoad + "()\n", &err, &output)) {
-            getApp()->appendToScriptEditor("Failed to run onProjectLoad callback: " + err);
-        } else {
-            getApp()->appendToScriptEditor(output);
-        }
-    }
-    
+    _imp->runOnProjectLoadCallback();
+
     ///Process all events before flagging that we're no longer loading the project
     ///to avoid multiple renders being called because of reshape events of viewers
     QCoreApplication::processEvents();
@@ -457,7 +447,9 @@ Project::saveProjectInternal(const QString & path,
         }
         filePath.append("/");
         filePath.append(name);
-        filePath.append(".autosave");
+        if (!isRenderSave) {
+            filePath.append(".autosave");
+        }
         if (!isRenderSave) {
             if (appendTimeHash) {
                 Hash64 timeHash;
@@ -588,7 +580,7 @@ Project::triggerAutoSave()
     ///Should only be called in the main-thread, that is upon user interaction.
     assert( QThread::currentThread() == qApp->thread() );
 
-    if ( appPTR->isBackground() || !appPTR->isLoaded() ) {
+    if ( appPTR->isBackground() || !appPTR->isLoaded() || _imp->projectClosing ) {
         return;
     }
     {
@@ -597,7 +589,7 @@ Project::triggerAutoSave()
             return;
         }
     }
-
+    
     _imp->autoSaveTimer->start( appPTR->getCurrentSettings()->getAutoSaveDelayMS() );
 }
 
@@ -1973,7 +1965,7 @@ Project::isFrameRangeLocked() const
 }
     
 void
-Project::getFrameRange(int* first,int* last) const
+Project::getFrameRange(double* first,double* last) const
 {
     *first = _imp->frameRange->getValue(0);
     *last = _imp->frameRange->getValue(1);
@@ -2018,7 +2010,7 @@ Project::createViewer()
                                          -1,-1,
                                          true,
                                          INT_MIN,INT_MIN,
-                                         true,
+                                         false,
                                          true,
                                          false,
                                          QString(),
@@ -2126,7 +2118,17 @@ void Project::extractTreesFromNodes(const std::list<boost::shared_ptr<Natron::No
     
 }
   
-
+bool Project::addFormat(const std::string& formatSpec)
+{
+    Format f;
+    if (generateFormatFromString(formatSpec.c_str(), &f)) {
+        QMutexLocker k(&_imp->formatMutex);
+        tryAddProjectFormat(f);
+        return true;
+    } else {
+        return false;
+    }
+}
     
 } //namespace Natron
 

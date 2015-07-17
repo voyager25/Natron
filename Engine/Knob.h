@@ -104,6 +104,11 @@ public:
         Q_EMIT keyFrameRemoved(time,dimension,reason);
     }
     
+    void s_multipleKeyFramesSet(const std::list<SequenceTime>& keys, int dimension, int reason)
+    {
+        Q_EMIT multipleKeyFramesSet(keys, dimension, reason);
+    }
+    
     void s_animationAboutToBeRemoved(int dimension)
     {
         Q_EMIT animationAboutToBeRemoved(dimension);
@@ -250,6 +255,8 @@ Q_SIGNALS:
     ///@param added True if this is the first time that the keyframe was set
     void keyFrameSet(SequenceTime time,int dimension,int reason,bool added);
     
+    /// Called when a curve is cloned
+    void multipleKeyFramesSet(std::list<SequenceTime>, int dimension, int reason);
     
     ///Emitted whenever a keyframe is removed with a reason different of eValueChangedReasonUserEdited
     void keyFrameRemoved(SequenceTime,int dimension,int reason);
@@ -909,7 +916,7 @@ public:
     /**
      * @brief Returns the current time if attached to a timeline or the time being rendered
      **/
-    virtual SequenceTime getCurrentTime() const = 0;
+    virtual double getCurrentTime() const = 0;
     
     /**
      * @brief Returns the current view being rendered
@@ -1194,7 +1201,7 @@ public:
     virtual void* getOfxParamHandle() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual bool isMastersPersistenceIgnored() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual void copyAnimationToClipboard() const OVERRIDE FINAL;
-    virtual SequenceTime getCurrentTime() const OVERRIDE FINAL WARN_UNUSED_RETURN;
+    virtual double getCurrentTime() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual int getCurrentView() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual std::string getDimensionName(int dimension) const OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual void setDimensionName(int dim,const std::string & name) OVERRIDE FINAL;
@@ -1386,6 +1393,13 @@ public:
      * If it is animated, it will return the value at the current time.
      **/
     T getValue(int dimension = 0,bool clampToMinMax = true) const WARN_UNUSED_RETURN;
+    
+    /**
+     * @brief Same as getValue() except that this value will return always the value that is displayed on the Gui. 
+     * whereas the actual value returned by getValue() might not have taken into account the recent modifications
+     * due to the node being rendering.
+     **/
+    T getGuiValue(int dimension = 0) const WARN_UNUSED_RETURN;
 
     /**
      * @brief Returns the value of the knob at the given time and for the given dimension.
@@ -1704,8 +1718,8 @@ private:
    
     ///Here is all the stuff we couldn't get rid of the template parameter
 
-    mutable QMutex _valueMutex; //< protects _values & _defaultValues & ExprResults
-    std::vector<T> _values;
+    mutable QMutex _valueMutex; //< protects _values & _guiValues & _defaultValues & ExprResults
+    std::vector<T> _values,_guiValues;
     std::vector<T> _defaultValues;
     mutable ExprResults _exprRes;
     
@@ -1872,12 +1886,6 @@ public:
     
     bool areKnobsFrozen() const;
 
-    /**
-     * @brief Can be overriden to prevent values to be set directly.
-     * Instead the setValue/setValueAtTime actions are queued up
-     * They will be dequeued when dequeueValuesSet will be called.
-     **/
-    virtual bool canSetValue() const { return true; }
     virtual void abortAnyEvaluation() {}
     
     /**
@@ -1946,10 +1954,18 @@ public:
 
     void appendValueChange(KnobI* knob,Natron::ValueChangedReasonEnum reason);
     
+    bool isSetValueCurrentlyPossible() const;
+    
 protected:
     
     //////////////////////////////////////////////////////////////////////////////////////////
     
+    /**
+     * @brief Can be overriden to prevent values to be set directly.
+     * Instead the setValue/setValueAtTime actions are queued up
+     * They will be dequeued when dequeueValuesSet will be called.
+     **/
+    virtual bool canSetValue() const { return true; }
     
     
 protected:
@@ -2088,7 +2104,7 @@ public:
     /**
      * @brief Returns the local current time of the timeline
      **/
-    virtual SequenceTime getCurrentTime() const;
+    virtual double getCurrentTime() const;
 
     /**
      * @brief Returns the local current view being rendered or 0

@@ -9,6 +9,8 @@
 
 #include "Histogram.h"
 
+#include <algorithm> // min, max
+
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QCheckBox>
@@ -1120,6 +1122,7 @@ Histogram::paintGL()
     if ( (zoomLeft == zoomRight) || (zoomTop == zoomBottom) ) {
         glClearColor(0,0,0,1);
         glClear(GL_COLOR_BUFFER_BIT);
+        glCheckErrorIgnoreOSXBug();
 
         return;
     }

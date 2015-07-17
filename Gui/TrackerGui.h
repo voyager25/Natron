@@ -24,7 +24,7 @@ CLANG_DIAG_ON(uninitialized)
 
 class QWidget;
 class ViewerTab;
-class TrackerPanel;
+class TrackerPanelV1;
 class QKeyEvent;
 class QPointF;
 class QMouseEvent;
@@ -38,7 +38,7 @@ class TrackerGui
 
 public:
 
-    TrackerGui(const boost::shared_ptr<TrackerPanel> & panel,
+    TrackerGui(const boost::shared_ptr<TrackerPanelV1> & panel,
                ViewerTab* parent);
 
     virtual ~TrackerGui();
@@ -49,21 +49,21 @@ public:
     QWidget* getButtonsBar() const;
 
 
-    void drawOverlays(double scaleX, double scaleY) const;
+    void drawOverlays(double time, double scaleX, double scaleY) const;
 
-    bool penDown(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, QMouseEvent* e);
+    bool penDown(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, QMouseEvent* e);
 
-    bool penDoubleClicked(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, QMouseEvent* e);
+    bool penDoubleClicked(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, QMouseEvent* e);
 
-    bool penMotion(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, QInputEvent* e);
+    bool penMotion(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, QInputEvent* e);
 
-    bool penUp(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, QMouseEvent* e);
+    bool penUp(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, QMouseEvent* e);
 
-    bool keyDown(double scaleX, double scaleY, QKeyEvent* e);
+    bool keyDown(double time, double scaleX, double scaleY, QKeyEvent* e);
 
-    bool keyUp(double scaleX, double scaleY, QKeyEvent* e);
+    bool keyUp(double time, double scaleX, double scaleY, QKeyEvent* e);
 
-    bool loseFocus(double scaleX, double scaleY);
+    bool loseFocus(double time, double scaleX, double scaleY);
 
 public Q_SLOTS:
 

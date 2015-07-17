@@ -67,22 +67,24 @@ public:
     {
         esNoEditingState,
         esPickKeyframe,
-        esReaderRepos,
         esReaderLeftTrim,
         esReaderRightTrim,
         esReaderSlip,
-        esGroupRepos,
         esSelectionByRect,
         esMoveKeyframeSelection,
         esMoveCurrentFrameIndicator,
-        esDraggingView
+        esDraggingView,
+        esZoomingView,
+        esTransformingKeyframesMiddleRight,
+        esTransformingKeyframesMiddleLeft
     };
 
     explicit DopeSheetView(DopeSheet *model, HierarchyView *hierarchyView,
                            Gui *gui,
                            const boost::shared_ptr<TimeLine> &timeline,
                            QWidget *parent = 0);
-    ~DopeSheetView();
+    
+    virtual ~DopeSheetView() OVERRIDE;
 
     /**
      * @brief Set the current timeline range on ['xMin', 'xMax'].
@@ -112,6 +114,9 @@ public:
     void restoreOpenGLContext() OVERRIDE FINAL;
     unsigned int getCurrentRenderScale() const OVERRIDE FINAL;
 
+    void refreshSelectionBboxAndRedraw();
+
+    
 public Q_SLOTS:
     void redraw() OVERRIDE FINAL;
 
@@ -220,7 +225,7 @@ private Q_SLOTS:
      * This slot is automatically called when the user triggers the menu action
      * or presses Ctrl + A.
      */
-    void selectAllKeyframes();
+    void onSelectedAllTriggered();
 
     /**
      * @brief Delete the selected keyframes.
@@ -271,6 +276,7 @@ private Q_SLOTS:
      * or presses Ctrl + V.
      */
     void pasteKeyframes();
+    
 
 private: /* attributes */
     boost::scoped_ptr<DopeSheetViewPrivate> _imp;

@@ -15,6 +15,8 @@
 
 #include "Image.h"
 
+#include <algorithm> // min, max
+
 #include <QDebug>
 //#ifndef Q_MOC_RUN
 //#include <boost/math/special_functions/fpclassify.hpp>
@@ -683,7 +685,7 @@ Image::setBitmapDirtyZone(const RectI& zone)
 ImageKey  
 Image::makeKey(U64 nodeHashKey,
                bool frameVaryingOrAnimated,
-               SequenceTime time,
+               double time,
                int view)
 {
     return ImageKey(nodeHashKey,frameVaryingOrAnimated,time,view);

@@ -296,6 +296,16 @@ GuiAppInstance::load(const CLArgs& cl)
             execOnProjectCreatedCallback();
         }
     }
+    
+    const QString& extraOnProjectCreatedScript = cl.getDefaultOnProjectLoadedScript();
+    if (!extraOnProjectCreatedScript.isEmpty()) {
+        QFileInfo cbInfo(extraOnProjectCreatedScript);
+        if (cbInfo.exists()) {
+            loadPythonScript(cbInfo);
+        }
+    }
+
+    
 } // load
 
 
@@ -682,11 +692,11 @@ GuiAppInstance::startRenderingFullSequence(const AppInstance::RenderWork& w,bool
 
 
     ///validate the frame range to render
-    int firstFrame,lastFrame;
+    double firstFrame,lastFrame;
     if (w.firstFrame == INT_MIN || w.lastFrame == INT_MAX) {
         w.writer->getFrameRange_public(w.writer->getHash(),&firstFrame, &lastFrame, true);
         //if firstframe and lastframe are infinite clamp them to the timeline bounds
-        int projectFirst,projectLast;
+        double projectFirst,projectLast;
         getFrameRange(&projectFirst, &projectLast);
         if (firstFrame == INT_MIN) {
             firstFrame = projectFirst;
@@ -929,7 +939,7 @@ GuiAppInstance::declareCurrentAppVariable_Python()
     std::string appIDStr = getAppIDString();
     /// define the app variable
     std::stringstream ss;
-    ss << appIDStr << " = natron.getGuiInstance(" << getAppID() << ") \n";
+    ss << appIDStr << " = " << NATRON_GUI_PYTHON_MODULE_NAME << ".natron.getGuiInstance(" << getAppID() << ") \n";
     const std::vector<boost::shared_ptr<KnobI> >& knobs = getProject()->getKnobs();
     for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it = knobs.begin(); it != knobs.end(); ++it) {
         ss << appIDStr << "." << (*it)->getName() << " = "  << appIDStr  << ".getProjectParam('" <<

@@ -11,10 +11,11 @@
 #include "Global/GlobalDefines.h"
 
 #include "Gui/DockablePanel.h"
-#include "Gui/DopeSheet.h"
 #include "Gui/KnobGui.h"
 #include "Gui/NodeGui.h"
-
+#include "Gui/DopeSheetEditor.h"
+#include "Gui/DopeSheet.h"
+#include "Gui/DopeSheetView.h"
 
 typedef std::map<boost::weak_ptr<KnobI>, KnobGui *> KnobsAndGuis;
 
@@ -23,50 +24,7 @@ typedef std::map<boost::weak_ptr<KnobI>, KnobGui *> KnobsAndGuis;
 
 namespace {
 
-/**
- * @brief A little helper to sort a DSKeyPtrList.
- *
- * This is used in the DSMoveKeysCommand.
- */
-static bool dsSelectedKeyLessFunctor(const DSKeyPtr &left,
-                                     const DSKeyPtr &right)
-{
-    return left->key.getTime() < right->key.getTime();
-}
 
-/**
- * @brief The two functions above are used to ensure that only one render
- * will be triggered after a massive action (like moving a set of keyframes
- * or a group).
- */
-void renderOnce(Natron::EffectInstance *effectInstance)
-{
-    assert(effectInstance);
-
-    std::set<ViewerInstance *> toRender;
-
-    std::list<ViewerInstance *> connectedViewers;
-    effectInstance->getNode()->hasViewersConnected(&connectedViewers);
-
-    toRender.insert(connectedViewers.begin(), connectedViewers.end());
-
-    for (std::set<ViewerInstance *>::const_iterator viIt = toRender.begin(); viIt != toRender.end(); ++viIt) {
-        ViewerInstance *viewer = (*viIt);
-
-        viewer->renderCurrentFrame(true);
-    }
-}
-
-void renderOnce(const std::set<KnobHolder *>& holders)
-{
-
-    for (std::set<KnobHolder *>::const_iterator khIt = holders.begin(); khIt != holders.end(); ++khIt) {
-        Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(*khIt);
-
-        effectInstance->endChanges();
-    }
-
-}
 
 /**
  * @brief Move the node 'reader' on project timeline, by offsetting its
@@ -74,74 +32,165 @@ void renderOnce(const std::set<KnobHolder *>& holders)
  */
 void moveReader(const NodePtr &reader, double dt)
 {
-    Knob<int> *startingTimeKnob = dynamic_cast<Knob<int> *>(reader->getKnobByName("startingTime").get());
+    Knob<int> *startingTimeKnob = dynamic_cast<Knob<int> *>(reader->getKnobByName(kReaderParamNameStartingTime).get());
     assert(startingTimeKnob);
-
-    KnobHolder *holder = startingTimeKnob->getHolder();
-    Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
-
-    effectInstance->beginChanges();
-    KnobHelper::ValueChangedReturnCodeEnum r = startingTimeKnob->setValue(startingTimeKnob->getValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
-    effectInstance->endChanges(); // don't discard changes here otherwise the hash of hte node is not updated
-
-    Q_UNUSED(r);
+    (void)startingTimeKnob->setValue(startingTimeKnob->getGuiValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
+}
+    
+void moveTimeOffset(const NodePtr& node, double dt)
+{
+    Knob<int>* timeOffsetKnob = dynamic_cast<Knob<int>*>(node->getKnobByName(kTimeOffsetParamNameTimeOffset).get());
+    assert(timeOffsetKnob);
+    (void)timeOffsetKnob->setValue(timeOffsetKnob->getGuiValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
 }
 
+void moveFrameRange(const NodePtr& node, double dt)
+{
+    Knob<int>* frameRangeKnob = dynamic_cast<Knob<int>*>(node->getKnobByName(kFrameRangeParamNameFrameRange).get());
+    assert(frameRangeKnob);
+    (void)frameRangeKnob->setValues(frameRangeKnob->getGuiValue(0) + dt, frameRangeKnob->getGuiValue(1)  + dt, Natron::eValueChangedReasonNatronGuiEdited);
+}
+    
+void moveGroupNode(DopeSheetEditor* model, const NodePtr& node, double dt)
+{
+    NodeGroup *group = dynamic_cast<NodeGroup *>(node->getLiveInstance());
+    assert(group);
+    NodeList nodes;
+    group->getNodes_recursive(nodes);
+    
+    for (NodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
+        boost::shared_ptr<NodeGui> nodeGui = boost::dynamic_pointer_cast<NodeGui>((*it)->getNodeGui());
+        assert(nodeGui);
+        std::string pluginID = (*it)->getPluginID();
+        
+        NodeGroup* isChildGroup = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
+        
+        // Move readers
+        if (pluginID == PLUGINID_OFX_READOIIO ||
+            pluginID == PLUGINID_OFX_READFFMPEG ||
+            pluginID == PLUGINID_OFX_READPFM) {
+            moveReader(*it, dt);
+        } else if (pluginID == PLUGINID_OFX_TIMEOFFSET) {
+            moveTimeOffset(*it, dt);
+        } else if (pluginID == PLUGINID_OFX_FRAMERANGE) {
+            moveFrameRange(*it, dt);
+        } else if (isChildGroup) {
+            moveGroupNode(model, *it, dt);
+        }
+        
+        // Move keyframes
+        const KnobsAndGuis &knobs = nodeGui->getKnobs();
+        
+        for (KnobsAndGuis::const_iterator knobIt = knobs.begin(); knobIt != knobs.end(); ++knobIt) {
+            KnobGui *knobGui = (*knobIt).second;
+            boost::shared_ptr<KnobI> knob = knobGui->getKnob();
+            if (!knob->hasAnimation()) {
+                continue;
+            }
+        
+            for (int dim = 0; dim < knobGui->getKnob()->getDimension(); ++dim) {
+                if (!knob->isAnimated(dim)) {
+                    continue;
+                }
+                KeyFrameSet keyframes = knobGui->getCurve(dim)->getKeyFrames_mt_safe();
+                
+                for (KeyFrameSet::iterator kfIt = keyframes.begin(); kfIt != keyframes.end(); ++kfIt) {
+                    KeyFrame kf = (*kfIt);
+                    
+                    KeyFrame fake;
+                    
+                    knob->moveValueAtTime(kf.getTime(), dim, dt, 0, &fake);
+                }
+            }
+        }
+    }
+    
+}
+    
 } // anon namespace
 
 
 ////////////////////////// DSMoveKeysCommand //////////////////////////
 
-DSMoveKeysCommand::DSMoveKeysCommand(const DSKeyPtrList &keys,
-                                     double dt,
-                                     DopeSheet *model,
-                                     QUndoCommand *parent) :
-    QUndoCommand(parent),
-    _keys(keys),
-    _dt(dt),
-    _model(model)
+DSMoveKeysAndNodesCommand::DSMoveKeysAndNodesCommand(const DSKeyPtrList &keys,
+                                                         const std::vector<boost::shared_ptr<DSNode> >& nodes,
+                                                         double dt,
+                                                         DopeSheetEditor *model,
+                                                         QUndoCommand *parent) :
+QUndoCommand(parent),
+_keys(keys),
+_nodes(),
+_dt(dt),
+_model(model)
 {
     setText(QObject::tr("Move selected keys"));
-
-    _keys.sort(dsSelectedKeyLessFunctor);
-}
-
-void DSMoveKeysCommand::undo()
-{
-    moveSelectedKeyframes(-_dt);
-}
-
-void DSMoveKeysCommand::redo()
-{
-    moveSelectedKeyframes(_dt);
-}
-
-void DSMoveKeysCommand::moveSelectedKeyframes(double dt)
-{
-    std::set<KnobHolder *> knobHolders;
-
-    for (DSKeyPtrList::iterator it = _keys.begin(); it != _keys.end(); ++it) {
-        DSKeyPtr selectedKey = (*it);
-
-        boost::shared_ptr<DSKnob> knobContext = selectedKey->context.lock();
-
-        if (!knobContext) {
+    std::set<boost::shared_ptr<Natron::Node> > nodesSet;
+    for (std::vector<boost::shared_ptr<DSNode> >::const_iterator it = nodes.begin(); it!=nodes.end(); ++it) {
+        DopeSheet::ItemType type = (*it)->getItemType();
+        if (type != DopeSheet::ItemTypeReader &&
+            type != DopeSheet::ItemTypeGroup &&
+            type != DopeSheet::ItemTypeTimeOffset &&
+            type != DopeSheet::ItemTypeFrameRange) {
+            //Note that Retime nodes cannot be moved
             continue;
         }
-
-        KnobHolder *holder = knobContext->getKnobGui()->getKnob()->getHolder();
-
-        knobHolders.insert(holder);
+        _nodes.push_back(*it);
+        nodesSet.insert((*it)->getInternalNode());
+        NodeGroup* isGroup = dynamic_cast<NodeGroup*>((*it)->getInternalNode()->getLiveInstance());
+        if (isGroup) {
+            NodeList recurseNodes;
+            isGroup->getNodes_recursive(recurseNodes);
+            for (NodeList::iterator it = recurseNodes.begin(); it!=recurseNodes.end(); ++it) {
+                nodesSet.insert(*it);
+            }
+        }
     }
-
-    for (std::set<KnobHolder *>::iterator khIt = knobHolders.begin(); khIt != knobHolders.end(); ++khIt) {
-        Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(*khIt);
-
-        effectInstance->beginChanges();
-    }
-
+    
     for (DSKeyPtrList::iterator it = _keys.begin(); it != _keys.end(); ++it) {
-        DSKeyPtr selectedKey = (*it);
+        KnobHolder* holder = (*it)->getContext()->getInternalKnob()->getHolder();
+        assert(holder);
+        Natron::EffectInstance* isEffect = dynamic_cast<Natron::EffectInstance*>(holder);
+        if (isEffect) {
+            nodesSet.insert(isEffect->getNode());
+        }
+    }
+    
+    for (std::set<boost::shared_ptr<Natron::Node> >::iterator it = nodesSet.begin(); it!=nodesSet.end(); ++it) {
+        _allDifferentNodes.push_back(*it);
+    }
+}
+
+void DSMoveKeysAndNodesCommand::undo()
+{
+    moveSelection(-_dt);
+}
+
+void DSMoveKeysAndNodesCommand::redo()
+{
+    moveSelection(_dt);
+}
+
+void DSMoveKeysAndNodesCommand::moveSelection(double dt)
+{
+    /*
+     The view is going to get MANY update() calls since every knob change will trigger a computeNodeRange() in DopeSheetView
+     We explicitly disable update on the dopesheet view and re-enable it afterwards.
+     */
+    DopeSheetView* view = _model->getDopesheetView();
+    view->setUpdatesEnabled(false);
+    
+    for (std::list<boost::weak_ptr<Natron::Node> >::iterator khIt = _allDifferentNodes.begin(); khIt != _allDifferentNodes.end(); ++khIt) {
+        NodePtr node = khIt->lock();
+        if (!node) {
+            continue;
+        }
+        node->getLiveInstance()->beginChanges();
+    }
+
+    
+    //////////Handle selected keyframes
+    for (DSKeyPtrList::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+        const DSKeyPtr& selectedKey = (*it);
 
         boost::shared_ptr<DSKnob> knobContext = selectedKey->context.lock();
         if (!knobContext) {
@@ -154,20 +203,43 @@ void DSMoveKeysCommand::moveSelectedKeyframes(double dt)
                               knobContext->getDimension(),
                               dt, 0, &selectedKey->key);
     }
+    ////////////Handle selected nodes
+    for (std::vector<boost::shared_ptr<DSNode> >::iterator it = _nodes.begin(); it != _nodes.end(); ++it) {
+        DopeSheet::ItemType type = (*it)->getItemType();
+        if (type == DopeSheet::ItemTypeReader) {
+            moveReader((*it)->getInternalNode(), dt);
+        } else if (type == DopeSheet::ItemTypeFrameRange)  {
+            moveFrameRange((*it)->getInternalNode(), dt);
+        } else if (type == DopeSheet::ItemTypeTimeOffset) {
+            moveTimeOffset((*it)->getInternalNode(), dt);
+        } else if (type == DopeSheet::ItemTypeGroup) {
+            moveGroupNode(_model, (*it)->getInternalNode(), dt);
+        }
+    }
+    
 
-    renderOnce(knobHolders);
+    for (std::list<boost::weak_ptr<Natron::Node> >::const_iterator khIt = _allDifferentNodes.begin(); khIt != _allDifferentNodes.end(); ++khIt) {
+        NodePtr node = khIt->lock();
+        if (!node) {
+            continue;
+        }
+        node->getLiveInstance()->endChanges();
+    }
+    
+    view->setUpdatesEnabled(true);
 
-    _model->getSelectionModel()->emit_keyframeSelectionChanged();
+
+    _model->refreshSelectionBboxAndRedrawView();
 }
 
-int DSMoveKeysCommand::id() const
+int DSMoveKeysAndNodesCommand::id() const
 {
     return kDopeSheetEditorMoveKeysCommandCompressionID;
 }
 
-bool DSMoveKeysCommand::mergeWith(const QUndoCommand *other)
+bool DSMoveKeysAndNodesCommand::mergeWith(const QUndoCommand *other)
 {
-    const DSMoveKeysCommand *cmd = dynamic_cast<const DSMoveKeysCommand *>(other);
+    const DSMoveKeysAndNodesCommand *cmd = dynamic_cast<const DSMoveKeysAndNodesCommand *>(other);
 
     if (cmd->id() != id()) {
         return false;
@@ -176,10 +248,23 @@ bool DSMoveKeysCommand::mergeWith(const QUndoCommand *other)
     if (cmd->_keys.size() != _keys.size()) {
         return false;
     }
-
-    DSKeyPtrList::const_iterator itOther = cmd->_keys.begin();
-
-    for (DSKeyPtrList::const_iterator it = _keys.begin(); it != _keys.end(); ++it, ++itOther) {
+    
+    if (cmd->_nodes.size() != _nodes.size()) {
+        return false;
+    }
+    
+    {
+        DSKeyPtrList::const_iterator itOther = cmd->_keys.begin();
+        
+        for (DSKeyPtrList::const_iterator it = _keys.begin(); it != _keys.end(); ++it, ++itOther) {
+            if (*itOther != *it) {
+                return false;
+            }
+        }
+    }
+    
+    std::vector<boost::shared_ptr<DSNode> >::const_iterator itOther = cmd->_nodes.begin();
+    for (std::vector<boost::shared_ptr<DSNode> >::const_iterator it = _nodes.begin(); it!=_nodes.end(); ++it,++itOther) {
         if (*itOther != *it) {
             return false;
         }
@@ -187,6 +272,172 @@ bool DSMoveKeysCommand::mergeWith(const QUndoCommand *other)
 
     _dt += cmd->_dt;
 
+    return true;
+}
+
+//////////////////////////DSTransformKeysCommand //////////////////////////
+
+DSTransformKeysCommand::DSTransformKeysCommand(const DSKeyPtrList &keys,
+                       const Transform::Matrix3x3& transform,
+                       DopeSheetEditor *model,
+                       QUndoCommand *parent)
+: QUndoCommand(parent)
+, _firstRedoCalled(false)
+, _transform(transform)
+, _model(model)
+{
+    for (DSKeyPtrList::const_iterator it = keys.begin(); it != keys.end(); ++it) {
+        boost::shared_ptr<DSKnob> knobContext = (*it)->context.lock();
+        if (!knobContext) {
+            continue;
+        }
+        
+        TransformKeyData& data = _keys[knobContext];
+        data.keys.push_back(*it);
+    }
+    
+    setText(QObject::tr("Scale keyframes"));
+}
+
+void
+DSTransformKeysCommand::undo()
+{
+    /*
+     The view is going to get MANY update() calls since every knob change will trigger a computeNodeRange() in DopeSheetView
+     We explicitly disable update on the dopesheet view and re-enable it afterwards.
+     */
+    DopeSheetView* view = _model->getDopesheetView();
+    view->setUpdatesEnabled(false);
+    
+    std::list<KnobHolder*> differentKnobs;
+    for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+        
+        KnobHolder* holder = it->first->getInternalKnob()->getHolder();
+        if (holder) {
+            if ( std::find(differentKnobs.begin(), differentKnobs.end(), holder) == differentKnobs.end() ) {
+                differentKnobs.push_back(holder);
+                holder->beginChanges();
+            }
+        }
+    }
+    
+    for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+        it->first->getInternalKnob()->cloneCurve(it->first->getDimension(),*it->second.oldCurve);
+    }
+    for (std::list<KnobHolder*>::iterator it= differentKnobs.begin(); it!=differentKnobs.end(); ++it) {
+        (*it)->endChanges();
+    }
+    
+    view->setUpdatesEnabled(true);
+    
+    
+    _model->refreshSelectionBboxAndRedrawView();
+}
+
+void
+DSTransformKeysCommand::redo()
+{
+    
+    /*
+     The view is going to get MANY update() calls since every knob change will trigger a computeNodeRange() in DopeSheetView
+     We explicitly disable update on the dopesheet view and re-enable it afterwards.
+     */
+    DopeSheetView* view = _model->getDopesheetView();
+    view->setUpdatesEnabled(false);
+    
+    std::list<KnobHolder*> differentKnobs;
+    for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+        
+        KnobHolder* holder = it->first->getInternalKnob()->getHolder();
+        if (holder) {
+            if ( std::find(differentKnobs.begin(), differentKnobs.end(), holder) == differentKnobs.end() ) {
+                differentKnobs.push_back(holder);
+                holder->beginChanges();
+            }
+        }
+    }
+    
+    if (!_firstRedoCalled) {
+        for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+            it->second.oldCurve.reset(new Curve(*it->first->getInternalKnob()->getCurve(it->first->getDimension())));
+            
+        }
+        for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+            for (DSKeyPtrList::iterator it2 = it->second.keys.begin(); it2 != it->second.keys.end(); ++it2) {
+                transformKey(*it2);
+            }
+        }
+
+        for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+            it->second.newCurve.reset(new Curve(*it->first->getInternalKnob()->getCurve(it->first->getDimension())));
+        }
+        _firstRedoCalled = true;
+    } else {
+        for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+            it->first->getInternalKnob()->cloneCurve(it->first->getDimension(),*it->second.newCurve);
+        }
+
+    }
+    
+    for (std::list<KnobHolder*>::iterator it= differentKnobs.begin(); it!=differentKnobs.end(); ++it) {
+        (*it)->endChanges();
+    }
+    
+    view->setUpdatesEnabled(true);
+    
+    
+    _model->refreshSelectionBboxAndRedrawView();
+
+}
+
+void
+DSTransformKeysCommand::transformKey(const DSKeyPtr& key)
+{
+    boost::shared_ptr<DSKnob> knobContext = key->context.lock();
+    if (!knobContext) {
+        return;
+    }
+    
+    boost::shared_ptr<KnobI> knob = knobContext->getKnobGui()->getKnob();
+    knob->transformValueAtTime(key->key.getTime(), knobContext->getDimension(), _transform, &key->key);
+}
+
+int
+DSTransformKeysCommand::id() const
+{
+    return kDopeSheetEditorTransformKeysCommandCompressionID;
+}
+
+bool
+DSTransformKeysCommand::mergeWith(const QUndoCommand *other)
+{
+    const DSTransformKeysCommand *cmd = dynamic_cast<const DSTransformKeysCommand *>(other);
+    
+    if (cmd->id() != id()) {
+        return false;
+    }
+    
+    if (cmd->_keys.size() != _keys.size()) {
+        return false;
+    }
+    {
+        TransformKeys::const_iterator itOther = cmd->_keys.begin();
+        
+        for (TransformKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
+            if (itOther->second.keys.size() != it->second.keys.size()) {
+                return false;
+            }
+            
+            DSKeyPtrList::const_iterator kItOther = itOther->second.keys.begin();
+            for (DSKeyPtrList::const_iterator it2 = it->second.keys.begin(); it2!=it->second.keys.end(); ++it2, ++kItOther) {
+                if (*it2 != *kItOther) {
+                    return false;
+                }
+            }
+        }
+    }
+    
+    _transform = Transform::matMul(_transform, cmd->_transform);
     return true;
 }
 
@@ -224,7 +475,7 @@ void DSLeftTrimReaderCommand::trimLeft(double firstFrame)
 
     NodePtr node = nodeContext->getInternalNode();
 
-    Knob<int> *firstFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName("firstFrame").get());
+    Knob<int> *firstFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameFirstFrame).get());
     assert(firstFrameKnob);
 
     KnobHolder *holder = firstFrameKnob->getHolder();
@@ -233,8 +484,6 @@ void DSLeftTrimReaderCommand::trimLeft(double firstFrame)
     effectInstance->beginChanges();
     KnobHelper::ValueChangedReturnCodeEnum r = firstFrameKnob->setValue(firstFrame, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
     effectInstance->endChanges();
-
-    //renderOnce(effectInstance);
 
     Q_UNUSED(r);
 }
@@ -272,7 +521,7 @@ bool DSLeftTrimReaderCommand::mergeWith(const QUndoCommand *other)
 
 DSRightTrimReaderCommand::DSRightTrimReaderCommand(const boost::shared_ptr<DSNode> &reader,
                                                    double oldTime, double newTime,
-                                                   DopeSheet * /*model*/,
+                                                   DopeSheetEditor * /*model*/,
                                                    QUndoCommand *parent) :
     QUndoCommand(parent),
     _readerContext(reader),
@@ -301,7 +550,7 @@ void DSRightTrimReaderCommand::trimRight(double lastFrame)
 
     NodePtr node = nodeContext->getInternalNode();
 
-    Knob<int> *lastFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName("lastFrame").get());
+    Knob<int> *lastFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameLastFrame).get());
     assert(lastFrameKnob);
 
     KnobHolder *holder = lastFrameKnob->getHolder();
@@ -310,8 +559,6 @@ void DSRightTrimReaderCommand::trimRight(double lastFrame)
     effectInstance->beginChanges();
     KnobHelper::ValueChangedReturnCodeEnum r = lastFrameKnob->setValue(lastFrame, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
     effectInstance->endChanges();
-
-    //renderOnce(effectInstance);
 
     Q_UNUSED(r);
 }
@@ -349,11 +596,12 @@ bool DSRightTrimReaderCommand::mergeWith(const QUndoCommand *other)
 
 DSSlipReaderCommand::DSSlipReaderCommand(const boost::shared_ptr<DSNode> &dsNodeReader,
                                          double dt,
-                                         DopeSheet * /*model*/,
+                                         DopeSheetEditor *model,
                                          QUndoCommand *parent) :
     QUndoCommand(parent),
     _readerContext(dsNodeReader),
-    _dt(dt)
+    _dt(dt),
+    _model(model)
 {
     setText(QObject::tr("Slip reader"));
 }
@@ -405,101 +653,61 @@ void DSSlipReaderCommand::slipReader(double dt)
 
     NodePtr node = nodeContext->getInternalNode();
 
-    Knob<int> *firstFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName("firstFrame").get());
+    Knob<int> *firstFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameFirstFrame).get());
     assert(firstFrameKnob);
-    Knob<int> *lastFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName("lastFrame").get());
+    Knob<int> *lastFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameLastFrame).get());
     assert(lastFrameKnob);
-    Knob<int> *startingTimeKnob = dynamic_cast<Knob<int> *>(node->getKnobByName("timeOffset").get());
+    Knob<int> *timeOffsetKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameTimeOffset).get());
+    assert(timeOffsetKnob);
+    Knob<int> *startingTimeKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameStartingTime).get());
     assert(startingTimeKnob);
 
+
+    /*
+     Since the lastFrameKnob and startingTimeKnob have their signal connected to the computeNodeRange function in DopeSheetview
+     We disconnect them beforehand and reconnect them afterwards, otherwise the dopesheet view is going to get many redraw() calls
+     for nothing.
+     */
+    DopeSheetView* view = _model->getDopesheetView();
+    QObject::disconnect(lastFrameKnob->getSignalSlotHandler().get(), SIGNAL(valueChanged(int, int)),
+            view, SLOT(onRangeNodeChanged(int, int)));
+    
+    QObject::disconnect(startingTimeKnob->getSignalSlotHandler().get(), SIGNAL(valueChanged(int, int)),
+            view, SLOT(onRangeNodeChanged(int, int)));
+
+    
     KnobHolder *holder = lastFrameKnob->getHolder();
     Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
 
     effectInstance->beginChanges();
     {
         KnobHelper::ValueChangedReturnCodeEnum r;
-        int oldStartingTime = startingTimeKnob->getValue();
 
-        r = firstFrameKnob->setValue(firstFrameKnob->getValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
-        r = lastFrameKnob->setValue(lastFrameKnob->getValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
-
-        r = startingTimeKnob->setValue(oldStartingTime, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
+        r = firstFrameKnob->setValue(firstFrameKnob->getGuiValue() - dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
+        r = lastFrameKnob->setValue(lastFrameKnob->getGuiValue() - dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
+        r = timeOffsetKnob->setValue(timeOffsetKnob->getGuiValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
 
         Q_UNUSED(r);
 
     }
     effectInstance->endChanges();
+    
+    
+    QObject::connect(lastFrameKnob->getSignalSlotHandler().get(), SIGNAL(valueChanged(int, int)),
+                        view, SLOT(onRangeNodeChanged(int, int)));
+    
+    QObject::connect(startingTimeKnob->getSignalSlotHandler().get(), SIGNAL(valueChanged(int, int)),
+                        view, SLOT(onRangeNodeChanged(int, int)));
 
-    //renderOnce(effectInstance);
+    view->update();
 }
 
-
-////////////////////////// DSMoveReaderCommand //////////////////////////
-
-DSMoveReaderCommand::DSMoveReaderCommand(const boost::shared_ptr<DSNode> &reader,
-                                         double dt,
-                                         DopeSheet * /*model*/,
-                                         QUndoCommand *parent) :
-    QUndoCommand(parent),
-    _readerContext(reader),
-    _dt(dt)
-{
-    setText(QObject::tr("Move reader"));
-}
-
-void DSMoveReaderCommand::undo()
-{
-    boost::shared_ptr<DSNode> node = _readerContext.lock();
-    if (!node) {
-        return;
-    }
-
-    moveReader(node->getInternalNode(), -_dt);
-}
-
-void DSMoveReaderCommand::redo()
-{
-    boost::shared_ptr<DSNode> node = _readerContext.lock();
-    if (!node) {
-        return;
-    }
-
-    moveReader(node->getInternalNode(), _dt);
-}
-
-int DSMoveReaderCommand::id() const
-{
-    return kDopeSheetEditorMoveClipCommandCompressionID;
-}
-
-bool DSMoveReaderCommand::mergeWith(const QUndoCommand *other)
-{
-    const DSMoveReaderCommand *cmd = dynamic_cast<const DSMoveReaderCommand *>(other);
-
-    if (cmd->id() != id()) {
-        return false;
-    }
-
-    boost::shared_ptr<DSNode> node = _readerContext.lock();
-    boost::shared_ptr<DSNode> otherNode = cmd->_readerContext.lock();
-    if (!node || !otherNode) {
-        return false;
-    }
-
-    if (node!= otherNode) {
-        return false;
-    }
-
-    _dt += cmd->_dt;
-
-    return true;
-}
 
 
 ////////////////////////// DSRemoveKeysCommand //////////////////////////
 
 DSRemoveKeysCommand::DSRemoveKeysCommand(const std::vector<DopeSheetKey> &keys,
-                                         DopeSheet *model,
+                                         DopeSheetEditor *model,
                                          QUndoCommand *parent) :
     QUndoCommand(parent),
     _keys(keys),
@@ -539,139 +747,16 @@ void DSRemoveKeysCommand::addOrRemoveKeyframe(bool add)
         }
     }
 
-    _model->getSelectionModel()->emit_keyframeSelectionChanged();
+    _model->refreshSelectionBboxAndRedrawView();
 }
 
 
-////////////////////////// DSMoveGroupCommand //////////////////////////
-
-DSMoveGroupCommand::DSMoveGroupCommand(const boost::shared_ptr<DSNode> &group, double dt, DopeSheet *model, QUndoCommand *parent) :
-    QUndoCommand(parent),
-    _groupContext(group),
-    _dt(dt),
-    _model(model)
-{
-    setText(QObject::tr("Move Group Keyframes"));
-}
-
-void DSMoveGroupCommand::undo()
-{
-    moveGroup(-_dt);
-}
-
-void DSMoveGroupCommand::redo()
-{
-    moveGroup(_dt);
-}
-
-int DSMoveGroupCommand::id() const
-{
-    return kDopeSheetEditorMoveGroupCommandCompressionID;
-}
-
-bool DSMoveGroupCommand::mergeWith(const QUndoCommand *other)
-{
-    const DSMoveGroupCommand *cmd = dynamic_cast<const DSMoveGroupCommand *>(other);
-
-    if (cmd->id() != id()) {
-        return false;
-    }
-
-    boost::shared_ptr<DSNode> node = _groupContext.lock();
-    boost::shared_ptr<DSNode> otherNode = cmd->_groupContext.lock();
-    if (!node || !otherNode) {
-        return false;
-    }
-
-    if (node!= otherNode) {
-        return false;
-    }
-
-    _dt += cmd->_dt;
-
-    return true;
-}
-
-void DSMoveGroupCommand::moveGroup(double dt)
-{
-    boost::shared_ptr<DSNode> nodeContext = _groupContext.lock();
-    if (!nodeContext) {
-        return;
-    }
-
-    NodeGroup *group = dynamic_cast<NodeGroup *>(nodeContext->getInternalNode()->getLiveInstance());
-    NodeList nodes = group->getNodes();
-
-    std::set<KnobHolder *> knobHolders;
-
-    for (NodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
-        boost::shared_ptr<NodeGui> nodeGui = boost::dynamic_pointer_cast<NodeGui>((*it)->getNodeGui());
-
-        if (dynamic_cast<GroupInput *>(nodeGui->getNode()->getLiveInstance()) ||
-                dynamic_cast<GroupOutput *>(nodeGui->getNode()->getLiveInstance())) {
-            continue;
-        }
-
-        if (!nodeGui->getSettingPanel() || !nodeGui->isSettingsPanelVisible()) {
-            continue;
-        }
-
-        NodePtr node = nodeGui->getNode();
-        std::string pluginID = node->getPluginID();
-
-        // Move readers
-        if (pluginID == PLUGINID_OFX_READOIIO ||
-                pluginID == PLUGINID_OFX_READFFMPEG ||
-                pluginID == PLUGINID_OFX_READPFM) {
-            moveReader(node, dt);
-        }
-
-        // Move keyframes
-        const KnobsAndGuis &knobs = nodeGui->getKnobs();
-
-        for (KnobsAndGuis::const_iterator knobIt = knobs.begin(); knobIt != knobs.end(); ++knobIt) {
-            KnobGui *knobGui = (*knobIt).second;
-            boost::shared_ptr<KnobI> knob = knobGui->getKnob();
-
-            if (!knob->hasAnimation()) {
-                continue;
-            }
-
-            KnobHolder *holder = knob->getHolder();
-            knobHolders.insert(holder);
-
-            Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
-            effectInstance->beginChanges();
-
-            for (int dim = 0; dim < knobGui->getKnob()->getDimension(); ++dim) {
-                if (!knob->isAnimated(dim)) {
-                    continue;
-                }
-
-                KeyFrameSet keyframes = knobGui->getCurve(dim)->getKeyFrames_mt_safe();
-
-                for (KeyFrameSet::iterator kfIt = keyframes.begin(); kfIt != keyframes.end(); ++kfIt) {
-                    KeyFrame kf = (*kfIt);
-
-                    KeyFrame fake;
-
-                    knob->moveValueAtTime(kf.getTime(), dim, dt, 0, &fake);
-                }
-            }
-        }
-    }
-
-    renderOnce(knobHolders);
-
-    _model->getSelectionModel()->clearKeyframeSelection();
-    _model->emit_modelChanged();
-}
 
 
 ////////////////////////// DSSetSelectedKeysInterpolationCommand //////////////////////////
 
 DSSetSelectedKeysInterpolationCommand::DSSetSelectedKeysInterpolationCommand(const std::list<DSKeyInterpolationChange> &changes,
-                                                                             DopeSheet *model,
+                                                                             DopeSheetEditor *model,
                                                                              QUndoCommand *parent) :
     QUndoCommand(parent),
     _changes(changes),
@@ -706,14 +791,14 @@ void DSSetSelectedKeysInterpolationCommand::setInterpolation(bool undo)
                                                                      &it->_key->key);
     }
 
-    _model->emit_modelChanged();
+    _model->refreshSelectionBboxAndRedrawView();
 }
 
 
 ////////////////////////// DSAddKeysCommand //////////////////////////
 
 DSPasteKeysCommand::DSPasteKeysCommand(const std::vector<DopeSheetKey> &keys,
-                                       DopeSheet *model,
+                                       DopeSheetEditor *model,
                                        QUndoCommand *parent) :
     QUndoCommand(parent),
     _keys(keys),
@@ -745,7 +830,7 @@ void DSPasteKeysCommand::addOrRemoveKeyframe(bool add)
         boost::shared_ptr<KnobI> knob = knobContext->getInternalKnob();
         knob->beginChanges();
 
-        SequenceTime currentTime = _model->getCurrentFrame();
+        SequenceTime currentTime = _model->getTimelineCurrentTime();
 
         double keyTime = key.key.getTime();
 
@@ -772,5 +857,5 @@ void DSPasteKeysCommand::addOrRemoveKeyframe(bool add)
         knob->endChanges();
     }
 
-    _model->emit_modelChanged();
+    _model->refreshSelectionBboxAndRedrawView();
 }

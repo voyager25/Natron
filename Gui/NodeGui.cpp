@@ -15,6 +15,7 @@
 #include "NodeGui.h"
 
 #include <cassert>
+#include <algorithm> // min, max
 #include <boost/scoped_array.hpp>
 
 CLANG_DIAG_OFF(deprecated)
@@ -491,7 +492,7 @@ NodeGui::createPanel(QVBoxLayout* container,
         assert(container);
         boost::shared_ptr<MultiInstancePanel> multiPanel;
         if ( node->isTrackerNode() && node->isMultiInstance() && node->getParentMultiInstanceName().empty() ) {
-            multiPanel.reset( new TrackerPanel(thisAsShared) );
+            multiPanel.reset( new TrackerPanelV1(thisAsShared) );
 
             ///This is valid only if the node is a multi-instance and this is the main instance.
             ///The "real" panel showed on the gui will be the _settingsPanel, but we still need to create
@@ -2184,7 +2185,9 @@ NodeGui::moveBelowPositionRecursively(const QRectF & r)
         for (std::list<Natron::Node* >::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
             assert(*it);
             boost::shared_ptr<NodeGuiI> outputGuiI = (*it)->getNodeGui();
-            assert(outputGuiI);
+            if (!outputGuiI) {
+                continue;
+            }
             NodeGui* gui = dynamic_cast<NodeGui*>(outputGuiI.get());
             assert(gui);
             sceneRect = mapToScene( boundingRect() ).boundingRect();
@@ -2471,8 +2474,9 @@ NodeGui::toggleBitDepthIndicator(bool on,
                                  const QString & tooltip)
 {
     if (on) {
-        setToolTip( Natron::convertFromPlainText(tooltip.trimmed(), Qt::WhiteSpaceNormal) );
-        _bitDepthWarning->setToolTip(tooltip);
+        QString arrangedTt = Natron::convertFromPlainText(tooltip.trimmed(), Qt::WhiteSpaceNormal);
+        setToolTip(arrangedTt);
+        _bitDepthWarning->setToolTip(arrangedTt);
     } else {
         setToolTip("");
         _bitDepthWarning->setToolTip("");
@@ -2547,7 +2551,7 @@ NodeGuiIndicator::~NodeGuiIndicator()
 void
 NodeGuiIndicator::setToolTip(const QString & tooltip)
 {
-    _imp->ellipse->setToolTip( Natron::convertFromPlainText(tooltip.trimmed(), Qt::WhiteSpaceNormal) );
+    _imp->ellipse->setToolTip(tooltip);
 }
 
 void
@@ -3443,14 +3447,14 @@ NodeGui::setCurrentViewportForDefaultOverlays(OverlaySupport* viewPort)
 }
 
 void
-NodeGui::drawDefaultOverlay(double scaleX,double scaleY)
+NodeGui::drawDefaultOverlay(double time, double scaleX,double scaleY)
 {
     if (_defaultOverlay) {
         RenderScale rs;
         rs.x = scaleX;
         rs.y = scaleY;
         NatronOverlayInteractSupport::OGLContextSaver s(_defaultOverlay->getLastCallingViewport());
-        _defaultOverlay->draw(getNode()->getLiveInstance()->getCurrentTime(), rs);
+        _defaultOverlay->draw(time , rs);
     }
 }
 

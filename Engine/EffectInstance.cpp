@@ -17,6 +17,8 @@
 
 #include <map>
 #include <sstream>
+#include <algorithm> // min, max
+
 #include <QtConcurrentMap>
 #include <QReadWriteLock>
 #include <QCoreApplication>
@@ -48,6 +50,7 @@
 #include "Engine/OutputSchedulerThread.h"
 #include "Engine/Transform.h"
 #include "Engine/DiskCacheNode.h"
+#include "Engine/Timer.h"
 
 //#define NATRON_ALWAYS_ALLOCATE_FULL_IMAGE_BOUNDS
 
@@ -101,6 +104,7 @@ namespace  {
     
     typedef std::map<ActionKey,IdentityResults,CompareActionsCacheKeys> IdentityCacheMap;
     typedef std::map<ActionKey,RectD,CompareActionsCacheKeys> RoDCacheMap;
+    typedef std::map<ActionKey,EffectInstance::FramesNeededMap,CompareActionsCacheKeys> FramesNeededCacheMap;
     
     /**
      * @brief This class stores all results of the following actions:
@@ -123,6 +127,7 @@ namespace  {
             
             IdentityCacheMap _identityCache;
             RoDCacheMap _rodCache;
+            FramesNeededCacheMap _framesNeededCache;
             
             ActionsCacheInstance()
             : _hash(0)
@@ -130,6 +135,7 @@ namespace  {
             , _timeDomainSet(false)
             , _identityCache()
             , _rodCache()
+            , _framesNeededCache()
             {
                 
             }
@@ -268,6 +274,56 @@ namespace  {
 
         }
         
+        bool getFramesNeededResult(U64 hash,double time, int view,unsigned int mipMapLevel,EffectInstance::FramesNeededMap* framesNeeded) {
+            
+            QMutexLocker l(&_cacheMutex);
+            for (std::list<ActionsCacheInstance>::iterator it = _instances.begin(); it!=_instances.end(); ++it) {
+                if (it->_hash == hash) {
+                    ActionKey key;
+                    key.time = time;
+                    key.view = view;
+                    key.mipMapLevel = mipMapLevel;
+                    
+                    FramesNeededCacheMap::const_iterator found = it->_framesNeededCache.find(key);
+                    if ( found != it->_framesNeededCache.end() ) {
+                        *framesNeeded = found->second;
+                        return true;
+                    }
+                    
+                    return false;
+                }
+            }
+            return false;
+        }
+        
+        
+        void setFramesNeededResult(U64 hash,double time, int view, unsigned int mipMapLevel,const EffectInstance::FramesNeededMap& framesNeeded)
+        {
+            
+            QMutexLocker l(&_cacheMutex);
+            for (std::list<ActionsCacheInstance>::iterator it = _instances.begin(); it!=_instances.end(); ++it) {
+                if (it->_hash == hash) {
+                    
+                    ActionKey key;
+                    key.time = time;
+                    key.view = view;
+                    key.mipMapLevel = mipMapLevel;
+                    
+                    FramesNeededCacheMap::iterator found = it->_framesNeededCache.find(key);
+                    if ( found != it->_framesNeededCache.end() ) {
+                        ///Already set, this is a bug
+                        return;
+                    } else {
+                        it->_framesNeededCache.insert(std::make_pair(key, framesNeeded));
+                    }
+                    return;
+                }
+            }
+            
+            //the cache for this hash did not exist
+            
+        }
+        
         bool getTimeDomainResult(U64 hash,double *first,double* last) {
             
             QMutexLocker l(&_cacheMutex);
@@ -313,18 +369,18 @@ struct EffectInstance::RenderArgs
     RectD _rod; //!< the effect's RoD in CANONICAL coordinates
     RoIMap _regionOfInterestResults; //< the input RoI's in CANONICAL coordinates
     RectI _renderWindowPixel; //< the current renderWindow in PIXEL coordinates
-    SequenceTime _time; //< the time to render
+    double _time; //< the time to render
     int _view; //< the view to render
     bool _validArgs; //< are the args valid ?
     bool _isIdentity;
-    SequenceTime _identityTime;
+    double _identityTime;
     int _identityInputNb;
     std::map<Natron::ImageComponents,PlaneToRender> _outputPlanes;
     
     //This is set only when the plug-in has set ePassThroughRenderAllRequestedPlanes
     Natron::ImageComponents _outputPlaneBeingRendered;
 
-    int _firstFrame,_lastFrame;
+    double _firstFrame,_lastFrame;
     
     RenderArgs()
     : _rod()
@@ -386,6 +442,8 @@ struct EffectInstance::Implementation
     , componentsAvailableMutex()
     , componentsAvailableDirty(true)
     , outputComponentsAvailable()
+    , renderingTimersMutex()
+    , totalTimeSpentRendering(0.)
     {
     }
 
@@ -446,8 +504,10 @@ struct EffectInstance::Implementation
     bool componentsAvailableDirty; /// Set to true when getClipPreferences is called to indicate it must be set again
     EffectInstance::ComponentsAvailableMap outputComponentsAvailable;
     
-    void runChangedParamCallback(KnobI* k,bool userEdited,const std::string& callback);
+    mutable QMutex renderingTimersMutex;
+    double totalTimeSpentRendering;
     
+    void runChangedParamCallback(KnobI* k,bool userEdited,const std::string& callback);
     
     void setDuringInteractAction(bool b)
     {
@@ -473,10 +533,10 @@ struct EffectInstance::Implementation
         }
     }
     
-    void waitForImageBeingRenderedElsewhereAndUnmark(const RectI& roi,const boost::shared_ptr<Natron::Image>& img)
+    bool waitForImageBeingRenderedElsewhereAndUnmark(const RectI& roi,const boost::shared_ptr<Natron::Image>& img)
     {
         if (!img->usesBitMap()) {
-            return;
+            return true;
         }
         IBRPtr ibr;
         {
@@ -502,14 +562,18 @@ struct EffectInstance::Implementation
         }
         
         ///Everything should be rendered now.
-
+        bool hasFailed;
         {
             QMutexLocker k(&imagesBeingRenderedMutex);
             IBRMap::iterator found = imagesBeingRendered.find(img);
             assert(found != imagesBeingRendered.end());
             
             QMutexLocker kk(&ibr->lock);
-            assert(ab || !isBeingRenderedElseWhere || ibr->renderFailed || ibr->refCount <= 1);
+            hasFailed = ab || ibr->renderFailed || isBeingRenderedElseWhere;
+            
+            // If it crashes here, that is probably because ibr->refCount == 1, but in this case isBeingRenderedElseWhere should be false.
+            // If this assert is triggered, please investigate, this is a serious bug in the trimap system.
+            assert(ab || !isBeingRenderedElseWhere || ibr->renderFailed);
             --ibr->refCount;
             found->second->cond.wakeAll();
             if (found != imagesBeingRendered.end() && !ibr->refCount) {
@@ -517,7 +581,7 @@ struct EffectInstance::Implementation
             }
         }
 
-        
+        return !hasFailed;
         
     
     }
@@ -587,14 +651,14 @@ struct EffectInstance::Implementation
                          const RoIMap & roiMap,
                          const RectD & rod,
                          const RectI& renderWindow,
-                         SequenceTime time,
+                         double time,
                          int view,
                          bool isIdentity,
-                         SequenceTime identityTime,
+                         double identityTime,
                          int inputNbIdentity,
                          const std::map<Natron::ImageComponents,PlaneToRender>& outputPlanes,
-                         int firstFrame,
-                         int lastFrame)
+                         double firstFrame,
+                         double lastFrame)
             : localData(&dst->localData())
             , _dst(dst)
         {
@@ -649,10 +713,10 @@ struct EffectInstance::Implementation
         ///the thread-storage set up in the first pass to work
         void setArgs_firstPass(const RectD & rod,
                                const RectI& renderWindow,
-                               SequenceTime time,
+                               double time,
                                int view,
                                bool isIdentity,
-                               SequenceTime identityTime,
+                               double identityTime,
                                int inputNbIdentity)
         {
             localData->_rod = rod;
@@ -690,6 +754,28 @@ struct EffectInstance::Implementation
         }
     }
 };
+
+
+class RenderingTimeRecorder
+{
+    TimeLapse _lapse;
+    EffectInstance* _imp;
+    
+public:
+    
+    RenderingTimeRecorder(EffectInstance* imp)
+    : _lapse()
+    , _imp(imp)
+    {
+        
+    }
+    
+    ~RenderingTimeRecorder()
+    {
+        _imp->incrementTotalTimeSpentRendering(_lapse.getTimeSinceCreation());
+    }
+};
+
 
 class InputImagesHolder_RAII
 {
@@ -750,6 +836,29 @@ EffectInstance::~EffectInstance()
     clearPluginMemoryChunks();
 }
 
+double
+EffectInstance::getTotalTimeSpentRenderingSinceLastReset() const
+{
+    QMutexLocker k(&_imp->renderingTimersMutex);
+    return _imp->totalTimeSpentRendering;
+}
+
+void
+EffectInstance::resetTotalTimeSpentRendering()
+{
+    {
+        QMutexLocker k(&_imp->renderingTimersMutex);
+        _imp->totalTimeSpentRendering = 0.;
+    }
+    resetTimeSpentRenderingInfos();
+}
+
+void
+EffectInstance::incrementTotalTimeSpentRendering(double v)
+{
+    QMutexLocker k(&_imp->renderingTimersMutex);
+    _imp->totalTimeSpentRendering += v;
+}
 
 void
 EffectInstance::lock(const boost::shared_ptr<Natron::Image>& entry)
@@ -879,7 +988,7 @@ EffectInstance::invalidateParallelRenderArgsTLS()
             (*it)->getLiveInstance()->invalidateParallelRenderArgsTLS();
         }
     } else {
-        qDebug() << "Frame render args thread storage not set, this is probably because the graph changed while rendering.";
+        //qDebug() << "Frame render args thread storage not set, this is probably because the graph changed while rendering.";
     }
 }
 
@@ -889,7 +998,7 @@ EffectInstance::getParallelRenderArgsTLS() const
     if (_imp->frameRenderArgs.hasLocalData()) {
         return _imp->frameRenderArgs.localData();
     } else {
-        qDebug() << "Frame render args thread storage not set, this is probably because the graph changed while rendering.";
+        //qDebug() << "Frame render args thread storage not set, this is probably because the graph changed while rendering.";
         return ParallelRenderArgs();
     }
 }
@@ -1050,14 +1159,14 @@ EffectInstance::getInputLabel(int inputNb) const
 }
 
 bool
-EffectInstance::retrieveGetImageDataUponFailure(const int time,
+EffectInstance::retrieveGetImageDataUponFailure(const double time,
                                                 const int view,
                                                 const RenderScale& scale,
                                                 const RectD* optionalBoundsParam,
                                                 U64* nodeHash_p,
                                                 U64* rotoAge_p,
                                                 bool* isIdentity_p,
-                                                int* identityTime,
+                                                double* identityTime,
                                                 int* identityInputNb_p,
                                                 bool* duringPaintStroke_p,
                                                 RectD* rod_p,
@@ -1152,7 +1261,7 @@ EffectInstance::getThreadLocalRegionsOfInterests(EffectInstance::RoIMap& roiMap)
 
 ImagePtr
 EffectInstance::getImage(int inputNb,
-                         const SequenceTime time,
+                         const double time,
                          const RenderScale & scale,
                          const int view,
                          const RectD *optionalBoundsParam, //!< optional region in canonical coordinates
@@ -1232,7 +1341,7 @@ EffectInstance::getImage(int inputNb,
     RectD rod;
     bool isIdentity;
     int inputNbIdentity;
-    int inputIdentityTime;
+    double inputIdentityTime;
     U64 nodeHash;
     U64 rotoAge;
     bool duringPaintStroke;
@@ -1486,7 +1595,7 @@ EffectInstance::getImage(int inputNb,
 } // getImage
 
 void
-EffectInstance::calcDefaultRegionOfDefinition(U64 /*hash*/,SequenceTime /*time*/,
+EffectInstance::calcDefaultRegionOfDefinition(U64 /*hash*/,double /*time*/,
                                               int /*view*/,
                                               const RenderScale & /*scale*/,
                                               RectD *rod)
@@ -1498,7 +1607,7 @@ EffectInstance::calcDefaultRegionOfDefinition(U64 /*hash*/,SequenceTime /*time*/
 }
 
 Natron::StatusEnum
-EffectInstance::getRegionOfDefinition(U64 hash,SequenceTime time,
+EffectInstance::getRegionOfDefinition(U64 hash,double time,
                                       const RenderScale & scale,
                                       int view,
                                       RectD* rod) //!< rod is in canonical coordinates
@@ -1537,7 +1646,7 @@ EffectInstance::getRegionOfDefinition(U64 hash,SequenceTime time,
 
 bool
 EffectInstance::ifInfiniteApplyHeuristic(U64 hash,
-                                         SequenceTime time,
+                                         double time,
                                          const RenderScale & scale,
                                          int view,
                                          RectD* rod) //!< input/output
@@ -1636,7 +1745,7 @@ EffectInstance::ifInfiniteApplyHeuristic(U64 hash,
 } // ifInfiniteApplyHeuristic
 
 void
-EffectInstance::getRegionsOfInterest(SequenceTime /*time*/,
+EffectInstance::getRegionsOfInterest(double /*time*/,
                                      const RenderScale & /*scale*/,
                                      const RectD & /*outputRoD*/, //!< the RoD of the effect, in canonical coordinates
                                      const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
@@ -1652,7 +1761,7 @@ EffectInstance::getRegionsOfInterest(SequenceTime /*time*/,
 }
 
 EffectInstance::FramesNeededMap
-EffectInstance::getFramesNeeded(SequenceTime time, int view)
+EffectInstance::getFramesNeeded(double time, int view)
 {
     EffectInstance::FramesNeededMap ret;
     RangeD defaultRange;
@@ -1677,8 +1786,8 @@ EffectInstance::getFramesNeeded(SequenceTime time, int view)
 }
 
 void
-EffectInstance::getFrameRange(SequenceTime *first,
-                              SequenceTime *last)
+EffectInstance::getFrameRange(double *first,
+                              double *last)
 {
     // default is infinite if there are no non optional input clips
     *first = INT_MIN;
@@ -1686,7 +1795,7 @@ EffectInstance::getFrameRange(SequenceTime *first,
     for (int i = 0; i < getMaxInputCount(); ++i) {
         Natron::EffectInstance* input = getInput(i);
         if (input) {
-            SequenceTime inpFirst,inpLast;
+            double inpFirst,inpLast;
             input->getFrameRange(&inpFirst, &inpLast);
             if (i == 0) {
                 *first = inpFirst;
@@ -2187,7 +2296,7 @@ EffectInstance::allocateImagePlane(const ImageKey& key,
 static void optimizeRectsToRender(Natron::EffectInstance* self,
                                   const RectI& inputsRoDIntersection,
                                   const std::list<RectI>& rectsToRender,
-                                  const int time,
+                                  const double time,
                                   const int view,
                                   const RenderScale& renderMappedScale,
                                   std::list<EffectInstance::RectToRender>* finalRectsToRender)
@@ -2205,7 +2314,7 @@ static void optimizeRectsToRender(Natron::EffectInstance* self,
         
         bool nonIdentityRectSet = false;
         for (std::size_t i = 0; i < splits.size(); ++i) {
-            SequenceTime identityInputTime;
+            double identityInputTime;
             int identityInputNb;
             bool identity;
             
@@ -2264,7 +2373,8 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
 {
    
     //Do nothing if no components were requested
-    if (args.components.empty()) {
+    if (args.components.empty() || args.roi.isNull()) {
+        qDebug() << getScriptName_mt_safe().c_str() << "renderRoi: Early bail-out components requested empty or RoI is NULL";
         return eRenderRoIRetCodeOk;
     }
     
@@ -2323,7 +2433,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
         }
     }
     
-    
+    ViewInvarianceLevel viewInvariance = isViewInvariant();
     
     // eRenderSafetyInstanceSafe means that there is at most one render per instance
     // NOTE: the per-instance lock should probably be shared between
@@ -2408,7 +2518,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////// Check if effect is identity ///////////////////////////////////////////////////////////////
     {
-        SequenceTime inputTimeIdentity = 0.;
+        double inputTimeIdentity = 0.;
         int inputNbIdentity;
         
         assert( !( (supportsRS == eSupportsNo) && !(renderMappedScale.x == 1. && renderMappedScale.y == 1.) ) );
@@ -2416,10 +2526,17 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
         
         RectI pixelRod;
         rod.toPixelEnclosing(args.mipMapLevel, par, &pixelRod);
-        try {
-            identity = isIdentity_public(true, nodeHash, args.time, renderMappedScale, pixelRod, args.view, &inputTimeIdentity, &inputNbIdentity);
-        } catch (...) {
-            return eRenderRoIRetCodeFailed;
+        
+        if (args.view != 0 && viewInvariance == eViewInvarianceAllViewsInvariant) {
+            identity = true;
+            inputNbIdentity = -2;
+            inputTimeIdentity = args.time;
+        } else {
+            try {
+                identity = isIdentity_public(true, nodeHash, args.time, renderMappedScale, pixelRod, args.view, &inputTimeIdentity, &inputNbIdentity);
+            } catch (...) {
+                return eRenderRoIRetCodeFailed;
+            }
         }
         
         if ( (supportsRS == eSupportsMaybe) && (renderMappedMipMapLevel != 0) ) {
@@ -2438,18 +2555,26 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
                 return eRenderRoIRetCodeOk;
             } else if (inputNbIdentity == -2) {
                 // there was at least one crash if you set the first frame to a negative value
-                assert(inputTimeIdentity != args.time);
-                if (inputTimeIdentity != args.time) { // be safe in release mode!
+                assert(inputTimeIdentity != args.time || viewInvariance == eViewInvarianceAllViewsInvariant);
+                
+                // be safe in release mode otherwise we hit an infinite recursion
+                if (inputTimeIdentity != args.time || viewInvariance == eViewInvarianceAllViewsInvariant) {
+                    
                     ///This special value of -2 indicates that the plugin is identity of itself at another time
                     RenderRoIArgs argCpy = args;
                     argCpy.time = inputTimeIdentity;
+                    
+                    if (viewInvariance == eViewInvarianceAllViewsInvariant) {
+                        argCpy.view = 0;
+                    }
+                    
                     argCpy.preComputedRoD.clear(); //< clear as the RoD of the identity input might not be the same (reproducible with Blur)
                     
                     return renderRoI(argCpy,outputPlanes);
                 }
             }
             
-            int firstFrame,lastFrame;
+            double firstFrame,lastFrame;
             getFrameRange_public(nodeHash, &firstFrame, &lastFrame);
             
             RectD canonicalRoI;
@@ -2457,10 +2582,11 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
             ///later on for us already.
             //args.roi.toCanonical(args.mipMapLevel, rod, &canonicalRoI);
             args.roi.toCanonical_noClipping(args.mipMapLevel, par,  &canonicalRoI);
+            
             Natron::EffectInstance* inputEffectIdentity = getInput(inputNbIdentity);
             if (inputEffectIdentity) {
                 
-                RoIMap inputsRoI;
+                /*RoIMap inputsRoI;
                 inputsRoI.insert( std::make_pair(inputEffectIdentity, canonicalRoI) );
                 Implementation::ScopedRenderArgs scopedArgs(&_imp->renderArgs,
                                                             inputsRoI,
@@ -2473,11 +2599,12 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
                                                             inputNbIdentity,
                                                             std::map<Natron::ImageComponents,PlaneToRender>(),
                                                             firstFrame,
-                                                            lastFrame);
+                                                            lastFrame);*/
                 
-                ///we don't need to call getRegionOfDefinition and getFramesNeeded if the effect is an identity
                 RenderRoIArgs inputArgs = args;
                 inputArgs.time = inputTimeIdentity;
+                
+                // Make sure we do not hold the RoD for this effect
                 inputArgs.preComputedRoD.clear();
                 
                 return inputEffectIdentity->renderRoI(inputArgs, outputPlanes);
@@ -2603,6 +2730,14 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////// End pass-through for planes //////////////////////////////////////////////////////////
 
+    // At this point, if only the pass through planes are view variant and the rendered view is different than 0,
+    // just call renderRoI again for the components left to render on the view 0.    
+    if (args.view != 0 && viewInvariance == eViewInvarianceOnlyPassThroughPlanesVariant) {
+        RenderRoIArgs argCpy = args;
+        argCpy.view = 0;
+        argCpy.preComputedRoD.clear();
+        return renderRoI(argCpy,outputPlanes);
+    }
     
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////// Transform concatenations ///////////////////////////////////////////////////////////////
@@ -2671,7 +2806,6 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     } else {
         roi.toCanonical(args.mipMapLevel, par, rod, &canonicalRoI);
     }
-    
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////// End Compute RoI /////////////////////////////////////////////////////////////////////////
     
@@ -2811,7 +2945,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     /////////////////////////////////End cache lookup//////////////////////////////////////////////////////////
     
     if (framesNeeded.empty()) {
-        framesNeeded = getFramesNeeded_public(args.time, args.view);
+        framesNeeded = getFramesNeeded_public(nodeHash, args.time, args.view, renderMappedMipMapLevel);
     }
   
     
@@ -2876,7 +3010,33 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
         ///We check what is left to render.
 #if NATRON_ENABLE_TRIMAP
         if (!frameRenderArgs.canAbort && frameRenderArgs.isRenderResponseToUserInteraction) {
+#ifndef DEBUG
             isPlaneCached->getRestToRender_trimap(roi, rectsLeftToRender, &planesToRender.isBeingRenderedElsewhere);
+#else
+       // in debug mode, check that the result of getRestToRender_trimap and getRestToRender is the same if the image
+       // is not currently rendered concurrently
+            QMutexLocker k(&_imp->imagesBeingRenderedMutex);
+            EffectInstance::Implementation::IBRMap::const_iterator found = _imp->imagesBeingRendered.find(isPlaneCached);
+            if (found == _imp->imagesBeingRendered.end() || !found->second->refCount) {
+                
+                Image::ReadAccess racc(isPlaneCached.get());
+                isPlaneCached->getRestToRender_trimap(roi, rectsLeftToRender, &planesToRender.isBeingRenderedElsewhere);
+                std::list<RectI> tmpRects;
+                isPlaneCached->getRestToRender(roi, tmpRects);
+                
+                //If it crashes here that means the image is no longer being rendered but its bitmap still contains PIXEL_UNAVAILABLE pixels.
+                //The other thread should have removed that image from the cache or marked the image as rendered.
+                assert(!planesToRender.isBeingRenderedElsewhere);
+                assert(rectsLeftToRender.size() == tmpRects.size());
+                
+                std::list<RectI>::iterator oIt = rectsLeftToRender.begin();
+                for (std::list<RectI>::iterator it = tmpRects.begin(); it!=tmpRects.end(); ++it,++oIt) {
+                    assert(*it == *oIt);
+                }
+            } else {
+                isPlaneCached->getRestToRender_trimap(roi, rectsLeftToRender, &planesToRender.isBeingRenderedElsewhere);
+            }
+#endif
         } else {
             isPlaneCached->getRestToRender(roi, rectsLeftToRender);
         }
@@ -3290,7 +3450,6 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
         }
 #endif
 
-
         if (hasSomethingToRender) {
             
             {
@@ -3314,9 +3473,9 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
                 if ( !isLastPlanesEmpty && lastRenderHash != nodeHash ) {
                     ///once we got it remove it from the cache
                     if (!useDiskCacheNode) {
-                        appPTR->removeAllImagesFromCacheWithMatchingKey(lastRenderHash);
+                        appPTR->removeAllImagesFromCacheWithMatchingKey(true, lastRenderHash);
                     } else {
-                        appPTR->removeAllImagesFromDiskCacheWithMatchingKey(lastRenderHash);
+                        appPTR->removeAllImagesFromDiskCacheWithMatchingKey(true, lastRenderHash);
                     }
                     {
                         QMutexLocker l(&_imp->lastRenderArgsMutex);
@@ -3327,17 +3486,18 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
             
 # ifdef DEBUG
 
-            {
-                /*const std::list<RectToRender>& rectsToRender = planesToRender.rectsToRender;
+            /*{
+                const std::list<RectToRender>& rectsToRender = planesToRender.rectsToRender;
                 qDebug() <<'('<<QThread::currentThread()<<")--> "<< getNode()->getScriptName_mt_safe().c_str() << ": render view: " << args.view << ", time: " << args.time << " No. tiles: " << rectsToRender.size() << " rectangles";
                 for (std::list<RectToRender>::const_iterator it = rectsToRender.begin(); it != rectsToRender.end(); ++it) {
                     qDebug() << "rect: " << "x1= " <<  it->rect.x1 << " , y1= " << it->rect.y1 << " , x2= " << it->rect.x2 << " , y2= " << it->rect.y2 << "(identity:" << it->isIdentity << ")";
                 }
                 for (std::map<Natron::ImageComponents, PlaneToRender> ::iterator it = planesToRender.planes.begin(); it != planesToRender.planes.end(); ++it) {
-                    qDebug() << "plane: " << it->first.getLayerName().c_str();
-                }*/
+                    qDebug() << "plane: " <<  it->second.downscaleImage.get() << it->first.getLayerName().c_str();
+                }
+                qDebug() << "Cached:" << (isPlaneCached.get() != 0) << "Rendered elsewhere:" << planesToRender.isBeingRenderedElsewhere;
                 
-            }
+            }*/
 # endif
             renderRetCode = renderRoIInternal(args.time,
                                               safety,
@@ -3370,12 +3530,14 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
                         _imp->unmarkImageAsBeingRendered(useImageAsOutput ? it->second.fullscaleImage : it->second.downscaleImage,
                                                          renderRetCode == eRenderRoIStatusRenderFailed);
                     } else {
-                        _imp->waitForImageBeingRenderedElsewhereAndUnmark(roi,
-                                                                          useImageAsOutput ? it->second.fullscaleImage: it->second.downscaleImage);
+                        if (!_imp->waitForImageBeingRenderedElsewhereAndUnmark(roi,
+                                                                               useImageAsOutput ? it->second.fullscaleImage: it->second.downscaleImage)) {
+                            renderAborted = true;
+                        }
                     }
                 } else {
-                    _imp->unmarkImageAsBeingRendered(useImageAsOutput ? it->second.fullscaleImage : it->second.downscaleImage,true);
                     appPTR->removeFromNodeCache(useImageAsOutput ? it->second.fullscaleImage : it->second.downscaleImage);
+                    _imp->unmarkImageAsBeingRendered(useImageAsOutput ? it->second.fullscaleImage : it->second.downscaleImage,true);
                     return eRenderRoIRetCodeAborted;
                 }
             }
@@ -3390,7 +3552,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
         
         if (isDuringPaintStroke) {
             //We know the image will never be used ever again
-            appPTR->removeAllImagesFromCacheWithMatchingKey(nodeHash);
+            appPTR->removeAllImagesFromCacheWithMatchingKey(true, nodeHash);
         }
         return eRenderRoIRetCodeAborted;
         
@@ -3405,7 +3567,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     
 
 #if DEBUG
-    if (renderRetCode != eRenderRoIStatusRenderFailed && !renderAborted) {
+    if (hasSomethingToRender && renderRetCode != eRenderRoIStatusRenderFailed && !renderAborted) {
         // Kindly check that everything we asked for is rendered!
         
         for (std::map<ImageComponents, PlaneToRender>::iterator it = planesToRender.planes.begin(); it != planesToRender.planes.end(); ++it) {
@@ -3421,7 +3583,6 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
                 assert(srcRealBounds.y1 == srcBounds.y1);
                 assert(srcRealBounds.y2 == srcBounds.y2);
             }
-
             
             std::list<RectI> restToRender;
             if (useImageAsOutput) {
@@ -3486,7 +3647,6 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
             }
             it->second.downscaleImage = tmp;
         }
-        
         assert(it->second.downscaleImage->getComponents() == it->first && it->second.downscaleImage->getBitDepth() == args.bitdepth);
         outputPlanes->push_back(it->second.downscaleImage);
 
@@ -3494,7 +3654,10 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////// End requested format convertion ////////////////////////////////////////////////////////////////////
+  
     
+    ///// Termination, update last rendered planes
+    assert(!outputPlanes->empty());
     {
         ///flag that this is the last planes we rendered
         QMutexLocker l(&_imp->lastRenderArgsMutex);
@@ -3506,7 +3669,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
 
 
 EffectInstance::RenderRoIRetCode
-EffectInstance::renderInputImagesForRoI(SequenceTime time,
+EffectInstance::renderInputImagesForRoI(double time,
                                         int view,
                                         double par,
                                         const RectD& rod,
@@ -3640,6 +3803,7 @@ EffectInstance::renderInputImagesForRoI(SequenceTime time,
             
             RectI inputRoIPixelCoords;
             foundInputRoI->second.toPixelEnclosing(useScaleOneInputImages ? 0 : mipMapLevel, inputPar, &inputRoIPixelCoords);
+    
             
             ///Notify the node that we're going to render something with the input
             assert(it->first != -1); //< see getInputNumber
@@ -3653,52 +3817,55 @@ EffectInstance::renderInputImagesForRoI(SequenceTime time,
                     
                     int nbFramesPreFetched = 0;
                     for (U32 range = 0; range < it2->second.size(); ++range) {
-                        
-                        for (int f = std::floor(it2->second[range].min + 0.5);
-                             f <= std::floor(it2->second[range].max + 0.5) && nbFramesPreFetched < NATRON_MAX_FRAMES_NEEDED_PRE_FETCHING;
-                             ++f) {
-                            
-                            
-                            RenderScale scaleOne;
-                            scaleOne.x = scaleOne.y = 1.;
-                            
-                            ///Render the input image with the bit depth of its preference
-                            std::list<Natron::ImageComponents> inputPrefComps;
-                            Natron::ImageBitDepthEnum inputPrefDepth;
-                            inputEffect->getPreferredDepthAndComponents(-1/*it2->first*/, &inputPrefComps, &inputPrefDepth);
-                            std::list<ImageComponents> componentsToRender;
-                            for (U32 k = 0; k < foundCompsNeeded->second.size(); ++k) {
-                                if (foundCompsNeeded->second[k].getNumComponents() > 0) {
-                                    componentsToRender.push_back(foundCompsNeeded->second[k]);
+                        // if the range bounds are not ints, the fetched images will probably anywhere within this range - no need to pre-render
+                        if (it2->second[range].min == (int)it2->second[range].min &&
+                            it2->second[range].max == (int)it2->second[range].max) {
+                            for (double f = it2->second[range].min;
+                                 f <= it2->second[range].max && nbFramesPreFetched < NATRON_MAX_FRAMES_NEEDED_PRE_FETCHING;
+                                 f += 1.) {
+
+
+                                RenderScale scaleOne;
+                                scaleOne.x = scaleOne.y = 1.;
+
+                                ///Render the input image with the bit depth of its preference
+                                std::list<Natron::ImageComponents> inputPrefComps;
+                                Natron::ImageBitDepthEnum inputPrefDepth;
+                                inputEffect->getPreferredDepthAndComponents(-1/*it2->first*/, &inputPrefComps, &inputPrefDepth);
+                                std::list<ImageComponents> componentsToRender;
+                                for (U32 k = 0; k < foundCompsNeeded->second.size(); ++k) {
+                                    if (foundCompsNeeded->second[k].getNumComponents() > 0) {
+                                        componentsToRender.push_back(foundCompsNeeded->second[k]);
+                                    }
                                 }
-                            }
-                            
-                            RenderRoIArgs inArgs(f, //< time
-                                                 useScaleOneInputImages ? scaleOne : scale, //< scale
-                                                 useScaleOneInputImages ? 0 : mipMapLevel, //< mipmapLevel (redundant with the scale)
-                                                 view, //< view
-                                                 byPassCache,
-                                                 inputRoIPixelCoords, //< roi in pixel coordinates
-                                                 RectD(), // < did we precompute any RoD to speed-up the call ?
-                                                 componentsToRender, //< requested comps
-                                                 inputPrefDepth,
-                                                 this);
-                            
-                            
-                           
-                            ImageList inputImgs;
-                            RenderRoIRetCode ret = inputEffect->renderRoI(inArgs, &inputImgs); //< requested bitdepth
-                            if (ret != eRenderRoIRetCodeOk) {
-                                return ret;
-                            }
-                            
-                            for (ImageList::iterator it3 = inputImgs.begin(); it3 != inputImgs.end(); ++it3) {
-                                if (*it3) {
-                                    foundInputImages->second.push_back(*it3);
+
+                                RenderRoIArgs inArgs(f, //< time
+                                                     useScaleOneInputImages ? scaleOne : scale, //< scale
+                                                     useScaleOneInputImages ? 0 : mipMapLevel, //< mipmapLevel (redundant with the scale)
+                                                     view, //< view
+                                                     byPassCache,
+                                                     inputRoIPixelCoords, //< roi in pixel coordinates
+                                                     RectD(), // < did we precompute any RoD to speed-up the call ?
+                                                     componentsToRender, //< requested comps
+                                                     inputPrefDepth,
+                                                     this);
+
+
+
+                                ImageList inputImgs;
+                                RenderRoIRetCode ret = inputEffect->renderRoI(inArgs, &inputImgs); //< requested bitdepth
+                                if (ret != eRenderRoIRetCodeOk) {
+                                    return ret;
                                 }
-                            }
-                            if (!inputImgs.empty()) {
-                                ++nbFramesPreFetched;
+
+                                for (ImageList::iterator it3 = inputImgs.begin(); it3 != inputImgs.end(); ++it3) {
+                                    if (*it3) {
+                                        foundInputImages->second.push_back(*it3);
+                                    }
+                                }
+                                if (!inputImgs.empty()) {
+                                    ++nbFramesPreFetched;
+                                }
                             }
                         }
                     }
@@ -3717,7 +3884,7 @@ EffectInstance::renderInputImagesForRoI(SequenceTime time,
 
 
 EffectInstance::RenderRoIStatusEnum
-EffectInstance::renderRoIInternal(SequenceTime time,
+EffectInstance::renderRoIInternal(double time,
                                   Natron::RenderSafetyEnum safety,
                                   unsigned int mipMapLevel,
                                   int view,
@@ -3799,12 +3966,6 @@ EffectInstance::renderRoIInternal(SequenceTime time,
             ( QThreadPool::globalInstance()->activeThreadCount() >= QThreadPool::globalInstance()->maxThreadCount() ) ||
             isRotoPaintNode()) {
             safety = eRenderSafetyFullySafe;
-        } else {
-//            if ( !getApp()->getProject()->tryLock() ) {
-//                safety = eRenderSafetyFullySafe;
-//            } else {
-//                getApp()->getProject()->unlock();
-//            }
         }
     }
    
@@ -3818,7 +3979,7 @@ EffectInstance::renderRoIInternal(SequenceTime time,
         getApp()->getProject()->getParallelRenderArgs(tlsCopy);
     }
     
-    int firstFrame, lastFrame;
+    double firstFrame, lastFrame;
     getFrameRange_public(nodeHash, &firstFrame, &lastFrame);
 
     
@@ -4002,7 +4163,7 @@ EffectInstance::tiledRenderingFunctor(const QThread* callingThread,
                                       unsigned int mipMapLevel,
                                       unsigned int renderMappedMipMapLevel,
                                       const RectD& rod,
-                                      int time,
+                                      double time,
                                       int view,
                                       const double par,
                                       bool byPassCache,
@@ -4292,7 +4453,7 @@ EffectInstance::renderHandler(RenderArgs & args,
                               const ParallelRenderArgs& frameArgs,
                               const InputImagesMap& inputImages,
                               bool identity,
-                              SequenceTime identityTime,
+                              double identityTime,
                               Natron::EffectInstance* identityInput,
                               bool renderFullScaleThenDownscale,
                               bool renderUseScaleOneInputs,
@@ -4310,11 +4471,15 @@ EffectInstance::renderHandler(RenderArgs & args,
                               ImagePlanesToRender& planes)
 {
     
-    
+    //Record the time spent rendering
+    boost::shared_ptr<RenderingTimeRecorder> _timeRecorder_;
+    if (isSequentialRender) {
+        _timeRecorder_.reset(new RenderingTimeRecorder(this));
+    }
     
     const PlaneToRender& firstPlane = planes.planes.begin()->second;
     
-    const SequenceTime time = args._time;
+    const double time = args._time;
     int mipMapLevel = firstPlane.downscaleImage->getMipMapLevel();
     const int view = args._view;
 
@@ -4547,11 +4712,14 @@ EffectInstance::renderHandler(RenderArgs & args,
             assert(!outputPlanes.empty());
         }
         
-        if (st != eStatusOK) {
+        if (st != eStatusOK || renderAborted) {
 #if NATRON_ENABLE_TRIMAP
-            if (!frameArgs.canAbort && frameArgs.isRenderResponseToUserInteraction) {
-                assert(!renderAborted);
+            if (!identityProcessed && !frameArgs.canAbort && frameArgs.isRenderResponseToUserInteraction) {
                 
+                /*
+                 At this point, another thread might have already gotten this image from the cache and could end-up
+                 using it while it has still pixels marked to PIXEL_UNAVAILABLE, hence clear the bitmap
+                 */
                 for (std::map<ImageComponents,PlaneToRender>::const_iterator it = outputPlanes.begin(); it != outputPlanes.end(); ++it) {
                     if (outputUseImage) {
                         it->second.fullscaleImage->clearBitmap(downscaledRectToRender);
@@ -4562,199 +4730,194 @@ EffectInstance::renderHandler(RenderArgs & args,
                 
             }
 #endif
-            return eRenderingFunctorRetFailed;
             
-        }
-        if (renderAborted) {
-            break;
-        }
-    }
+            return st != eStatusOK ? eRenderingFunctorRetFailed : eRenderingFunctorRetAborted;
+            
+            
+        } // if (st != eStatusOK || renderAborted) {
+    } // for (std::list<std::list<std::pair<ImageComponents,ImagePtr> > >::iterator it = planesLists.begin(); it != planesLists.end(); ++it)
 
-
-    bool unPremultIfNeeded = planes.outputPremult == eImagePremultiplicationPremultiplied;
-
-    if (renderAborted) {
-        return eRenderingFunctorRetAborted;
-    } else {
+    assert(!renderAborted);
     
-        bool useMaskMix = isHostMaskingEnabled() || isHostMixingEnabled();
-        double mix = useMaskMix ? getNode()->getHostMixingValue(time) : 1.;
-        bool doMask = useMaskMix ? getNode()->isMaskEnabled(getMaxInputCount() - 1) : false;
+    bool unPremultIfNeeded = planes.outputPremult == eImagePremultiplicationPremultiplied;
+    bool useMaskMix = isHostMaskingEnabled() || isHostMixingEnabled();
+    double mix = useMaskMix ? getNode()->getHostMixingValue(time) : 1.;
+    bool doMask = useMaskMix ? getNode()->isMaskEnabled(getMaxInputCount() - 1) : false;
+    
+    //Check for NaNs, copy to output image and mark for rendered
+    for (std::map<ImageComponents,PlaneToRender>::const_iterator it = outputPlanes.begin(); it != outputPlanes.end(); ++it) {
         
-        //Check for NaNs, copy to output image and mark for rendered
-        for (std::map<ImageComponents,PlaneToRender>::const_iterator it = outputPlanes.begin(); it != outputPlanes.end(); ++it) {
-            
-            bool unPremultRequired = unPremultIfNeeded && it->second.tmpImage->getComponentsCount() == 4 && it->second.renderMappedImage->getComponentsCount() == 3;
-            
-            if (frameArgs.doNansHandling && it->second.tmpImage->checkForNaNs(actionArgs.roi)) {
-                QString warning(getNode()->getScriptName_mt_safe().c_str());
-                warning.append(": ");
-                warning.append(tr("rendered rectangle ("));
-                warning.append(QString::number(actionArgs.roi.x1));
-                warning.append(',');
-                warning.append(QString::number(actionArgs.roi.y1));
-                warning.append(")-(");
-                warning.append(QString::number(actionArgs.roi.x2));
-                warning.append(',');
-                warning.append(QString::number(actionArgs.roi.y2));
-                warning.append(") ");
-                warning.append(tr("contains NaN values. They have been converted to 1."));
-                setPersistentMessage(Natron::eMessageTypeWarning, warning.toStdString());
-            }
-            if (it->second.isAllocatedOnTheFly) {
-                ///Plane allocated on the fly only have a temp image if using the cache and it is defined over the render window only
-                if (it->second.tmpImage != it->second.renderMappedImage) {
-                    assert(it->second.tmpImage->getBounds() == actionArgs.roi);
+        bool unPremultRequired = unPremultIfNeeded && it->second.tmpImage->getComponentsCount() == 4 && it->second.renderMappedImage->getComponentsCount() == 3;
+        
+        if (frameArgs.doNansHandling && it->second.tmpImage->checkForNaNs(actionArgs.roi)) {
+            QString warning(getNode()->getScriptName_mt_safe().c_str());
+            warning.append(": ");
+            warning.append(tr("rendered rectangle ("));
+            warning.append(QString::number(actionArgs.roi.x1));
+            warning.append(',');
+            warning.append(QString::number(actionArgs.roi.y1));
+            warning.append(")-(");
+            warning.append(QString::number(actionArgs.roi.x2));
+            warning.append(',');
+            warning.append(QString::number(actionArgs.roi.y2));
+            warning.append(") ");
+            warning.append(tr("contains NaN values. They have been converted to 1."));
+            setPersistentMessage(Natron::eMessageTypeWarning, warning.toStdString());
+        }
+        if (it->second.isAllocatedOnTheFly) {
+            ///Plane allocated on the fly only have a temp image if using the cache and it is defined over the render window only
+            if (it->second.tmpImage != it->second.renderMappedImage) {
+                assert(it->second.tmpImage->getBounds() == actionArgs.roi);
+                
+                if (it->second.renderMappedImage->getComponents() != it->second.tmpImage->getComponents() ||
+                    it->second.renderMappedImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
                     
-                    if (it->second.renderMappedImage->getComponents() != it->second.tmpImage->getComponents() ||
-                        it->second.renderMappedImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
+                    it->second.tmpImage->convertToFormat(it->second.tmpImage->getBounds(),
+                                                         getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
+                                                         getApp()->getDefaultColorSpaceForBitDepth(it->second.renderMappedImage->getBitDepth()),
+                                                         -1, false, unPremultRequired, it->second.renderMappedImage.get());
+                } else {
+                    it->second.renderMappedImage->pasteFrom(*(it->second.tmpImage), it->second.tmpImage->getBounds(), false);
+                }
+            }
+            it->second.renderMappedImage->markForRendered(actionArgs.roi);
+            
+        } else {
+            
+            if (renderFullScaleThenDownscale) {
+                ///copy the rectangle rendered in the full scale image to the downscaled output
+                
+                /* If we're using renderUseScaleOneInputs, the full scale image is cached.
+                 We might have been asked to render only a portion.
+                 Hence we're not sure that the whole part of the image will be downscaled.
+                 Instead we do all the downscale at once at the end of renderRoI().
+                 If !renderUseScaleOneInputs the image is not cached.
+                 Hence we know it will be rendered completly so it is safe to do this here and take advantage of the multi-threading.*/
+                if (mipMapLevel != 0 && !renderUseScaleOneInputs) {
+                    
+                    assert(it->second.fullscaleImage != it->second.downscaleImage && it->second.renderMappedImage == it->second.fullscaleImage);
+                    
+                    
+                    if (it->second.downscaleImage->getComponents() != it->second.tmpImage->getComponents() ||
+                        it->second.downscaleImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
+                        
+                        /*
+                         * BitDepth/Components conversion required as well as downscaling, do conversion to a tmp buffer
+                         */
+                        ImagePtr tmp(new Image(it->second.downscaleImage->getComponents(), it->second.tmpImage->getRoD(), it->second.tmpImage->getBounds(), mipMapLevel,it->second.tmpImage->getPixelAspectRatio(), it->second.downscaleImage->getBitDepth(), false) );
                         
                         it->second.tmpImage->convertToFormat(it->second.tmpImage->getBounds(),
-                                                        getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
-                                                        getApp()->getDefaultColorSpaceForBitDepth(it->second.renderMappedImage->getBitDepth()),
-                                                                   -1, false, unPremultRequired, it->second.renderMappedImage.get());
+                                                             getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
+                                                             getApp()->getDefaultColorSpaceForBitDepth(it->second.downscaleImage->getBitDepth()),
+                                                             -1, false, unPremultRequired, tmp.get());
+                        tmp->downscaleMipMap(it->second.tmpImage->getRoD(),
+                                             actionArgs.roi, 0, mipMapLevel, false,it->second.downscaleImage.get() );
                     } else {
-                        it->second.renderMappedImage->pasteFrom(*(it->second.tmpImage), it->second.tmpImage->getBounds(), false);
+                        
+                        /*
+                         *  Downscaling required only
+                         */
+                        it->second.tmpImage->downscaleMipMap(it->second.tmpImage->getRoD(),
+                                                             actionArgs.roi, 0, mipMapLevel, false,it->second.downscaleImage.get() );
+                        
                     }
-                }
-                it->second.renderMappedImage->markForRendered(actionArgs.roi);
-                
-            } else {
-                
-                if (renderFullScaleThenDownscale) {
-                    ///copy the rectangle rendered in the full scale image to the downscaled output
-
-                    /* If we're using renderUseScaleOneInputs, the full scale image is cached.
-                     We might have been asked to render only a portion.
-                     Hence we're not sure that the whole part of the image will be downscaled.
-                     Instead we do all the downscale at once at the end of renderRoI().
-                     If !renderUseScaleOneInputs the image is not cached.
-                     Hence we know it will be rendered completly so it is safe to do this here and take advantage of the multi-threading.*/
-                    if (mipMapLevel != 0 && !renderUseScaleOneInputs) {
                     
-                        assert(it->second.fullscaleImage != it->second.downscaleImage && it->second.renderMappedImage == it->second.fullscaleImage);
-                        
-                        
-                        if (it->second.downscaleImage->getComponents() != it->second.tmpImage->getComponents() ||
-                            it->second.downscaleImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
-                            
-                            /*
-                             * BitDepth/Components conversion required as well as downscaling, do conversion to a tmp buffer
-                             */
-                            ImagePtr tmp(new Image(it->second.downscaleImage->getComponents(), it->second.tmpImage->getRoD(), it->second.tmpImage->getBounds(), mipMapLevel,it->second.tmpImage->getPixelAspectRatio(), it->second.downscaleImage->getBitDepth(), false) );
-                            
-                            it->second.tmpImage->convertToFormat(it->second.tmpImage->getBounds(),
-                                                                 getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
-                                                                 getApp()->getDefaultColorSpaceForBitDepth(it->second.downscaleImage->getBitDepth()),
-                                                                 -1, false, unPremultRequired, tmp.get());
-                            tmp->downscaleMipMap(it->second.tmpImage->getRoD(),
-                                                 actionArgs.roi, 0, mipMapLevel, false,it->second.downscaleImage.get() );
-                        } else {
-                            
-                            /*
-                             *  Downscaling required only
-                             */
-                            it->second.tmpImage->downscaleMipMap(it->second.tmpImage->getRoD(),
-                                                                 actionArgs.roi, 0, mipMapLevel, false,it->second.downscaleImage.get() );
-
-                        }
-                        
-                        it->second.downscaleImage->copyUnProcessedChannels(downscaledRectToRender, planes.outputPremult, originalImagePremultiplication,  processChannels, originalInputImage);
-                        if (useMaskMix) {
-                            it->second.downscaleImage->applyMaskMix(downscaledRectToRender, maskImage.get(), originalInputImage.get(), doMask, false, mix);
-                        }
-                        it->second.downscaleImage->markForRendered(downscaledRectToRender);
-                    } else { // if (mipMapLevel != 0 && !renderUseScaleOneInputs) {
-                        
-                        assert(it->second.renderMappedImage == it->second.fullscaleImage);
-                        if (it->second.tmpImage != it->second.renderMappedImage) {
-                            
-                            if (it->second.fullscaleImage->getComponents() != it->second.tmpImage->getComponents() ||
-                                it->second.fullscaleImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
-                            
-                                /*
-                                 * BitDepth/Components conversion required
-                                 */
-                                
-                                it->second.tmpImage->copyUnProcessedChannels(it->second.tmpImage->getBounds(), planes.outputPremult, originalImagePremultiplication, processChannels, originalInputImage);
-                                if (useMaskMix) {
-                                    it->second.tmpImage->applyMaskMix(actionArgs.roi, maskImage.get(), originalInputImage.get(), doMask, false, mix);
-                                }
-                                it->second.tmpImage->convertToFormat(it->second.tmpImage->getBounds(),
-                                                                     getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
-                                                                     getApp()->getDefaultColorSpaceForBitDepth(it->second.fullscaleImage->getBitDepth()),
-                                                                     -1, false, unPremultRequired, it->second.fullscaleImage.get());
-                                
-                            } else {
-                                
-                                /*
-                                 * No conversion required, copy to output
-                                 */
-                                int prefInput = getNode()->getPreferredInput();
-                                RectI roiPixel;
-                                ImagePtr originalInputImageFullScale;
-                                if (prefInput != -1) {
-                                    originalInputImageFullScale = getImage(prefInput, time, actionArgs.mappedScale, view, NULL, originalInputImage->getComponents(), originalInputImage->getBitDepth(), originalInputImage->getPixelAspectRatio(), false, &roiPixel);
-                                }
-                                
-                                
-                                if (originalInputImageFullScale) {
-                                    
-                                    it->second.fullscaleImage->copyUnProcessedChannels(actionArgs.roi,planes.outputPremult, originalImagePremultiplication,  processChannels, originalInputImageFullScale);
-                                    if (useMaskMix) {
-                                        ImagePtr originalMaskFullScale = getImage(getMaxInputCount() - 1, time, actionArgs.mappedScale, view, NULL, ImageComponents::getAlphaComponents(), originalInputImage->getBitDepth(), originalInputImage->getPixelAspectRatio(), false, &roiPixel);
-                                        if (originalMaskFullScale) {
-                                            it->second.fullscaleImage->applyMaskMix(actionArgs.roi, originalMaskFullScale.get(), originalInputImageFullScale.get(), doMask, false, mix);
-                                        }
-                                    }
-                                }
-                                it->second.fullscaleImage->pasteFrom(*it->second.tmpImage, actionArgs.roi, false);
-                            }
-                            
-                            
-                        }
-                        it->second.fullscaleImage->markForRendered(actionArgs.roi);
+                    it->second.downscaleImage->copyUnProcessedChannels(downscaledRectToRender, planes.outputPremult, originalImagePremultiplication,  processChannels, originalInputImage);
+                    if (useMaskMix) {
+                        it->second.downscaleImage->applyMaskMix(downscaledRectToRender, maskImage.get(), originalInputImage.get(), doMask, false, mix);
                     }
-                } else { // if (renderFullScaleThenDownscale) {
+                    it->second.downscaleImage->markForRendered(downscaledRectToRender);
+                } else { // if (mipMapLevel != 0 && !renderUseScaleOneInputs) {
                     
-                    ///Copy the rectangle rendered in the downscaled image
-                    if (it->second.tmpImage != it->second.downscaleImage) {
+                    assert(it->second.renderMappedImage == it->second.fullscaleImage);
+                    if (it->second.tmpImage != it->second.renderMappedImage) {
                         
-
-                        if (it->second.downscaleImage->getComponents() != it->second.tmpImage->getComponents() ||
-                            it->second.downscaleImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
+                        if (it->second.fullscaleImage->getComponents() != it->second.tmpImage->getComponents() ||
+                            it->second.fullscaleImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
                             
                             /*
                              * BitDepth/Components conversion required
                              */
                             
-                            
+                            it->second.tmpImage->copyUnProcessedChannels(it->second.tmpImage->getBounds(), planes.outputPremult, originalImagePremultiplication, processChannels, originalInputImage);
+                            if (useMaskMix) {
+                                it->second.tmpImage->applyMaskMix(actionArgs.roi, maskImage.get(), originalInputImage.get(), doMask, false, mix);
+                            }
                             it->second.tmpImage->convertToFormat(it->second.tmpImage->getBounds(),
                                                                  getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
-                                                                 getApp()->getDefaultColorSpaceForBitDepth(it->second.downscaleImage->getBitDepth()),
-                                                                 -1, false, unPremultRequired, it->second.downscaleImage.get());
+                                                                 getApp()->getDefaultColorSpaceForBitDepth(it->second.fullscaleImage->getBitDepth()),
+                                                                 -1, false, unPremultRequired, it->second.fullscaleImage.get());
+                            
                         } else {
                             
                             /*
                              * No conversion required, copy to output
                              */
+                            int prefInput = getNode()->getPreferredInput();
+                            RectI roiPixel;
+                            ImagePtr originalInputImageFullScale;
+                            if (prefInput != -1) {
+                                originalInputImageFullScale = getImage(prefInput, time, actionArgs.mappedScale, view, NULL, originalInputImage->getComponents(), originalInputImage->getBitDepth(), originalInputImage->getPixelAspectRatio(), false, &roiPixel);
+                            }
                             
-                            it->second.downscaleImage->pasteFrom(*(it->second.tmpImage), it->second.downscaleImage->getBounds(), false);
+                            
+                            if (originalInputImageFullScale) {
+                                
+                                it->second.fullscaleImage->copyUnProcessedChannels(actionArgs.roi,planes.outputPremult, originalImagePremultiplication,  processChannels, originalInputImageFullScale);
+                                if (useMaskMix) {
+                                    ImagePtr originalMaskFullScale = getImage(getMaxInputCount() - 1, time, actionArgs.mappedScale, view, NULL, ImageComponents::getAlphaComponents(), originalInputImage->getBitDepth(), originalInputImage->getPixelAspectRatio(), false, &roiPixel);
+                                    if (originalMaskFullScale) {
+                                        it->second.fullscaleImage->applyMaskMix(actionArgs.roi, originalMaskFullScale.get(), originalInputImageFullScale.get(), doMask, false, mix);
+                                    }
+                                }
+                            }
+                            it->second.fullscaleImage->pasteFrom(*it->second.tmpImage, actionArgs.roi, false);
                         }
-
+                        
+                        
+                    }
+                    it->second.fullscaleImage->markForRendered(actionArgs.roi);
+                }
+            } else { // if (renderFullScaleThenDownscale) {
+                
+                ///Copy the rectangle rendered in the downscaled image
+                if (it->second.tmpImage != it->second.downscaleImage) {
+                    
+                    
+                    if (it->second.downscaleImage->getComponents() != it->second.tmpImage->getComponents() ||
+                        it->second.downscaleImage->getBitDepth() != it->second.tmpImage->getBitDepth()) {
+                        
+                        /*
+                         * BitDepth/Components conversion required
+                         */
+                        
+                        
+                        it->second.tmpImage->convertToFormat(it->second.tmpImage->getBounds(),
+                                                             getApp()->getDefaultColorSpaceForBitDepth(it->second.tmpImage->getBitDepth()),
+                                                             getApp()->getDefaultColorSpaceForBitDepth(it->second.downscaleImage->getBitDepth()),
+                                                             -1, false, unPremultRequired, it->second.downscaleImage.get());
+                    } else {
+                        
+                        /*
+                         * No conversion required, copy to output
+                         */
+                        
+                        it->second.downscaleImage->pasteFrom(*(it->second.tmpImage), it->second.downscaleImage->getBounds(), false);
                     }
                     
-                    it->second.downscaleImage->copyUnProcessedChannels(actionArgs.roi,planes.outputPremult, originalImagePremultiplication, processChannels, originalInputImage);
-                    if (useMaskMix) {
-                        it->second.downscaleImage->applyMaskMix(actionArgs.roi, maskImage.get(), originalInputImage.get(), doMask, false, mix);
-                    }
-                    it->second.downscaleImage->markForRendered(downscaledRectToRender);
+                }
                 
-                } // if (renderFullScaleThenDownscale) {
-            } // if (it->second.isAllocatedOnTheFly) {
-        } // for (std::map<ImageComponents,PlaneToRender>::const_iterator it = outputPlanes.begin(); it != outputPlanes.end(); ++it) {
-        
-    }
+                it->second.downscaleImage->copyUnProcessedChannels(actionArgs.roi,planes.outputPremult, originalImagePremultiplication, processChannels, originalInputImage);
+                if (useMaskMix) {
+                    it->second.downscaleImage->applyMaskMix(actionArgs.roi, maskImage.get(), originalInputImage.get(), doMask, false, mix);
+                }
+                it->second.downscaleImage->markForRendered(downscaledRectToRender);
+                
+            } // if (renderFullScaleThenDownscale) {
+        } // if (it->second.isAllocatedOnTheFly) {
+    } // for (std::map<ImageComponents,PlaneToRender>::const_iterator it = outputPlanes.begin(); it != outputPlanes.end(); ++it) {
+    
+    
     return eRenderingFunctorRetOK;
 } // tiledRenderingFunctor
 
@@ -4762,10 +4925,10 @@ ImagePtr
 EffectInstance::allocateImagePlaneAndSetInThreadLocalStorage(const Natron::ImageComponents& plane)
 {
     /*
-     * The idea here is that we may have asked the plug-in to render say motion.forward, but it can only render both fotward 
+     * The idea here is that we may have asked the plug-in to render say motion.forward, but it can only render both fotward
      * and backward at a time.
-     * So it needs to allocate motion.backward and store it in the cache for efficiency. 
-     * Note that when calling this, the plug-in is already in the render action, hence in case of Host frame threading, 
+     * So it needs to allocate motion.backward and store it in the cache for efficiency.
+     * Note that when calling this, the plug-in is already in the render action, hence in case of Host frame threading,
      * this function will be called as many times as there were thread used by the host frame threading.
      * For all other planes, there was a local temporary image, shared among all threads for the calls to render.
      * Since we may be in a thread of the host frame threading, only allocate a temporary image of the size of the rectangle
@@ -4916,7 +5079,7 @@ EffectInstance::evaluate(KnobI* knob,
     }
     
     
-    int time = getCurrentTime();
+    double time = getCurrentTime();
     
     
     std::list<ViewerInstance* > viewers;
@@ -5092,7 +5255,8 @@ EffectInstance::setCurrentViewportForOverlays_public(OverlaySupport* viewport)
 }
 
 void
-EffectInstance::drawOverlay_public(double scaleX,
+EffectInstance::drawOverlay_public(double time,
+                                   double scaleX,
                                    double scaleY)
 {
     ///cannot be run in another thread
@@ -5104,13 +5268,14 @@ EffectInstance::drawOverlay_public(double scaleX,
     RECURSIVE_ACTION();
 
     _imp->setDuringInteractAction(true);
-    drawOverlay(scaleX,scaleY);
-    getNode()->drawDefaultOverlay(scaleX, scaleY);
+    drawOverlay(time, scaleX,scaleY);
+    getNode()->drawDefaultOverlay(time, scaleX, scaleY);
     _imp->setDuringInteractAction(false);
 }
 
 bool
-EffectInstance::onOverlayPenDown_public(double scaleX,
+EffectInstance::onOverlayPenDown_public(double time,
+                                        double scaleX,
                                         double scaleY,
                                         const QPointF & viewportPos,
                                         const QPointF & pos,
@@ -5126,7 +5291,7 @@ EffectInstance::onOverlayPenDown_public(double scaleX,
     {
         NON_RECURSIVE_ACTION();
         _imp->setDuringInteractAction(true);
-        ret = onOverlayPenDown(scaleX, scaleY, viewportPos, pos, pressure);
+        ret = onOverlayPenDown(time, scaleX, scaleY, viewportPos, pos, pressure);
         if (!ret) {
             ret |= getNode()->onOverlayPenDownDefault(scaleX, scaleY, viewportPos, pos, pressure);
         }
@@ -5138,7 +5303,8 @@ EffectInstance::onOverlayPenDown_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayPenMotion_public(double scaleX,
+EffectInstance::onOverlayPenMotion_public(double time,
+                                          double scaleX,
                                           double scaleY,
                                           const QPointF & viewportPos,
                                           const QPointF & pos,
@@ -5153,7 +5319,7 @@ EffectInstance::onOverlayPenMotion_public(double scaleX,
 
     NON_RECURSIVE_ACTION();
     _imp->setDuringInteractAction(true);
-    bool ret = onOverlayPenMotion(scaleX, scaleY, viewportPos, pos, pressure);
+    bool ret = onOverlayPenMotion(time, scaleX, scaleY, viewportPos, pos, pressure);
     if (!ret) {
         ret |= getNode()->onOverlayPenMotionDefault(scaleX, scaleY, viewportPos, pos, pressure);
     }
@@ -5165,7 +5331,8 @@ EffectInstance::onOverlayPenMotion_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayPenUp_public(double scaleX,
+EffectInstance::onOverlayPenUp_public(double time,
+                                      double scaleX,
                                       double scaleY,
                                       const QPointF & viewportPos,
                                       const QPointF & pos,
@@ -5180,7 +5347,7 @@ EffectInstance::onOverlayPenUp_public(double scaleX,
     {
         NON_RECURSIVE_ACTION();
         _imp->setDuringInteractAction(true);
-        ret = onOverlayPenUp(scaleX, scaleY, viewportPos, pos, pressure);
+        ret = onOverlayPenUp(time, scaleX, scaleY, viewportPos, pos, pressure);
         if (!ret) {
             ret |= getNode()->onOverlayPenUpDefault(scaleX, scaleY, viewportPos, pos, pressure);
         }
@@ -5192,7 +5359,8 @@ EffectInstance::onOverlayPenUp_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayKeyDown_public(double scaleX,
+EffectInstance::onOverlayKeyDown_public(double time,
+                                        double scaleX,
                                         double scaleY,
                                         Natron::Key key,
                                         Natron::KeyboardModifiers modifiers)
@@ -5207,7 +5375,7 @@ EffectInstance::onOverlayKeyDown_public(double scaleX,
     {
         NON_RECURSIVE_ACTION();
         _imp->setDuringInteractAction(true);
-        ret = onOverlayKeyDown(scaleX,scaleY,key, modifiers);
+        ret = onOverlayKeyDown(time, scaleX,scaleY,key, modifiers);
         if (!ret) {
             ret |= getNode()->onOverlayKeyDownDefault(scaleX, scaleY, key, modifiers);
         }
@@ -5219,7 +5387,8 @@ EffectInstance::onOverlayKeyDown_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayKeyUp_public(double scaleX,
+EffectInstance::onOverlayKeyUp_public(double time,
+                                      double scaleX,
                                       double scaleY,
                                       Natron::Key key,
                                       Natron::KeyboardModifiers modifiers)
@@ -5235,7 +5404,7 @@ EffectInstance::onOverlayKeyUp_public(double scaleX,
         NON_RECURSIVE_ACTION();
         
         _imp->setDuringInteractAction(true);
-        ret = onOverlayKeyUp(scaleX, scaleY, key, modifiers);
+        ret = onOverlayKeyUp(time, scaleX, scaleY, key, modifiers);
         if (!ret) {
             ret |= getNode()->onOverlayKeyUpDefault(scaleX, scaleY, key, modifiers);
         }
@@ -5247,7 +5416,8 @@ EffectInstance::onOverlayKeyUp_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayKeyRepeat_public(double scaleX,
+EffectInstance::onOverlayKeyRepeat_public(double time,
+                                          double scaleX,
                                           double scaleY,
                                           Natron::Key key,
                                           Natron::KeyboardModifiers modifiers)
@@ -5262,7 +5432,7 @@ EffectInstance::onOverlayKeyRepeat_public(double scaleX,
     {
         NON_RECURSIVE_ACTION();
         _imp->setDuringInteractAction(true);
-        ret = onOverlayKeyRepeat(scaleX,scaleY,key, modifiers);
+        ret = onOverlayKeyRepeat(time, scaleX,scaleY,key, modifiers);
         if (!ret) {
             ret |= getNode()->onOverlayKeyRepeatDefault(scaleX, scaleY, key, modifiers);
         }
@@ -5274,7 +5444,8 @@ EffectInstance::onOverlayKeyRepeat_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayFocusGained_public(double scaleX,
+EffectInstance::onOverlayFocusGained_public(double time,
+                                            double scaleX,
                                             double scaleY)
 {
     ///cannot be run in another thread
@@ -5287,7 +5458,7 @@ EffectInstance::onOverlayFocusGained_public(double scaleX,
     {
         NON_RECURSIVE_ACTION();
         _imp->setDuringInteractAction(true);
-        ret = onOverlayFocusGained(scaleX,scaleY);
+        ret = onOverlayFocusGained(time, scaleX,scaleY);
         if (!ret) {
             ret |= getNode()->onOverlayFocusGainedDefault(scaleX, scaleY);
         }
@@ -5299,7 +5470,8 @@ EffectInstance::onOverlayFocusGained_public(double scaleX,
 }
 
 bool
-EffectInstance::onOverlayFocusLost_public(double scaleX,
+EffectInstance::onOverlayFocusLost_public(double time,
+                                          double scaleX,
                                           double scaleY)
 {
     ///cannot be run in another thread
@@ -5312,7 +5484,7 @@ EffectInstance::onOverlayFocusLost_public(double scaleX,
         
         NON_RECURSIVE_ACTION();
         _imp->setDuringInteractAction(true);
-        ret = onOverlayFocusLost(scaleX,scaleY);
+        ret = onOverlayFocusLost(time, scaleX,scaleY);
         if (!ret) {
             ret |= getNode()->onOverlayFocusLostDefault(scaleX, scaleY);
         }
@@ -5341,7 +5513,7 @@ EffectInstance::render_public(const RenderActionArgs& args)
 }
 
 Natron::StatusEnum
-EffectInstance::getTransform_public(SequenceTime time,
+EffectInstance::getTransform_public(double time,
                                     const RenderScale& renderScale,
                                     int view,
                                     Natron::EffectInstance** inputToTransform,
@@ -5355,11 +5527,11 @@ EffectInstance::getTransform_public(SequenceTime time,
 bool
 EffectInstance::isIdentity_public(bool useIdentityCache, // only set to true when calling for the whole image (not for a subrect)
                                   U64 hash,
-                                  SequenceTime time,
+                                  double time,
                                   const RenderScale & scale,
                                   const RectI& renderWindow,
                                   int view,
-                                  SequenceTime* inputTime,
+                                  double* inputTime,
                                   int* inputNb)
 {
     
@@ -5439,12 +5611,14 @@ EffectInstance::onInputChanged(int /*inputNo*/)
 }
 
 Natron::StatusEnum
-EffectInstance::getRegionOfDefinition_public(U64 hash,
-                                             SequenceTime time,
-                                             const RenderScale & scale,
-                                             int view,
-                                             RectD* rod,
-                                             bool* isProjectFormat)
+EffectInstance::getRegionOfDefinition_publicInternal(U64 hash,
+                                                        double time,
+                                                        const RenderScale & scale,
+                                                        const RectI& renderWindow,
+                                                        bool useRenderWindow,
+                                                        int view,
+                                                        RectD* rod,
+                                                        bool* isProjectFormat)
 {
     if (!isEffectCreated()) {
         return eStatusFailed;
@@ -5452,12 +5626,25 @@ EffectInstance::getRegionOfDefinition_public(U64 hash,
     
     unsigned int mipMapLevel = Image::getLevelFromScale(scale.x);
     
-    bool foundInCache;
-
-    if (getScriptName_mt_safe() == "Roto1") {
-        assert(true);
+    if (useRenderWindow) {
+        double inputTimeIdentity;
+        int inputNbIdentity;
+        bool isIdentity = isIdentity_public(true, hash, time, scale, renderWindow, view, &inputTimeIdentity, &inputNbIdentity);
+        if (isIdentity) {
+            if (inputNbIdentity >= 0) {
+                Natron::EffectInstance* input = getInput(inputNbIdentity);
+                if (input) {
+                    return input->getRegionOfDefinition_public(input->getRenderHash(), inputTimeIdentity, scale, view, rod, isProjectFormat);
+                }
+            } else if (inputNbIdentity == -2) {
+                return getRegionOfDefinition_public(hash, inputTimeIdentity, scale, view, rod, isProjectFormat);
+            } else {
+                return eStatusFailed;
+            }
+        }
     }
-    foundInCache = _imp->actionsCache.getRoDResult(hash, time, view, mipMapLevel, rod);
+    
+    bool foundInCache = _imp->actionsCache.getRoDResult(hash, time, view, mipMapLevel, rod);
     if (foundInCache) {
         *isProjectFormat = false;
         if (rod->isNull()) {
@@ -5489,16 +5676,16 @@ EffectInstance::getRegionOfDefinition_public(U64 hash,
             if ( (ret != eStatusOK) && (ret != eStatusReplyDefault) ) {
                 // rod is not valid
                 //if (!isDuringStrokeCreation) {
-                    _imp->actionsCache.invalidateAll(hash);
-                    _imp->actionsCache.setRoDResult(hash, time, view, mipMapLevel, RectD());
-               // }
+                _imp->actionsCache.invalidateAll(hash);
+                _imp->actionsCache.setRoDResult(hash, time, view, mipMapLevel, RectD());
+                // }
                 return ret;
             }
             
             if (rod->isNull()) {
                 //if (!isDuringStrokeCreation) {
-                    _imp->actionsCache.invalidateAll(hash);
-                    _imp->actionsCache.setRoDResult(hash, time, view, mipMapLevel, RectD());
+                _imp->actionsCache.invalidateAll(hash);
+                _imp->actionsCache.setRoDResult(hash, time, view, mipMapLevel, RectD());
                 //}
                 return eStatusFailed;
             }
@@ -5508,16 +5695,40 @@ EffectInstance::getRegionOfDefinition_public(U64 hash,
         }
         *isProjectFormat = ifInfiniteApplyHeuristic(hash,time, scale, view, rod);
         assert(rod->x1 <= rod->x2 && rod->y1 <= rod->y2);
-
+        
         //if (!isDuringStrokeCreation) {
-            _imp->actionsCache.setRoDResult(hash, time, view,  mipMapLevel, *rod);
+        _imp->actionsCache.setRoDResult(hash, time, view,  mipMapLevel, *rod);
         //}
         return ret;
     }
+
+}
+
+Natron::StatusEnum
+EffectInstance::getRegionOfDefinitionWithIdentityCheck_public(U64 hash,
+                                                              double time,
+                                                              const RenderScale & scale,
+                                                              const RectI& renderWindow,
+                                                              int view,
+                                                              RectD* rod,
+                                                              bool* isProjectFormat)
+{
+    return getRegionOfDefinition_publicInternal(hash, time, scale, renderWindow, true, view, rod, isProjectFormat);
+}
+
+Natron::StatusEnum
+EffectInstance::getRegionOfDefinition_public(U64 hash,
+                                             double time,
+                                             const RenderScale & scale,
+                                             int view,
+                                             RectD* rod,
+                                             bool* isProjectFormat)
+{
+    return getRegionOfDefinition_publicInternal(hash, time, scale, RectI(), false, view, rod, isProjectFormat);
 }
 
 void
-EffectInstance::getRegionsOfInterest_public(SequenceTime time,
+EffectInstance::getRegionsOfInterest_public(double time,
                                             const RenderScale & scale,
                                             const RectD & outputRoD, //!< effect RoD in canonical coordinates
                                             const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
@@ -5535,17 +5746,25 @@ EffectInstance::getRegionsOfInterest_public(SequenceTime time,
 }
 
 EffectInstance::FramesNeededMap
-EffectInstance::getFramesNeeded_public(SequenceTime time,int view)
+EffectInstance::getFramesNeeded_public(U64 hash, double time,int view, unsigned int mipMapLevel)
 {
     NON_RECURSIVE_ACTION();
+    EffectInstance::FramesNeededMap framesNeeded;
+    bool foundInCache = _imp->actionsCache.getFramesNeededResult(hash, time, view, mipMapLevel, &framesNeeded);
+    if (foundInCache) {
+        return framesNeeded;
+    }
     
-    return getFramesNeeded(time, view);
+    framesNeeded = getFramesNeeded(time, view);
+    _imp->actionsCache.setFramesNeededResult(hash, time, view, mipMapLevel, framesNeeded);
+    
+    return framesNeeded;
 }
 
 void
 EffectInstance::getFrameRange_public(U64 hash,
-                                     SequenceTime *first,
-                                     SequenceTime *last,
+                                     double *first,
+                                     double *last,
                                      bool bypasscache)
 {
     
@@ -5576,9 +5795,9 @@ EffectInstance::getFrameRange_public(U64 hash,
 }
 
 Natron::StatusEnum
-EffectInstance::beginSequenceRender_public(SequenceTime first,
-                                           SequenceTime last,
-                                           SequenceTime step,
+EffectInstance::beginSequenceRender_public(double first,
+                                           double last,
+                                           double step,
                                            bool interactive,
                                            const RenderScale & scale,
                                            bool isSequentialRender,
@@ -5599,9 +5818,9 @@ EffectInstance::beginSequenceRender_public(SequenceTime first,
 }
 
 Natron::StatusEnum
-EffectInstance::endSequenceRender_public(SequenceTime first,
-                                         SequenceTime last,
-                                         SequenceTime step,
+EffectInstance::endSequenceRender_public(double first,
+                                         double last,
+                                         double step,
                                          bool interactive,
                                          const RenderScale & scale,
                                          bool isSequentialRender,
@@ -5696,7 +5915,7 @@ EffectInstance::setComponentsAvailableDirty(bool dirty)
 }
 
 void
-EffectInstance::getNonMaskInputsAvailableComponents(SequenceTime time,
+EffectInstance::getNonMaskInputsAvailableComponents(double time,
                                                     int view,
                                                     bool preferExistingComponents,
                                                     ComponentsAvailableMap* comps,
@@ -5747,7 +5966,7 @@ EffectInstance::getNonMaskInputsAvailableComponents(SequenceTime time,
 }
 
 void
-EffectInstance::getComponentsAvailableRecursive(SequenceTime time, int view, ComponentsAvailableMap* comps,
+EffectInstance::getComponentsAvailableRecursive(double time, int view, ComponentsAvailableMap* comps,
                                                 std::list<Natron::EffectInstance*>* markedNodes)
 {
     if (std::find(markedNodes->begin(), markedNodes->end(), this) != markedNodes->end()) {
@@ -5922,13 +6141,13 @@ EffectInstance::getComponentsAvailableRecursive(SequenceTime time, int view, Com
 }
 
 void
-EffectInstance::getComponentsAvailable(SequenceTime time, ComponentsAvailableMap* comps, std::list<Natron::EffectInstance*>* markedNodes)
+EffectInstance::getComponentsAvailable(double time, ComponentsAvailableMap* comps, std::list<Natron::EffectInstance*>* markedNodes)
 {
     getComponentsAvailableRecursive(time, 0, comps, markedNodes);
 }
 
 void
-EffectInstance::getComponentsAvailable(SequenceTime time, ComponentsAvailableMap* comps)
+EffectInstance::getComponentsAvailable(double time, ComponentsAvailableMap* comps)
 {
    
     //int nViews = getApp()->getProject()->getProjectViewsCount();
@@ -5944,7 +6163,7 @@ EffectInstance::getComponentsAvailable(SequenceTime time, ComponentsAvailableMap
 }
 
 void
-EffectInstance::getComponentsNeededAndProduced(SequenceTime time, int view,
+EffectInstance::getComponentsNeededAndProduced(double time, int view,
                                     ComponentsNeededMap* comps,
                                     SequenceTime* passThroughTime,
                                     int* passThroughView,
@@ -5998,7 +6217,7 @@ EffectInstance::getComponentsNeededAndProduced(SequenceTime time, int view,
 }
 
 void
-EffectInstance::getComponentsNeededAndProduced_public(SequenceTime time, int view,
+EffectInstance::getComponentsNeededAndProduced_public(double time, int view,
                                                       ComponentsNeededMap* comps,
                                                       bool* processAllRequested,
                                                       SequenceTime* passThroughTime,
@@ -6165,7 +6384,7 @@ EffectInstance::getThreadLocalRenderedPlanes(std::map<Natron::ImageComponents,Pl
 }
 
 void
-EffectInstance::updateThreadLocalRenderTime(int time)
+EffectInstance::updateThreadLocalRenderTime(double time)
 {
     if (QThread::currentThread() != qApp->thread() && _imp->renderArgs.hasLocalData()) {
          RenderArgs& args = _imp->renderArgs.localData();
@@ -6204,6 +6423,11 @@ EffectInstance::Implementation::runChangedParamCallback(KnobI* k,bool userEdited
 {
     std::vector<std::string> args;
     std::string error;
+    
+    if (!k || k->getName() == "onParamChanged") {
+        return;
+    }
+    
     Natron::getFunctionArguments(callback, &error, &args);
     if (!error.empty()) {
         _publicInterface->getApp()->appendToScriptEditor("Failed to run onParamChanged callback: " + error);
@@ -6258,7 +6482,7 @@ EffectInstance::Implementation::runChangedParamCallback(KnobI* k,bool userEdited
     std::string err;
     std::string output;
     if (!Natron::interpretPythonScript(script, &err,&output)) {
-        _publicInterface->getApp()->appendToScriptEditor(QObject::tr("Failed to execute callback: ").toStdString() + err);
+        _publicInterface->getApp()->appendToScriptEditor(QObject::tr("Failed to execute onParamChanged callback: ").toStdString() + err);
     } else {
         if (!output.empty()) {
             _publicInterface->getApp()->appendToScriptEditor(output);
@@ -6544,7 +6768,7 @@ EffectInstance::getNearestNonDisabledPrevious(int* inputNb)
 }
 
 Natron::EffectInstance*
-EffectInstance::getNearestNonIdentity(int time)
+EffectInstance::getNearestNonIdentity(double time)
 {
     U64 hash = getRenderHash();
 
@@ -6558,7 +6782,7 @@ EffectInstance::getNearestNonIdentity(int time)
     ///Ignore the result of getRoD if it failed
     (void)stat;
     
-    SequenceTime inputTimeIdentity;
+    double inputTimeIdentity;
     int inputNbIdentity;
     
     RectI pixelRoi;
@@ -6610,7 +6834,7 @@ EffectInstance::abortAnyEvaluation()
     getNode()->incrementKnobsAge();
 }
 
-SequenceTime
+double
 EffectInstance::getCurrentTime() const
 {
     return getThreadLocalRenderTime();
@@ -6698,13 +6922,14 @@ EffectInstance::isPaintingOverItselfEnabled() const
 }
 
 OutputEffectInstance::OutputEffectInstance(boost::shared_ptr<Node> node)
-    : Natron::EffectInstance(node)
-      , _writerCurrentFrame(0)
-      , _writerFirstFrame(0)
-      , _writerLastFrame(0)
-      , _outputEffectDataLock(new QMutex)
-      , _renderController(0)
-      , _engine(0)
+: Natron::EffectInstance(node)
+, _writerCurrentFrame(0)
+, _writerFirstFrame(0)
+, _writerLastFrame(0)
+, _outputEffectDataLock(new QMutex)
+, _renderController(0)
+, _engine(0)
+, _timeSpentPerFrameRendered()
 {
 }
 
@@ -6919,4 +7144,26 @@ EffectInstance::checkOFXClipPreferences_public(double time,
     }
 }
 
+void
+OutputEffectInstance::updateRenderTimeInfos(double lastTimeSpent, double *averageTimePerFrame, double *totalTimeSpent)
+{
+    assert(totalTimeSpent && averageTimePerFrame);
+    
+    *totalTimeSpent = 0;
+    
+    QMutexLocker k(_outputEffectDataLock);
+    _timeSpentPerFrameRendered.push_back(lastTimeSpent);
+    
+    for (std::list<double>::iterator it = _timeSpentPerFrameRendered.begin(); it!= _timeSpentPerFrameRendered.end(); ++it) {
+        *totalTimeSpent += *it;
+    }
+    assert(_timeSpentPerFrameRendered.size() != 0);
+    *averageTimePerFrame = *totalTimeSpent / _timeSpentPerFrameRendered.size();
+}
 
+void
+OutputEffectInstance::resetTimeSpentRenderingInfos()
+{
+    QMutexLocker k(_outputEffectDataLock);
+    _timeSpentPerFrameRendered.clear();
+}

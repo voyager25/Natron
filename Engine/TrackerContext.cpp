@@ -1135,9 +1135,9 @@ TrackerContext::getTimeLineFirstFrame() const
     if (!node) {
         return -1;
     }
-    int first,last;
+    double first,last;
     node->getApp()->getProject()->getFrameRange(&first, &last);
-    return first;
+    return (int)first;
 }
 
 int
@@ -1147,9 +1147,9 @@ TrackerContext::getTimeLineLastFrame() const
     if (!node) {
         return -1;
     }
-    int first,last;
+    double first,last;
     node->getApp()->getProject()->getFrameRange(&first, &last);
-    return last;
+    return (int)last;
 }
 
 void

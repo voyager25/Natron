@@ -21,6 +21,7 @@
 #include <QThreadPool>
 #include <QCoreApplication>
 #include <QTextStream>
+#include <algorithm> // min, max
 
 #include "Engine/AppInstance.h"
 #include "Engine/Node.h"
@@ -255,6 +256,20 @@ NodeCollection::quitAnyProcessingForAllNodes()
     setMustQuitProcessingRecursive(true, this);
     quitAnyProcessingInternal(this);
     setMustQuitProcessingRecursive(false, this);
+}
+
+void
+NodeCollection::resetTotalTimeSpentRenderingForAllNodes()
+{
+    QMutexLocker k(&_imp->nodesMutex);
+    for (NodeList::iterator it = _imp->nodes.begin(); it != _imp->nodes.end(); ++it) {
+        Natron::EffectInstance* effect = (*it)->getLiveInstance();
+        effect->resetTotalTimeSpentRendering();
+        NodeGroup* isGroup = dynamic_cast<NodeGroup*>(effect);
+        if (isGroup) {
+            isGroup->resetTotalTimeSpentRenderingForAllNodes();
+        }
+    }
 }
 
 bool
@@ -830,13 +845,13 @@ NodeCollection::recomputeFrameRangeForAllReaders(int* firstFrame,int* lastFrame)
         if ((*it)->isActivated()) {
             
             if ((*it)->getLiveInstance()->isReader()) {
-                int thisFirst,thislast;
+                double thisFirst,thislast;
                 (*it)->getLiveInstance()->getFrameRange_public((*it)->getHashValue(), &thisFirst, &thislast);
                 if (thisFirst != INT_MIN) {
-                    *firstFrame = std::min(*firstFrame, thisFirst);
+                    *firstFrame = std::min(*firstFrame, (int)thisFirst);
                 }
                 if (thislast != INT_MAX) {
-                    *lastFrame = std::max(*lastFrame, thislast);
+                    *lastFrame = std::max(*lastFrame, (int)thislast);
                 }
             } else {
                 NodeGroup* isGrp = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
@@ -1161,7 +1176,7 @@ NodeGroup::getInputLabel(int inputNb) const
     return inputName.toStdString();
 }
 
-SequenceTime
+double
 NodeGroup::getCurrentTime() const
 {
     NodePtr node = getOutputNodeInput();
@@ -1230,9 +1245,9 @@ NodeGroup::initializeKnobs()
     assert(nodePage);
     Page_Knob* isPage = dynamic_cast<Page_Knob*>(nodePage.get());
     assert(isPage);
-    _imp->exportAsTemplate = Natron::createKnob<Button_Knob>(this, "Export as Python plug-in");
-    _imp->exportAsTemplate->setName("exportAsGroup");
-    _imp->exportAsTemplate->setHintToolTip("Export this group as a Python group script that can be shared and/or later "
+    _imp->exportAsTemplate = Natron::createKnob<Button_Knob>(this, "Export as PyPlug");
+    _imp->exportAsTemplate->setName("exportAsPyPlug");
+    _imp->exportAsTemplate->setHintToolTip("Export this group as a Python group script (PyPlug) that can be shared and/or later "
                                            "on re-used as a plug-in.");
     isPage->addKnob(_imp->exportAsTemplate);
 }

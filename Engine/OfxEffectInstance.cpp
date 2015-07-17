@@ -340,7 +340,7 @@ OfxEffectInstance::createOfxImageEffectInstance(OFX::Host::ImageEffect::ImageEff
         // This is not always possible (e.g. if a param has a wrong value).
         if (supportsRenderScaleMaybe() == eSupportsMaybe) {
             // does the effect support renderscale?
-            SequenceTime first = INT_MIN,last = INT_MAX;
+            double first = INT_MIN,last = INT_MAX;
             getFrameRange(&first, &last);
             if (first == INT_MIN || last == INT_MAX) {
                 first = last = getApp()->getTimeLine()->currentFrame();
@@ -1402,7 +1402,7 @@ OfxEffectInstance::supportedFileFormats() const
 
 Natron::StatusEnum
 OfxEffectInstance::getRegionOfDefinition(U64 /*hash*/,
-                                         SequenceTime time,
+                                         double time,
                                          const RenderScale & scale,
                                          int view,
                                          RectD* rod)
@@ -1528,7 +1528,7 @@ OfxEffectInstance::getRegionOfDefinition(U64 /*hash*/,
 
 void
 OfxEffectInstance::calcDefaultRegionOfDefinition(U64 /*hash*/,
-                                                 SequenceTime time,
+                                                 double time,
                                                  int view,
                                                  const RenderScale & scale,
                                                  RectD *rod)
@@ -1589,7 +1589,7 @@ rectToOfxRectD(const RectD & b,
 }
 
 void
-OfxEffectInstance::getRegionsOfInterest(SequenceTime time,
+OfxEffectInstance::getRegionsOfInterest(double time,
                                         const RenderScale & scale,
                                         const RectD & outputRoD,
                                         const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
@@ -1641,7 +1641,7 @@ OfxEffectInstance::getRegionsOfInterest(SequenceTime time,
 
 
     if ( (stat != kOfxStatOK) && (stat != kOfxStatReplyDefault) ) {
-        throw std::runtime_error("getFramesNeeded action failed");
+        throw std::runtime_error("getRegionsOfInterest action failed");
     }
     
     //Default behaviour already handled in getRegionOfInterestAction
@@ -1657,6 +1657,10 @@ OfxEffectInstance::getRegionsOfInterest(SequenceTime time,
             inputRoi.y1 = it->second.y1;
             inputRoi.y2 = it->second.y2;
             
+            if (inputRoi.isNull()) {
+                continue;
+            }
+            
             ///The RoI might be infinite if the getRoI action of the plug-in doesn't do anything and the input effect has an
             ///infinite rod.
             ifInfiniteclipRectToProjectDefault(&inputRoi);
@@ -1671,7 +1675,7 @@ OfxEffectInstance::getRegionsOfInterest(SequenceTime time,
 } // getRegionsOfInterest
 
 Natron::EffectInstance::FramesNeededMap
-OfxEffectInstance::getFramesNeeded(SequenceTime time, int view)
+OfxEffectInstance::getFramesNeeded(double time, int view)
 {
     assert(_context != eContextNone);
     EffectInstance::FramesNeededMap ret;
@@ -1740,8 +1744,8 @@ OfxEffectInstance::getFramesNeeded(SequenceTime time, int view)
 }
 
 void
-OfxEffectInstance::getFrameRange(SequenceTime *first,
-                                 SequenceTime *last)
+OfxEffectInstance::getFrameRange(double *first,
+                                 double *last)
 {
     assert(_context != eContextNone);
     if (!_initialized) {
@@ -1763,8 +1767,8 @@ OfxEffectInstance::getFrameRange(SequenceTime *first,
         st = _effect->getTimeDomainAction(range);
     }
     if (st == kOfxStatOK) {
-        *first = (SequenceTime)range.min;
-        *last = (SequenceTime)range.max;
+        *first = range.min;
+        *last = range.max;
     } else if (st == kOfxStatReplyDefault) {
         //The default is...
         int nthClip = _effect->getNClips();
@@ -1787,7 +1791,7 @@ OfxEffectInstance::getFrameRange(SequenceTime *first,
                 //if (!isInputOptional(i)) {
                 EffectInstance* inputEffect = getInput(i);
                 if (inputEffect) {
-                    SequenceTime f,l;
+                    double f,l;
                     inputEffect->getFrameRange_public(inputEffect->getRenderHash(),&f, &l);
                     if (!firstValidInput) {
                         if ( (f < *first) && (f != INT_MIN) ) {
@@ -1809,11 +1813,11 @@ OfxEffectInstance::getFrameRange(SequenceTime *first,
 } // getFrameRange
 
 bool
-OfxEffectInstance::isIdentity(SequenceTime time,
+OfxEffectInstance::isIdentity(double time,
                               const RenderScale & scale,
                               const RectI & renderWindow,
                               int view,
-                              SequenceTime* inputTime,
+                              double* inputTime,
                               int* inputNb)
 {
     if (!_created) {
@@ -1915,9 +1919,9 @@ OfxEffectInstance::isIdentity(SequenceTime time,
 } // isIdentity
 
 Natron::StatusEnum
-OfxEffectInstance::beginSequenceRender(SequenceTime first,
-                                       SequenceTime last,
-                                       SequenceTime step,
+OfxEffectInstance::beginSequenceRender(double first,
+                                       double last,
+                                       double step,
                                        bool interactive,
                                        const RenderScale & scale,
                                        bool isSequentialRender,
@@ -1961,9 +1965,9 @@ OfxEffectInstance::beginSequenceRender(SequenceTime first,
 }
 
 Natron::StatusEnum
-OfxEffectInstance::endSequenceRender(SequenceTime first,
-                                     SequenceTime last,
-                                     SequenceTime step,
+OfxEffectInstance::endSequenceRender(double first,
+                                     double last,
+                                     double step,
                                      bool interactive,
                                      const RenderScale & scale,
                                      bool isSequentialRender,
@@ -2178,7 +2182,8 @@ OfxEffectInstance::initializeOverlayInteract()
 }
 
 void
-OfxEffectInstance::drawOverlay(double scaleX,
+OfxEffectInstance::drawOverlay(double time,
+                               double scaleX,
                                double scaleY)
 {
     if (!_initialized) {
@@ -2188,33 +2193,9 @@ OfxEffectInstance::drawOverlay(double scaleX,
         OfxPointD rs;
         rs.x = scaleX;
         rs.y = scaleY;
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
 
-       /* if (getRecursionLevel() == 1) {
-            
-            
-            bool skipDiscarding = false;
-            if (getRecursionLevel() > 1) {
-                ///This happens sometimes because of dialogs popping from the request of a plug-in (inside an action)
-                ///and making the mainwindow loose focus, hence forcing a new paint event
-                //qDebug() << "drawAction cannot be called recursively as an action. Please check this.";
-                skipDiscarding = true;
-            }
-            ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                                skipDiscarding,
-                                                false, //< setView ?
-                                                0,
-                                                false,
-                                                0);
-             
-            _overlayInteract->drawAction(time, rs);
-        } else {*/
-        
         SET_CAN_SET_VALUE(false);
-
         _overlayInteract->drawAction(time, rs);
-        
-        /*}*/
     }
 }
 
@@ -2227,7 +2208,8 @@ OfxEffectInstance::setCurrentViewportForOverlays(OverlaySupport* viewport)
 }
 
 bool
-OfxEffectInstance::onOverlayPenDown(double scaleX,
+OfxEffectInstance::onOverlayPenDown(double time,
+                                    double scaleX,
                                     double scaleY,
                                     const QPointF & viewportPos,
                                     const QPointF & pos,
@@ -2247,15 +2229,6 @@ OfxEffectInstance::onOverlayPenDown(double scaleX,
         penPosViewport.x = viewportPos.x();
         penPosViewport.y = viewportPos.y();
 
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
-        /*
-        ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                            false,
-                                            true, //< setView ?
-                                            view,
-                                            false,
-                                            0);
-         */
         SET_CAN_SET_VALUE(true);
 
         OfxStatus stat = _overlayInteract->penDownAction(time, rs, penPos, penPosViewport, pressure);
@@ -2277,7 +2250,8 @@ OfxEffectInstance::onOverlayPenDown(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayPenMotion(double scaleX,
+OfxEffectInstance::onOverlayPenMotion(double time,
+                                      double scaleX,
                                       double scaleY,
                                       const QPointF & viewportPos,
                                       const QPointF & pos,
@@ -2296,21 +2270,10 @@ OfxEffectInstance::onOverlayPenMotion(double scaleX,
         OfxPointI penPosViewport;
         penPosViewport.x = viewportPos.x();
         penPosViewport.y = viewportPos.y();
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
         OfxStatus stat;
-        /*
-        if (getRecursionLevel() == 1) {
-            ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                                false,
-                                                true, //< setView ?
-                                                view,
-                                                false,
-                                                0);
-            stat = _overlayInteract->penMotionAction(time, rs, penPos, penPosViewport, 1.);
-        } else {*/
+
         SET_CAN_SET_VALUE(true);
         stat = _overlayInteract->penMotionAction(time, rs, penPos, penPosViewport, pressure);
-        /*}*/
         
         if (getRecursionLevel() == 1 && checkIfOverlayRedrawNeeded()) {
             stat = _overlayInteract->redraw();
@@ -2326,7 +2289,8 @@ OfxEffectInstance::onOverlayPenMotion(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayPenUp(double scaleX,
+OfxEffectInstance::onOverlayPenUp(double time,
+                                  double scaleX,
                                   double scaleY,
                                   const QPointF & viewportPos,
                                   const QPointF & pos,
@@ -2345,16 +2309,7 @@ OfxEffectInstance::onOverlayPenUp(double scaleX,
         OfxPointI penPosViewport;
         penPosViewport.x = viewportPos.x();
         penPosViewport.y = viewportPos.y();
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
-        
-        /*
-        ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                            false,
-                                            true,
-                                            view,
-                                            false,
-                                            0);
-         */
+
         SET_CAN_SET_VALUE(true);
         OfxStatus stat = _overlayInteract->penUpAction(time, rs, penPos, penPosViewport, pressure);
 
@@ -2374,7 +2329,8 @@ OfxEffectInstance::onOverlayPenUp(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayKeyDown(double scaleX,
+OfxEffectInstance::onOverlayKeyDown(double time,
+                                    double scaleX,
                                     double scaleY,
                                     Natron::Key key,
                                     Natron::KeyboardModifiers /*modifiers*/)
@@ -2386,16 +2342,7 @@ OfxEffectInstance::onOverlayKeyDown(double scaleX,
         OfxPointD rs;
         rs.x = scaleX;
         rs.y = scaleY;
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
         QByteArray keyStr;
-/*
-        ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                            false,
-                                            true, //< setView ?
-                                            view,
-                                            false,
-                                            0);
- */
         SET_CAN_SET_VALUE(true);
         OfxStatus stat = _overlayInteract->keyDownAction( time, rs, (int)key, keyStr.data() );
 
@@ -2413,7 +2360,8 @@ OfxEffectInstance::onOverlayKeyDown(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayKeyUp(double scaleX,
+OfxEffectInstance::onOverlayKeyUp(double time,
+                                  double scaleX,
                                   double scaleY,
                                   Natron::Key key,
                                   Natron::KeyboardModifiers /* modifiers*/)
@@ -2425,17 +2373,7 @@ OfxEffectInstance::onOverlayKeyUp(double scaleX,
         OfxPointD rs;
         rs.x = scaleX;
         rs.y = scaleY;
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
         QByteArray keyStr;
-
-        /*
-        ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                            false,
-                                            true, //< setView ?
-                                            view,
-                                            false,
-                                            0);
-         */
         SET_CAN_SET_VALUE(true);
         OfxStatus stat = _overlayInteract->keyUpAction( time, rs, (int)key, keyStr.data() );
 
@@ -2455,7 +2393,8 @@ OfxEffectInstance::onOverlayKeyUp(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayKeyRepeat(double scaleX,
+OfxEffectInstance::onOverlayKeyRepeat(double time,
+                                      double scaleX,
                                       double scaleY,
                                       Natron::Key key,
                                       Natron::KeyboardModifiers /*modifiers*/)
@@ -2467,16 +2406,8 @@ OfxEffectInstance::onOverlayKeyRepeat(double scaleX,
         OfxPointD rs;
         rs.x = scaleX;
         rs.y = scaleY;
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
         QByteArray keyStr;
-/*
-        ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                            false,
-                                            true, //< setView ?
-                                            view,
-                                            false,
-                                            0);
- */
+
         SET_CAN_SET_VALUE(true);
         OfxStatus stat = _overlayInteract->keyRepeatAction( time, rs, (int)key, keyStr.data() );
 
@@ -2494,7 +2425,8 @@ OfxEffectInstance::onOverlayKeyRepeat(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayFocusGained(double scaleX,
+OfxEffectInstance::onOverlayFocusGained(double time,
+                                        double scaleX,
                                         double scaleY)
 {
     if (!_initialized) {
@@ -2504,22 +2436,9 @@ OfxEffectInstance::onOverlayFocusGained(double scaleX,
         OfxPointD rs;
         rs.x = scaleX;
         rs.y = scaleY;
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
         OfxStatus stat;
-/*
-        if (getRecursionLevel() == 1) {
-            ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                                false,
-                                                true, //< setView ?
-                                                view,
-                                                false,
-                                                0);
-            stat = _overlayInteract->gainFocusAction(time, rs);
-        } else {*/
         SET_CAN_SET_VALUE(true);
         stat = _overlayInteract->gainFocusAction(time, rs);
-        /*}*/
-        //assert(stat == kOfxStatOK || stat == kOfxStatReplyDefault);
         if (stat == kOfxStatOK) {
             return true;
         }
@@ -2529,7 +2448,8 @@ OfxEffectInstance::onOverlayFocusGained(double scaleX,
 }
 
 bool
-OfxEffectInstance::onOverlayFocusLost(double scaleX,
+OfxEffectInstance::onOverlayFocusLost(double time,
+                                      double scaleX,
                                       double scaleY)
 {
     if (!_initialized) {
@@ -2539,25 +2459,9 @@ OfxEffectInstance::onOverlayFocusLost(double scaleX,
         OfxPointD rs;
         rs.x = scaleX;
         rs.y = scaleY;
-        OfxTime time = getApp()->getTimeLine()->currentFrame();
         OfxStatus stat;
-        
-        /*if (getRecursionLevel() == 1) {
-            ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                                false,
-                                                true, //< setView ?
-                                                view,
-                                                false,
-                                                0);
-
-
-            stat = _overlayInteract->loseFocusAction(time, rs);
-        } else {*/
         SET_CAN_SET_VALUE(true);
         stat = _overlayInteract->loseFocusAction(time, rs);
-        /*}*/
-
-        //assert(stat == kOfxStatOK || stat == kOfxStatReplyDefault);
         if (stat == kOfxStatOK) {
             return true;
         }
@@ -2880,7 +2784,7 @@ OfxEffectInstance::getPreferredDepthAndComponents(int inputNb,
 }
 
 void
-OfxEffectInstance::getComponentsNeededAndProduced(SequenceTime time, int view,
+OfxEffectInstance::getComponentsNeededAndProduced(double time, int view,
                                             ComponentsNeededMap* comps,
                                             SequenceTime* passThroughTime,
                                             int* passThroughView,
@@ -2965,11 +2869,19 @@ OfxEffectInstance::isViewAware() const
     return effectInstance()->isViewAware();
 }
 
-bool
+EffectInstance::ViewInvarianceLevel
 OfxEffectInstance::isViewInvariant() const
 {
-    return effectInstance()->isViewInvariant();
-}
+    int inv = effectInstance()->getViewInvariance();
+    if (inv == 0) {
+        return eViewInvarianceAllViewsVariant;
+    } else if (inv == 1) {
+        return eViewInvarianceOnlyPassThroughPlanesVariant;
+    } else {
+        assert(inv == 2);
+        return eViewInvarianceAllViewsInvariant;
+    }
+ }
 
 Natron::SequentialPreferenceEnum
 OfxEffectInstance::getSequentialPreference() const
@@ -3081,7 +2993,7 @@ OfxEffectInstance::getInputsHoldingTransform(std::list<int>* inputs) const
 }
 
 Natron::StatusEnum
-OfxEffectInstance::getTransform(SequenceTime time,
+OfxEffectInstance::getTransform(double time,
                                 const RenderScale& renderScale, //< the plug-in accepted scale
                                 int view,
                                 Natron::EffectInstance** inputToTransform,

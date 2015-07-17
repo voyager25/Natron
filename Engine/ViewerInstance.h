@@ -202,7 +202,7 @@ public:
     
     int getLastRenderedTime() const;
     
-    virtual SequenceTime getCurrentTime() const OVERRIDE WARN_UNUSED_RETURN;
+    virtual double getCurrentTime() const OVERRIDE WARN_UNUSED_RETURN;
     
     virtual int getCurrentView() const OVERRIDE WARN_UNUSED_RETURN;
 
@@ -297,7 +297,7 @@ private:
         return "The Viewer node can display the output of a node graph.";
     }
 
-    virtual void getFrameRange(SequenceTime *first,SequenceTime *last) OVERRIDE FINAL;
+    virtual void getFrameRange(double *first,double *last) OVERRIDE FINAL;
     virtual std::string getInputLabel(int inputNb) const OVERRIDE FINAL
     {
         return QString::number(inputNb + 1).toStdString();

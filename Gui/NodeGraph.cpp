@@ -19,6 +19,8 @@
 #include <map>
 #include <vector>
 #include <locale>
+#include <algorithm> // min, max
+
 CLANG_DIAG_OFF(unused-private-field)
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QGraphicsProxyWidget>
@@ -95,6 +97,8 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/Histogram.h"
 #include "Gui/Label.h"
 #include "Gui/Menu.h"
+
+#include "Global/QtCompat.h"
 
 #define NATRON_CACHE_SIZE_TEXT_REFRESH_INTERVAL_MS 1000
 
@@ -2365,7 +2369,7 @@ NodeGraph::keyPressEvent(QKeyEvent* e)
         if ( getLastSelectedViewer() ) {
             getLastSelectedViewer()->previousFrame();
         }
-    }else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevKF, modifiers, key) ) {
+    } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevKF, modifiers, key) ) {
         getGui()->getApp()->getTimeLine()->goToPreviousKeyframe();
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerNextKF, modifiers, key) ) {
         getGui()->getApp()->getTimeLine()->goToNextKeyframe();
@@ -2389,6 +2393,12 @@ NodeGraph::keyPressEvent(QKeyEvent* e)
         pushUndoCommand(new ExtractNodeUndoRedoCommand(this,_imp->_selection));
     } else if ( isKeybind(kShortcutGroupNodegraph, kShortcutIDActionGraphTogglePreview, modifiers, key) ) {
         togglePreviewsForSelectedNodes();
+    } else if ( isKeybind(kShortcutGroupGlobal, kShortcutIDActionZoomIn, Qt::NoModifier, key) ) { // zoom in/out doesn't care about modifiers
+        QWheelEvent e(mapFromGlobal(QCursor::pos()), 120, Qt::NoButton, Qt::NoModifier); // one wheel click = +-120 delta
+        wheelEvent(&e);
+    } else if ( isKeybind(kShortcutGroupGlobal, kShortcutIDActionZoomOut, Qt::NoModifier, key) ) { // zoom in/out doesn't care about modifiers
+        QWheelEvent e(mapFromGlobal(QCursor::pos()), -120, Qt::NoButton, Qt::NoModifier); // one wheel click = +-120 delta
+        wheelEvent(&e);
     } else {
         bool intercepted = false;
         
@@ -3318,14 +3328,16 @@ NodeGraph::dropEvent(QDropEvent* e)
     QStringList filesList;
     QList<QUrl> urls = e->mimeData()->urls();
     for (int i = 0; i < urls.size(); ++i) {
-        const QUrl & rl = urls.at(i);
-        QString path = rl.path();
+        const QUrl rl = Natron::toLocalFileUrlFixed(urls.at(i));
+        QString path = rl.toLocalFile();
 
 #ifdef __NATRON_WIN32__
         if ( !path.isEmpty() && ( path.at(0) == QChar('/') ) || ( path.at(0) == QChar('\\') ) ) {
             path = path.remove(0,1);
         }
+
 #endif
+        
         QDir dir(path);
 
         //if the path dropped is not a directory append it
@@ -3343,7 +3355,7 @@ NodeGraph::dropEvent(QDropEvent* e)
     for (std::map<std::string,std::string>::const_iterator it = writersForFormat.begin(); it != writersForFormat.end(); ++it) {
         supportedExtensions.push_back( it->first.c_str() );
     }
-
+    QPointF scenePos = mapToScene(e->pos());
     std::vector< boost::shared_ptr<SequenceParsing::SequenceFromFiles> > files = SequenceFileDialog::fileSequencesFromFilesList(filesList,supportedExtensions);
     std::locale local;
     for (U32 i = 0; i < files.size(); ++i) {
@@ -3372,8 +3384,8 @@ NodeGraph::dropEvent(QDropEvent* e)
                                 "",
                                 -1,
                                 -1,
-                                true,
-                                INT_MIN,INT_MIN,
+                                false,
+                                scenePos.x(),scenePos.y(),
                                 true,
                                 true,
                                 false,
@@ -3381,6 +3393,11 @@ NodeGraph::dropEvent(QDropEvent* e)
                                 defaultValues,
                                 getGroup());
             boost::shared_ptr<Natron::Node>  n = getGui()->getApp()->createNode(args);
+            
+            //And offset scenePos by the Width of the previous node created if several nodes are created
+            double w,h;
+            n->getSize(&w, &h);
+            scenePos.rx() += (w + 10);
         }
     }
 } // dropEvent

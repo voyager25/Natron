@@ -528,9 +528,15 @@ public:
 
     void setTripleSyncEnabled(bool enabled);
     bool isTripleSyncEnabled() const;
+    
+    void setDopeSheetTreeWidth(int width);
+    void setCurveEditorTreeWidth(int width);
+    
 
     void centerOpenedViewersOn(SequenceTime left, SequenceTime right);
 
+    bool isAboutToClose() const;
+    
 Q_SIGNALS:
 
 
@@ -648,6 +654,8 @@ public Q_SLOTS:
 
     void onNextTabTriggered();
 
+    void onPrevTabTriggered();
+    
     void onCloseTabTriggered();
 
     void onUserCommandTriggered();

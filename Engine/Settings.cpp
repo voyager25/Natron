@@ -956,9 +956,9 @@ Settings::initializeKnobs()
     _extraPluginPaths->setMultiPath(true);
     _pluginsTab->addKnob(_extraPluginPaths);
     
-    _templatesPluginPaths = Natron::createKnob<Path_Knob>(this, "Group plugins search path");
+    _templatesPluginPaths = Natron::createKnob<Path_Knob>(this, "PyPlugs search path");
     _templatesPluginPaths->setName("groupPluginsSearchPath");
-    _templatesPluginPaths->setHintToolTip("Search path where " NATRON_APPLICATION_NAME " should scan for Python group scripts. "
+    _templatesPluginPaths->setHintToolTip("Search path where " NATRON_APPLICATION_NAME " should scan for Python group scripts (PyPlugs). "
                                                                                        "The search paths for groups can also be specified using the "
                                                                                        "NATRON_PLUGIN_PATH environment variable.");
     _templatesPluginPaths->setMultiPath(true);
@@ -1585,7 +1585,8 @@ Settings::tryLoadOpenColorIOConfig()
             for (int i = 0; i < defaultConfigsPaths.size(); ++i) {
                 QDir defaultConfigsDir(defaultConfigsPaths[i]);
                 if ( !defaultConfigsDir.exists() ) {
-                    qDebug() << "Attempt to read an OpenColorIO configuration but the configuration directory does not exist.";
+                    std::cerr << "Attempt to read an OpenColorIO configuration but the configuration directory"
+                    << defaultConfigsPaths[i].toStdString() <<  "does not exist." << std::endl;
                     continue;
                 }
                 ///try to open the .ocio config file first in the defaultConfigsDir
@@ -1615,7 +1616,9 @@ Settings::tryLoadOpenColorIOConfig()
         }
     }
     _ocioRestored = true;
-    qDebug() << "setting OCIO=" << configFile;
+#ifdef DEBUG
+    std::cout << "setting OCIO=" << configFile.toStdString() << std::endl;
+#endif
     qputenv( NATRON_OCIO_ENV_VAR_NAME, configFile.toUtf8() );
 
     std::string stdConfigFile = configFile.toStdString();
@@ -2813,8 +2816,6 @@ Settings::getAltTextColor(double* r,double* g,double* b) const
     *b = _altTextColor->getValue(2);
 }
 
-
-
 void
 Settings::getTimelinePlayheadColor(double* r,double* g,double* b) const
 {
@@ -2949,4 +2950,17 @@ bool
 Settings::isNaNHandlingEnabled() const
 {
     return _convertNaNValues->getValue();
+}
+
+
+void
+Settings::setOnProjectCreatedCB(const std::string& func)
+{
+    _onProjectCreated->setValue(func, 0);
+}
+
+void
+Settings::setOnProjectLoadedCB(const std::string& func)
+{
+    _defaultOnProjectLoaded->setValue(func, 0);
 }

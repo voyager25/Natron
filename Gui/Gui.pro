@@ -124,6 +124,7 @@ SOURCES += \
     ticks.cpp \
     ToolButton.cpp \
     TimeLineGui.cpp \
+    TrackerPanel.cpp \
     TrackerGui.cpp \
     Utils.cpp \
     ViewerGL.cpp \
@@ -213,6 +214,7 @@ HEADERS += \
     ticks.h \
     TimeLineGui.h \
     ToolButton.h \
+    TrackerPanel.h \
     TrackerGui.h \
     Utils.h \
     ViewerGL.h \

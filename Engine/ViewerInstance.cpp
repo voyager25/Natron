@@ -13,7 +13,9 @@
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
 
-#include "ViewerInstancePrivate.h"
+#include "ViewerInstance.h"
+
+#include <algorithm> // min, max
 
 #include <boost/shared_ptr.hpp>
 #include <boost/bind.hpp>
@@ -47,6 +49,8 @@ CLANG_DIAG_ON(deprecated)
 #include "Engine/RotoContext.h"
 #include "Engine/RotoPaint.h"
 #include "Engine/Timer.h"
+
+#include "ViewerInstancePrivate.h"
 
 #ifndef M_LN2
 #define M_LN2       0.693147180559945309417232121458176568  /* loge(2)        */
@@ -258,11 +262,11 @@ ViewerInstance::getMaxInputCount() const
 }
 
 void
-ViewerInstance::getFrameRange(SequenceTime *first,
-                              SequenceTime *last)
+ViewerInstance::getFrameRange(double *first,
+                              double *last)
 {
 
-    SequenceTime inpFirst = 1,inpLast = 1;
+    double inpFirst = 1,inpLast = 1;
     int activeInputs[2];
     getActiveInputs(activeInputs[0], activeInputs[1]);
     EffectInstance* n1 = getInput(activeInputs[0]);
@@ -929,7 +933,7 @@ ViewerInstance::getRenderViewerArgsAndCheckCache(SequenceTime time,
             lastRenderedHashValid = _imp->lastRenderedHashValid;
         }
         if ( lastRenderedHashValid && (lastRenderHash != viewerHash) ) {
-            appPTR->removeAllTexturesFromCacheWithMatchingKey(lastRenderHash);
+            appPTR->removeAllTexturesFromCacheWithMatchingKey(true, lastRenderHash);
             {
                 QMutexLocker l(&_imp->lastRenderedHashMutex);
                 _imp->lastRenderedHashValid = false;
@@ -1339,23 +1343,7 @@ ViewerInstance::renderViewer_internal(int view,
         }
         
         abortCheck(inArgs.activeInputToRender);
-        
-        if (!isSequentialRender) {
-            
-            bool couldRemove = true;
-            if (rectIndex == splitRoi.size() - 1) {
-                couldRemove = _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
-            }
-            if (!couldRemove) {
-                if (inArgs.params->cachedFrame) {
-                    inArgs.params->cachedFrame->setAborted(true);
-                    appPTR->removeFromViewerCache(inArgs.params->cachedFrame);
-                    inArgs.params->cachedFrame.reset();
-                }
-                return eStatusReplyDefault;
-            }
-        }
-        
+ 
         
         ViewerColorSpaceEnum srcColorSpace = getApp()->getDefaultColorSpaceForBitDepth( inArgs.params->image->getBitDepth() );
         
@@ -1367,14 +1355,14 @@ ViewerInstance::renderViewer_internal(int view,
         
         //If we are painting, only render the portion needed
         if (!lastPaintBboxPixel.isNull()) {
-            lastPaintBboxPixel.intersect(roi, &roi);
+            lastPaintBboxPixel.intersect(viewerRenderRoI, &viewerRenderRoI);
         }
         
         
         if (singleThreaded) {
             if (autoContrast) {
                 double vmin, vmax;
-                std::pair<double,double> vMinMax = findAutoContrastVminVmax(inArgs.params->image, channels, roi);
+                std::pair<double,double> vMinMax = findAutoContrastVminVmax(inArgs.params->image, channels, viewerRenderRoI);
                 vmin = vMinMax.first;
                 vmax = vMinMax.second;
                 
@@ -1412,7 +1400,7 @@ ViewerInstance::renderViewer_internal(int view,
                 runInCurrentThread = true;
             }
             if (!runInCurrentThread) {
-                splitRects = roi.splitIntoSmallerRects(appPTR->getHardwareIdealThreadCount());
+                splitRects = viewerRenderRoI.splitIntoSmallerRects(appPTR->getHardwareIdealThreadCount());
             }
             
             ///if autoContrast is enabled, find out the vmin/vmax before rendering and mapping against new values
@@ -1440,7 +1428,7 @@ ViewerInstance::renderViewer_internal(int view,
                         }
                     }
                 } else { //!runInCurrentThread
-                    std::pair<double,double> vMinMax = findAutoContrastVminVmax(inArgs.params->image, channels, roi);
+                    std::pair<double,double> vMinMax = findAutoContrastVminVmax(inArgs.params->image, channels, viewerRenderRoI);
                     vmin = vMinMax.first;
                     vmax = vMinMax.second;
                 }
@@ -1488,6 +1476,20 @@ ViewerInstance::renderViewer_internal(int view,
         } // if (singleThreaded)
         
     } // for (std::vector<RectI>::iterator rect = splitRoi.begin(); rect != splitRoi.end(), ++rect) {
+    
+    if (!isSequentialRender) {
+        
+        bool couldRemove = _imp->removeOngoingRender(inArgs.params->textureIndex, inArgs.params->renderAge);
+
+        if (!couldRemove) {
+            if (inArgs.params->cachedFrame) {
+                inArgs.params->cachedFrame->setAborted(true);
+                appPTR->removeFromViewerCache(inArgs.params->cachedFrame);
+                inArgs.params->cachedFrame.reset();
+            }
+            return eStatusReplyDefault;
+        }
+    }
     
     if (inArgs.params->cachedFrame) {
         inArgs.params->cachedFrame->setOriginalImage(inArgs.params->image);
@@ -1692,6 +1694,7 @@ scaleToTexture8bits_generic(const RectI& roi,
     const bool luminance = (args.channels == Natron::eDisplayChannelsY);
     
     Natron::Image::ReadAccess acc = Natron::Image::ReadAccess(args.inputImage.get());
+    const RectI srcImgBounds = args.inputImage->getBounds();
     
     ///offset the output buffer at the starting point
     U32* dst_pixels = output + (roi.y1 - args.texRect.y1) * args.texRect.w + (roi.x1 - args.texRect.x1);
@@ -1705,7 +1708,6 @@ scaleToTexture8bits_generic(const RectI& roi,
     for (int y = roi.y1; y < roi.y2;
          ++y,
          dst_pixels += args.texRect.w) {
-        
         
         // coverity[dont_call]
         int start = (int)(rand() % (roi.x2 - roi.x1));
@@ -2582,15 +2584,11 @@ ViewerInstance::onInputChanged(int inputNb)
                 _imp->activeInputs[0] = inputNb;
             } else {
                 Natron::ViewerCompositingOperatorEnum op = _imp->uiContext->getCompositingOperator();
-                if (autoWipeEnabled && op == Natron::eViewerCompositingOperatorNone) {
+                if (op == Natron::eViewerCompositingOperatorNone) {
                     _imp->uiContext->setCompositingOperator(Natron::eViewerCompositingOperatorWipe);
                     op = Natron::eViewerCompositingOperatorWipe;
-                }
-                if (op != Natron::eViewerCompositingOperatorNone) {
-                    _imp->activeInputs[1] = inputNb;
                 } else {
-#pragma message WARN("BUG? Execution cannot reach this statement")
-                    _imp->activeInputs[1] = -1;
+                    _imp->activeInputs[1] = inputNb;
                 }
             }
         }
@@ -2687,7 +2685,7 @@ ViewerInstance::getMipMapLevelFromZoomFactor() const
     return std::log(closestPowerOf2) / M_LN2;
 }
 
-SequenceTime
+double
 ViewerInstance::getCurrentTime() const
 {
     return getFrameRenderArgsCurrentTime();

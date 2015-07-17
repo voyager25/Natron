@@ -105,7 +105,7 @@ App::timelineGetTime() const
 int
 App::timelineGetLeftBound() const
 {
-    int left,right;
+    double left,right;
     _instance->getFrameRange(&left, &right);
     return left;
 }
@@ -113,7 +113,7 @@ App::timelineGetLeftBound() const
 int
 App::timelineGetRightBound() const
 {
-    int left,right;
+    double left,right;
     _instance->getFrameRange(&left, &right);
     return right;
 }
@@ -236,4 +236,12 @@ void
 App::writeToScriptEditor(const std::string& message)
 {
     _instance->appendToScriptEditor(message);
+}
+
+void
+App::addFormat(const std::string& formatSpec)
+{
+    if (!_instance->getProject()->addFormat(formatSpec)) {
+        _instance->appendToScriptEditor(formatSpec);
+    }
 }

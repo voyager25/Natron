@@ -21,6 +21,8 @@
 #include <vector>
 #include <utility>
 #include <cmath>
+#include <algorithm> // min, max
+#include <limits>
 
 #include "Global/GlobalDefines.h"
 
@@ -153,6 +155,7 @@ public:
     {
         *this = b;
     }
+    
 
     /**
      * @brief Upscales the bounds assuming this rectangle is the Nth level of mipmap
@@ -577,6 +580,15 @@ public:
         x2 = r;
         y2 = t;
         /*assert((x2>= x1) && (y2>=y1));*/
+    }
+    
+    //Useful for bbox computations
+    void setupInfinity()
+    {
+        x1 = std::numeric_limits<double>::infinity();
+        x2 = -std::numeric_limits<double>::infinity();
+        y1 = std::numeric_limits<double>::infinity();
+        y2 = -std::numeric_limits<double>::infinity();
     }
 
     void set(const RectD & b)
