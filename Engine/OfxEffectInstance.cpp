@@ -613,7 +613,7 @@ OfxEffectInstance::isWriter() const
 }
 
 bool
-OfxEffectInstance::isTrackerNode() const
+OfxEffectInstance::isTrackerNodePlugin() const
 {
     assert(_context != eContextNone);
     return _context == eContextTracker;

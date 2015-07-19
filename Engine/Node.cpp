@@ -54,6 +54,8 @@
 #include "Engine/NodeGroup.h"
 #include "Engine/BackDrop.h"
 #include "Engine/RotoPaint.h"
+#include "Engine/TrackerContext.h"
+
 ///The flickering of edges/nodes in the nodegraph will be refreshed
 ///at most every...
 #define NATRON_RENDER_GRAPHS_HINTS_REFRESH_RATE_SECONDS 1
@@ -406,6 +408,7 @@ struct Node::Implementation
     std::map<int,MaskSelector> maskSelectors;
     
     boost::shared_ptr<RotoContext> rotoContext; //< valid when the node has a rotoscoping context (i.e: paint context)
+    boost::shared_ptr<TrackerContext> trackContext;
     
     mutable QMutex imagesBeingRenderedMutex;
     QWaitCondition imageBeingRenderedCond;
@@ -523,6 +526,18 @@ Node::createRotoContextConditionnally()
     }
 }
 
+void
+Node::createTrackerContextConditionnally()
+{
+    assert(!_imp->trackContext);
+    assert(_imp->liveInstance);
+    ///Initialize the tracker context if any
+    if (_imp->liveInstance->isBuiltinTrackerNode()) {
+        _imp->trackContext.reset(new TrackerContext(shared_from_this()));
+    }
+
+}
+
 const Natron::Plugin*
 Node::getPlugin() const
 {
@@ -590,6 +605,7 @@ Node::load(const std::string & parentMultiInstanceName,
         _imp->liveInstance->initializeData();
         
         createRotoContextConditionnally();
+        createTrackerContextConditionnally();
         initializeInputs();
         initializeKnobs(renderScaleSupportPreference);
         
@@ -628,7 +644,7 @@ Node::load(const std::string & parentMultiInstanceName,
         throw std::runtime_error("Plug-in does not support 8bits, 16bits or 32bits floating point image processing.");
     }
     
-    if (isTrackerNode()) {
+    if (isTrackerNodePlugin()) {
         _imp->isMultiInstance = true;
     }
     
@@ -2309,7 +2325,11 @@ Node::initializeKnobs(int renderScaleSupportPref)
                 }
             }
             
-            bool isReaderOrWriterOrTrackerOrGroup = _imp->liveInstance->isReader() || _imp->liveInstance->isWriter() || _imp->liveInstance->isTrackerNode() || dynamic_cast<NodeGroup*>(_imp->liveInstance.get());
+            bool isReaderOrWriterOrTrackerOrGroup = _imp->liveInstance->isReader() ||
+            _imp->liveInstance->isWriter() ||
+            _imp->liveInstance->isBuiltinTrackerNode() ||
+            _imp->liveInstance->isTrackerNodePlugin() ||
+            dynamic_cast<NodeGroup*>(_imp->liveInstance.get());
             
             
             bool useChannels = !_imp->liveInstance->isMultiPlanar() && !isReaderOrWriterOrTrackerOrGroup;
@@ -3024,7 +3044,7 @@ Node::hasOutputConnected() const
     if ( QThread::currentThread() == qApp->thread() ) {
         if (_imp->outputs.size() == 1) {
 
-            return !(_imp->outputs.front()->isTrackerNode() && _imp->outputs.front()->isMultiInstance());
+            return !(_imp->outputs.front()->isMultiInstance());
 
         } else if (_imp->outputs.size() > 1) {
 
@@ -3035,7 +3055,7 @@ Node::hasOutputConnected() const
         QMutexLocker l(&_imp->outputsMutex);
         if (_imp->outputs.size() == 1) {
 
-            return !(_imp->outputs.front()->isTrackerNode() && _imp->outputs.front()->isMultiInstance());
+            return !(_imp->outputs.front()->isMultiInstance());
 
         } else if (_imp->outputs.size() > 1) {
 
@@ -4154,6 +4174,12 @@ boost::shared_ptr<RotoContext>
 Node::getRotoContext() const
 {
     return _imp->rotoContext;
+}
+
+boost::shared_ptr<TrackerContext>
+Node::getTrackerContext() const
+{
+    return _imp->trackContext;
 }
 
 U64
@@ -5687,9 +5713,9 @@ Node::hasSequentialOnlyNodeUpstream(std::string & nodeName) const
 }
 
 bool
-Node::isTrackerNode() const
+Node::isTrackerNodePlugin() const
 {
-    return _imp->liveInstance->isTrackerNode();
+    return _imp->liveInstance->isTrackerNodePlugin();
 }
 
 bool

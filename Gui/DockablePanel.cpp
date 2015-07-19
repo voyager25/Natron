@@ -93,6 +93,7 @@ GCC_DIAG_ON(unused-parameter)
 #include "Gui/SpinBox.h"
 #include "Gui/Menu.h"
 #include "Gui/Utils.h"
+#include "Gui/TrackerPanel.h"
 
 #define NATRON_FORM_LAYOUT_LINES_SPACING 0
 #define NATRON_SETTINGS_VERTICAL_SPACING_PIXELS 3
@@ -290,6 +291,8 @@ struct DockablePanelPrivate
     
     Natron::Label* _iconLabel;
     
+    TrackerPanel* _trackerPanel;
+    
     DockablePanelPrivate(DockablePanel* publicI,
                          Gui* gui,
                          KnobHolder* holder,
@@ -344,6 +347,7 @@ struct DockablePanelPrivate
     ,_pluginVersionMinor(0)
     ,_pagesEnabled(true)
     ,_iconLabel(0)
+    ,_trackerPanel(0)
     {
         if (!_undoStack) {
             _undoStack.reset(new QUndoStack());
@@ -1031,30 +1035,24 @@ DockablePanel::initializeKnobsInternal()
     std::vector< boost::shared_ptr<KnobI> > knobs = _imp->_holder->getKnobs();
     _imp->initializeKnobVector(knobs, NULL);
 
-    ///add all knobs left  to the default page
-
     RotoPanel* roto = initializeRotoPanel();
-    
-    
     if (roto) {
-//        boost::shared_ptr<Page_Knob> page = _imp->ensureDefaultPageKnobCreated();
-//        assert(page);
-//        PageMap::iterator foundPage = _imp->_pages.find(page->getDescription().c_str());
-//        assert(foundPage != _imp->_pages.end());
-//        
-//        QGridLayout* layout = 0;
-//        if (_imp->_useScrollAreasForTabs) {
-//            layout = dynamic_cast<QGridLayout*>( dynamic_cast<QScrollArea*>(foundPage->second.tab)->widget()->layout() );
-//        } else {
-//            layout = dynamic_cast<QGridLayout*>( foundPage->second.tab->layout() );
-//        }
-//        assert(layout);
-//        layout->addWidget(roto, layout->rowCount(), 0 , 1, 2);
         _imp->_mainLayout->addWidget(roto);
     }
-
+    assert(!_imp->_trackerPanel);
+    _imp->_trackerPanel = initializeTrackerPanel();
+    if (_imp->_trackerPanel) {
+        _imp->_mainLayout->addWidget(_imp->_trackerPanel);
+    }
+    
     initializeExtraGui(_imp->_mainLayout);
     
+}
+
+TrackerPanel*
+DockablePanel::getTrackerPanel() const
+{
+    return _imp->_trackerPanel;
 }
 
 void
@@ -2576,6 +2574,16 @@ NodeSettingsPanel::initializeRotoPanel()
 {
     if (getNode()->getNode()->isRotoPaintingNode()) {
         return new RotoPanel(_nodeGUI.lock(),this);
+    } else {
+        return NULL;
+    }
+}
+
+TrackerPanel*
+NodeSettingsPanel::initializeTrackerPanel()
+{
+    if (getNode()->getNode()->getLiveInstance()->isBuiltinTrackerNode()) {
+        return new TrackerPanel(_nodeGUI.lock(),this);
     } else {
         return NULL;
     }

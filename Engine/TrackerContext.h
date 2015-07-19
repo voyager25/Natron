@@ -36,8 +36,10 @@ class KnobI;
 class TimeLine;
 class TrackerContext;
 struct TrackMarkerPrivate;
-class TrackMarker
+class TrackMarker : QObject, public boost::enable_shared_from_this<TrackMarker>
 {
+    Q_OBJECT
+    
 public:
     
     TrackMarker(const boost::shared_ptr<TrackerContext>& context);
@@ -76,9 +78,118 @@ public:
     
     void setEnabled(bool enabled);
     
+    void resetCenter();
+    
+    void resetTrack();
+    
+    void setUserKeyframe(int time);
+    
+    void removeUserKeyframe(int time);
+    
+    void removeAllKeyframes();
+    
+public Q_SLOTS:
+    
+    void onCenterKeyframeSet(SequenceTime time,int dimension,int reason,bool added);
+    void onCenterKeyframeRemoved(SequenceTime time,int dimension,int reason);
+    void onCenterKeyframeMoved(int dimension,int oldTime,int newTime);
+    void onCenterKeyframesSet(const std::list<SequenceTime>& keys, int dimension, int reason);
+    void onCenterAnimationRemoved(int dimension);
+    
 private:
     
     boost::scoped_ptr<TrackMarkerPrivate> _imp;
+    
+};
+
+
+class TrackArgsV1
+{
+    int _start,_end;
+    bool _forward;
+    boost::shared_ptr<TimeLine> _timeline;
+    std::vector<Button_Knob*> _buttonInstances;
+    bool _isUpdateViewerEnabled;
+    
+    
+public:
+    
+    TrackArgsV1()
+    : _start(0)
+    , _end(0)
+    , _forward(false)
+    , _timeline()
+    , _buttonInstances()
+    , _isUpdateViewerEnabled(false)
+    {
+        
+    }
+    
+    TrackArgsV1(const TrackArgsV1& other)
+    {
+        *this = other;
+    }
+    
+    TrackArgsV1(int start,
+                int end,
+                bool forward,
+                const boost::shared_ptr<TimeLine>& timeline,
+                const std::vector<Button_Knob*>& instances,
+                bool updateViewer)
+    : _start(start)
+    , _end(end)
+    , _forward(forward)
+    , _timeline(timeline)
+    , _buttonInstances(instances)
+    , _isUpdateViewerEnabled(updateViewer)
+    {
+        
+    }
+    
+    void operator=(const TrackArgsV1& other)
+    {
+        _start = other._start;
+        _end = other._end;
+        _forward = other._forward;
+        _timeline = other._timeline;
+        _buttonInstances = other._buttonInstances;
+        _isUpdateViewerEnabled = other._isUpdateViewerEnabled;
+    }
+    
+    bool isUpdateViewerEnabled() const
+    {
+        return _isUpdateViewerEnabled;
+    }
+    
+    int getStart() const
+    {
+        return _start;
+    }
+    
+    int getEnd() const
+    {
+        return _end;
+    }
+    
+    bool getForward() const
+    {
+        return _forward;
+    }
+    
+    boost::shared_ptr<TimeLine> getTimeLine() const
+    {
+        return _timeline;
+    }
+    
+    const std::vector<Button_Knob*>& getInstances() const
+    {
+        return _buttonInstances;
+    }
+    
+    int getNumTracks() const
+    {
+        return (int)_buttonInstances.size();
+    }
     
 };
 
@@ -93,7 +204,7 @@ public:
     {
         eTrackSelectionSettingsPanel,
         eTrackSelectionViewer,
-        eTrackSelectionInternal
+        eTrackSelectionInternal,
     };
     
     TrackerContext(const boost::shared_ptr<Natron::Node> &node);
@@ -104,7 +215,16 @@ public:
     
     boost::shared_ptr<TrackMarker> createMarker();
     
-    void removeMarker(const TrackMarker* marker);
+    int getMarkerIndex(const boost::shared_ptr<TrackMarker>& marker) const;
+    
+    boost::shared_ptr<TrackMarker> getPrevMarker(const boost::shared_ptr<TrackMarker>& marker, bool loop) const;
+    boost::shared_ptr<TrackMarker> getNextMarker(const boost::shared_ptr<TrackMarker>& marker, bool loop) const;
+    
+    void appendMarker(const boost::shared_ptr<TrackMarker>& marker);
+    
+    void insertMarker(const boost::shared_ptr<TrackMarker>& marker, int index);
+    
+    void removeMarker(const boost::shared_ptr<TrackMarker>& marker);
     
     boost::shared_ptr<TrackMarker> getMarkerByName(const std::string & name) const;
     
@@ -131,7 +251,22 @@ public:
     
     void clearSelection(TrackSelectionReason reason);
     
+    void selectAll(TrackSelectionReason reason);
+    
     void getSelectedMarkers(std::list<boost::shared_ptr<TrackMarker> >* markers) const;
+    
+    static void getMotionModelsAndHelps(std::vector<std::string>* models,std::vector<std::string>* tooltips);
+    
+    int getTransformReferenceFrame() const;
+    
+    void s_keyframeSetOnTrack(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeSetOnTrack(marker,key); }
+    void s_keyframeRemovedOnTrack(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeRemovedOnTrack(marker,key); }
+    void s_allKeyframesRemovedOnTrack(boost::shared_ptr<TrackMarker> marker) { Q_EMIT allKeyframesRemovedOnTrack(marker); }
+    
+    void s_keyframeSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeSetOnTrackCenter(marker,key); }
+    void s_keyframeRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeRemovedOnTrackCenter(marker,key); }
+    void s_allKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker) { Q_EMIT allKeyframesRemovedOnTrackCenter(marker); }
+    void s_multipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, const std::list<int>& keys) { Q_EMIT multipleKeyframesSetOnTrackCenter(marker,keys); }
     
 public Q_SLOTS:
     
@@ -139,6 +274,16 @@ public Q_SLOTS:
     
     
 Q_SIGNALS:
+    
+    void keyframeSetOnTrack(boost::shared_ptr<TrackMarker> marker, int);
+    void keyframeRemovedOnTrack(boost::shared_ptr<TrackMarker> marker, int);
+    void allKeyframesRemovedOnTrack(boost::shared_ptr<TrackMarker> marker);
+    
+    void keyframeSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, int);
+    void keyframeRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker, int);
+    void allKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker);
+    void multipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, std::list<int>);
+    
     
     //reason is of type TrackSelectionReason
     void selectionChanged(int reason);

@@ -35,6 +35,7 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/DockablePanelI.h"
 
+class TrackerPanel;
 class KnobI;
 class KnobGui;
 class KnobHolder;
@@ -210,6 +211,8 @@ public:
     {
         return boost::shared_ptr<MultiInstancePanel>();
     }
+    
+    TrackerPanel* getTrackerPanel() const;
 
     KnobHolder* getHolder() const;
 
@@ -328,6 +331,11 @@ protected:
     {
         return NULL;
     }
+    
+    virtual TrackerPanel* initializeTrackerPanel()
+    {
+        return NULL;
+    }
 
     virtual void initializeExtraGui(QVBoxLayout* /*layout*/)
     {
@@ -395,7 +403,8 @@ public:
 private:
 
     
-    virtual RotoPanel* initializeRotoPanel();
+    virtual RotoPanel* initializeRotoPanel() OVERRIDE;
+    virtual TrackerPanel* initializeTrackerPanel() OVERRIDE;
     virtual void initializeExtraGui(QVBoxLayout* layout) OVERRIDE FINAL;
     virtual void centerOnItem() OVERRIDE FINAL;
 

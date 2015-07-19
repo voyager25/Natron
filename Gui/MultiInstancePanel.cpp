@@ -391,8 +391,6 @@ TableItemDelegate::paint(QPainter * painter,
     
     painter->drawText(textRect,Qt::TextSingleLine,data,&r);
 
-
-    //   widget->render(painter);
 }
 
 boost::shared_ptr<Natron::Node> MultiInstancePanel::getMainInstance() const
@@ -1669,95 +1667,7 @@ namespace  {
 };
 }
 
-class TrackArgsV1
-{
-    int _start,_end;
-    bool _forward;
-    boost::shared_ptr<TimeLine> _timeline;
-    std::vector<Button_Knob*> _buttonInstances;
-    bool _isUpdateViewerEnabled;
 
-    
-public:
-    
-    TrackArgsV1()
-    : _start(0)
-    , _end(0)
-    , _forward(false)
-    , _timeline()
-    , _buttonInstances()
-    , _isUpdateViewerEnabled(false)
-    {
-        
-    }
-    
-    TrackArgsV1(const TrackArgsV1& other)
-    {
-        *this = other;
-    }
-    
-    TrackArgsV1(int start,
-                int end,
-                bool forward,
-                const boost::shared_ptr<TimeLine>& timeline,
-                const std::vector<Button_Knob*>& instances,
-                bool updateViewer)
-    : _start(start)
-    , _end(end)
-    , _forward(forward)
-    , _timeline(timeline)
-    , _buttonInstances(instances)
-    , _isUpdateViewerEnabled(updateViewer)
-    {
-        
-    }
-    
-    void operator=(const TrackArgsV1& other)
-    {
-        _start = other._start;
-        _end = other._end;
-        _forward = other._forward;
-        _timeline = other._timeline;
-        _buttonInstances = other._buttonInstances;
-        _isUpdateViewerEnabled = other._isUpdateViewerEnabled;
-    }
-    
-    bool isUpdateViewerEnabled() const
-    {
-        return _isUpdateViewerEnabled;
-    }
-    
-    int getStart() const
-    {
-        return _start;
-    }
-    
-    int getEnd() const
-    {
-        return _end;
-    }
-    
-    bool getForward() const
-    {
-        return _forward;
-    }
-    
-    boost::shared_ptr<TimeLine> getTimeLine() const
-    {
-        return _timeline;
-    }
-    
-    const std::vector<Button_Knob*>& getInstances() const
-    {
-        return _buttonInstances;
-    }
-    
-    int getNumTracks() const
-    {
-        return (int)_buttonInstances.size();
-    }
-    
-};
 
 static bool
 handleTrackNextAndPrevious(int trackIndex, const TrackArgsV1& args, int time)

@@ -25,6 +25,7 @@ CLANG_DIAG_ON(uninitialized)
 class QWidget;
 class ViewerTab;
 class TrackerPanelV1;
+class TrackerPanel;
 class QKeyEvent;
 class QPointF;
 class QMouseEvent;
@@ -39,6 +40,9 @@ class TrackerGui
 public:
 
     TrackerGui(const boost::shared_ptr<TrackerPanelV1> & panel,
+               ViewerTab* parent);
+    
+    TrackerGui(TrackerPanel* panel,
                ViewerTab* parent);
 
     virtual ~TrackerGui();
@@ -92,7 +96,22 @@ public Q_SLOTS:
     void onSelectionCleared();
 
     void onTrackingEnded();
+    
+    void onCreateKeyOnMoveButtonClicked(bool clicked);
+    
+    void onShowCorrelationButtonClicked(bool clicked);
+    
+    void onCenterViewerButtonClicked(bool clicked);
+    
+    void onSetKeyframeButtonClicked();
+    void onRemoveKeyframeButtonClicked();
+    void onRemoveAnimationButtonClicked();
+    void onResetOffsetButtonClicked();
+    void onResetTrackButtonClicked();
+    
 private:
+    
+    void createGui();
 
     boost::scoped_ptr<TrackerGuiPrivate> _imp;
 };

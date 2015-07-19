@@ -415,7 +415,7 @@ GuiAppInstance::createNodeGui(const boost::shared_ptr<Natron::Node> &node,
         _imp->_gui->createNewRotoInterface( nodegui.get() );
     }
 
-    if ( node->isPointTrackerNode() && !parentMultiInstance ) {
+    if ((node->isPointTrackerNode() && !parentMultiInstance) || node->getLiveInstance()->isBuiltinTrackerNode()) {
         _imp->_gui->createNewTrackerInterface( nodegui.get() );
     }
 

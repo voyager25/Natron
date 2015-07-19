@@ -143,6 +143,7 @@ SOURCES += \
     TimeLine.cpp \
     Timer.cpp \
     TrackerContext.cpp \
+    TrackerNode.cpp \
     Transform.cpp \
     ViewerInstance.cpp \
     ../libs/SequenceParsing/SequenceParsing.cpp \
@@ -282,6 +283,8 @@ HEADERS += \
     TimeLine.h \
     Timer.h \
     TrackerContext.h \
+    TrackerNode.h \
+    TrackerSerialization.h \
     Transform.h \
     Variant.h \
     ViewerInstance.h \

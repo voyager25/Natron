@@ -425,7 +425,7 @@ NodeGui::ensurePanelCreated()
         if (getNode()->isRotoPaintingNode()) {
             _graph->getGui()->setRotoInterface(this);
         }
-        if (getNode()->isTrackerNode()) {
+        if (getNode()->isTrackerNodePlugin()) {
             _graph->getGui()->createNewTrackerInterface(this);
         }
     }
@@ -491,7 +491,7 @@ NodeGui::createPanel(QVBoxLayout* container,
     if (!isViewer) {
         assert(container);
         boost::shared_ptr<MultiInstancePanel> multiPanel;
-        if ( node->isTrackerNode() && node->isMultiInstance() && node->getParentMultiInstanceName().empty() ) {
+        if ( node->isTrackerNodePlugin() && node->isMultiInstance() && node->getParentMultiInstanceName().empty() ) {
             multiPanel.reset( new TrackerPanelV1(thisAsShared) );
 
             ///This is valid only if the node is a multi-instance and this is the main instance.
@@ -2908,7 +2908,11 @@ boost::shared_ptr<MultiInstancePanel> NodeGui::getMultiInstancePanel() const
     }
 }
 
-
+TrackerPanel*
+NodeGui::getTrackerPanel() const
+{
+    return _settingsPanel ? _settingsPanel->getTrackerPanel() : 0;
+}
 
 void
 NodeGui::setParentMultiInstance(const boost::shared_ptr<NodeGui> & node)

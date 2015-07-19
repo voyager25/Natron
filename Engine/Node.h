@@ -61,6 +61,7 @@ class Double_Knob;
 class NodeGuiI;
 class RotoContext;
 class NodeCollection;
+class TrackerContext;
 class RotoDrawableItem;
 class RectD;
 class RectI;
@@ -134,6 +135,8 @@ public:
     ///If the node can have a roto context, create it
     void createRotoContextConditionnally();
 
+    void createTrackerContextConditionnally();
+    
     ///called by Project::removeNode, never call this
     void removeReferences(bool ensureThreadsFinished);
 
@@ -248,7 +251,7 @@ public:
     /**
      * @brief Returns true if this node is a tracker
      **/
-    bool isTrackerNode() const;
+    bool isTrackerNodePlugin() const;
     
     bool isPointTrackerNode() const;
 
@@ -266,6 +269,11 @@ public:
      * @brief Returns a pointer to the rotoscoping context if the node is in the paint context, otherwise NULL.
      **/
     boost::shared_ptr<RotoContext> getRotoContext() const;
+    
+    /**
+     * @brief Returns a pointer to the tracker context if the node is is in the tracking context, otherwise NULL
+     **/
+    boost::shared_ptr<TrackerContext> getTrackerContext() const;
 
     U64 getRotoAge() const;
     

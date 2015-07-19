@@ -55,6 +55,7 @@ class Gui;
 class QUndoStack;
 class LinkArrow;
 class MultiInstancePanel;
+class TrackerPanel;
 class QMenu;
 class NodeGroup;
 class QUndoStack;
@@ -317,6 +318,7 @@ public:
         return _parentMultiInstance.lock();
     }
     
+    TrackerPanel* getTrackerPanel() const;
     
     void setKnobLinksVisible(bool visible);
     

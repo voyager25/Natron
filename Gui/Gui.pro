@@ -126,6 +126,7 @@ SOURCES += \
     TimeLineGui.cpp \
     TrackerPanel.cpp \
     TrackerGui.cpp \
+    TrackerUndoCommand.cpp \
     Utils.cpp \
     ViewerGL.cpp \
     ViewerTab.cpp \
@@ -136,7 +137,6 @@ SOURCES += \
     NatronGui/pypanel_wrapper.cpp \
     NatronGui/pytabwidget_wrapper.cpp \
     NatronGui/pyviewer_wrapper.cpp
-
 
 HEADERS += \
     AboutWindow.h \
@@ -216,6 +216,7 @@ HEADERS += \
     ToolButton.h \
     TrackerPanel.h \
     TrackerGui.h \
+    TrackerUndoCommand.h \
     Utils.h \
     ViewerGL.h \
     ViewerTab.h \
