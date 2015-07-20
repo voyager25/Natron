@@ -251,5 +251,10 @@
         <file>Resources/Images/interp_curve_z.png</file>
         <file>Resources/Images/interp_curve_z_selected.png</file>
         <file>Resources/Images/rotoToolPencil.png</file>
+        <file>Resources/Images/addUserKey.png</file>
+        <file>Resources/Images/hideTrackError.png</file>
+        <file>Resources/Images/removeUserKey.png</file>
+        <file>Resources/Images/resetTrackOffset.png</file>
+        <file>Resources/Images/showTrackError.png</file>
     </qresource>
 </RCC>

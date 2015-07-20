@@ -580,6 +580,14 @@ TrackMarker::resetCenter()
     }
 }
 
+void
+TrackMarker::resetOffset()
+{
+    for (int i = 0; i < _imp->offset->getDimension(); ++i) {
+        _imp->offset->resetToDefaultValue(i);
+    }
+}
+
 
 void
 TrackMarker::resetTrack()
@@ -1219,8 +1227,8 @@ struct TrackerContextPrivate
         searchWindowGroup->setAsTab();
         searchWindowGroup->setDefaultValue(false);
         
-        settingsPage->addKnob(searchWindowGroup);
         settingsPage->addKnob(patternGroup);
+        settingsPage->addKnob(searchWindowGroup);
         
         boost::shared_ptr<Double_Knob> sWndBtmLeft = Natron::createKnob<Double_Knob>(effect, kTrackerParamSearchWndBtmLeftLabel, 2, false);
         sWndBtmLeft->setName(kTrackerParamSearchWndBtmLeft);
@@ -2212,6 +2220,13 @@ TrackerContext::selectAll(TrackSelectionReason reason)
     }
     endEditSelection(reason);
     
+}
+
+void
+TrackerContext::getAllMarkers(std::vector<boost::shared_ptr<TrackMarker> >* markers) const
+{
+    QMutexLocker k(&_imp->trackerContextMutex);
+    *markers = _imp->markers;
 }
 
 void

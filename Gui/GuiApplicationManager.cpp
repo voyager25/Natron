@@ -593,6 +593,21 @@ GuiApplicationManager::getIcon(Natron::PixmapEnum e,
             case NATRON_PIXMAP_ADD_TRACK:
                 path = NATRON_IMAGES_PATH "addTrack.png";
                 break;
+            case NATRON_PIXMAP_ADD_USER_KEY:
+                path = NATRON_IMAGES_PATH "addUserKey.png";
+                break;
+            case NATRON_PIXMAP_REMOVE_USER_KEY:
+                path = NATRON_IMAGES_PATH "removeUserKey.png";
+                break;
+            case NATRON_PIXMAP_RESET_TRACK_OFFSET:
+                path = NATRON_IMAGES_PATH "resetTrackOffset.png";
+                break;
+            case NATRON_PIXMAP_HIDE_TRACK_ERROR:
+                path = NATRON_IMAGES_PATH "hideTrackError.png";
+                break;
+            case NATRON_PIXMAP_SHOW_TRACK_ERROR:
+                path = NATRON_IMAGES_PATH "showTrackError.png";
+                break;
             case NATRON_PIXMAP_SCRIPT_CLEAR_OUTPUT:
                 path = NATRON_IMAGES_PATH "clearOutput.png";
                 break;

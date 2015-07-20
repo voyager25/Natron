@@ -91,6 +91,8 @@ public:
     
     void resetCenter();
     
+    void resetOffset();
+    
     void resetTrack();
     
     void setUserKeyframe(int time);
@@ -268,6 +270,8 @@ public:
     void clearSelection(TrackSelectionReason reason);
     
     void selectAll(TrackSelectionReason reason);
+    
+    void getAllMarkers(std::vector<boost::shared_ptr<TrackMarker> >* markers) const;
     
     void getSelectedMarkers(std::list<boost::shared_ptr<TrackMarker> >* markers) const;
     

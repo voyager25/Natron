@@ -3858,8 +3858,12 @@ void compilePyScript(const std::string& script,PyObject** code)
 std::string
 makeNameScriptFriendly(const std::string& str)
 {
+    
+    //These are parameter names that would not work as attributes
     if (str == "from") {
         return "pFrom";
+    } else if (str == "lambda") {
+        return "pLambda";
     }
     ///Remove any non alpha-numeric characters from the baseName
     std::locale loc;
