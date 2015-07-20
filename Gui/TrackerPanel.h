@@ -103,6 +103,7 @@ public Q_SLOTS:
     void onItemMotionModelChanged(int index);
     void onItemRightClicked(TableItem* item);
     
+    void onContextSelectionAboutToChange(int reason);
     void onContextSelectionChanged(int reason);
     
     void onTrackKeyframeSet(const boost::shared_ptr<TrackMarker>& marker, int key);
@@ -114,8 +115,13 @@ public Q_SLOTS:
     void onAllKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker);
     void onMultipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, const std::list<int>& keys);
     
+    void onSettingsPanelClosed(bool closed);
+    void onTrackAboutToClone(const boost::shared_ptr<TrackMarker>& marker);
+    void onTrackCloned(const boost::shared_ptr<TrackMarker>& marker);
+    
 private:
     
+    void onSelectionAboutToChangeInternal(const std::list<boost::shared_ptr<TrackMarker> >& markers);
     void selectInternal(const std::list<boost::shared_ptr<TrackMarker> >& markers, int reason);
     boost::shared_ptr<TrackMarker> makeTrackInternal();
     

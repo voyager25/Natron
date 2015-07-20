@@ -12,4 +12,137 @@
 #ifndef TRACKERSERIALIZATION_H
 #define TRACKERSERIALIZATION_H
 
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+
+
+#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
+#include <boost/serialization/base_object.hpp>
+#include <boost/serialization/export.hpp>
+#include <boost/serialization/list.hpp>
+#include <boost/serialization/split_member.hpp>
+#include <boost/serialization/version.hpp>
+#endif
+
+#include "Engine/KnobSerialization.h"
+#include "Engine/TrackerContext.h"
+
+
+#define TRACK_SERIALIZATION_VERSION 1
+#define TRACKER_CONTEXT_SERIALIZATION_VERSION 1
+
+class TrackSerialization
+{
+    friend class boost::serialization::access;
+    friend class TrackMarker;
+    
+public:
+  
+    TrackSerialization()
+    : _enabled(true)
+    , _label()
+    , _scriptName()
+    , _knobs()
+    {
+        
+    }
+    
+
+    
+private:
+    
+    template<class Archive>
+    void save(Archive & ar,
+              const unsigned int version) const
+    {
+        (void)version;
+        ar & boost::serialization::make_nvp("Enabled",_enabled);
+        ar & boost::serialization::make_nvp("ScriptName",_scriptName);
+        ar & boost::serialization::make_nvp("Label",_label);
+        int nbItems = (int)_knobs.size();
+        ar & boost::serialization::make_nvp("NbItems",nbItems);
+        for (std::list<boost::shared_ptr<KnobSerialization> >::const_iterator it = _knobs.begin(); it!=_knobs.end(); ++it) {
+            ar & boost::serialization::make_nvp("Item",**it);
+        }
+        
+    }
+    
+    template<class Archive>
+    void load(Archive & ar,
+              const unsigned int version)
+    {
+        (void)version;
+        ar & boost::serialization::make_nvp("Enabled",_enabled);
+        ar & boost::serialization::make_nvp("ScriptName",_scriptName);
+        ar & boost::serialization::make_nvp("Label",_label);
+        int nbItems;
+        ar & boost::serialization::make_nvp("NbItems",nbItems);
+        for (int i = 0;i < nbItems; ++i) {
+            boost::shared_ptr<KnobSerialization> s(new KnobSerialization());
+            ar & boost::serialization::make_nvp("Item",*s);
+            _knobs.push_back(s);
+        }
+    }
+    
+    BOOST_SERIALIZATION_SPLIT_MEMBER()
+    
+    
+    bool _enabled;
+    std::string _label,_scriptName;
+    std::list<boost::shared_ptr<KnobSerialization> > _knobs;
+};
+
+BOOST_CLASS_VERSION(TrackSerialization,TRACK_SERIALIZATION_VERSION)
+
+class TrackerContextSerialization
+{
+    
+    friend class boost::serialization::access;
+    friend class TrackerContext;
+    
+public:
+    
+    TrackerContextSerialization()
+    : _tracks()
+    {
+        
+    }
+
+private:
+    
+    template<class Archive>
+    void save(Archive & ar,
+              const unsigned int version) const
+    {
+        (void)version;
+        int nbItems = _tracks.size();
+        ar & boost::serialization::make_nvp("NbItems",nbItems);
+        for (std::list<TrackSerialization>::const_iterator it = _tracks.begin(); it!=_tracks.end(); ++it) {
+            ar & boost::serialization::make_nvp("Item",*it);
+        }
+    }
+    
+    template<class Archive>
+    void load(Archive & ar,
+              const unsigned int version)
+    {
+        (void)version;
+        int nbItems;
+        ar & boost::serialization::make_nvp("NbItems",nbItems);
+        for (int i = 0;i < nbItems; ++i) {
+            TrackSerialization s;
+            ar & boost::serialization::make_nvp("Item",s);
+        }
+    }
+    
+    BOOST_SERIALIZATION_SPLIT_MEMBER()
+    
+    std::list<TrackSerialization> _tracks;
+};
+
+
+BOOST_CLASS_VERSION(TrackerContextSerialization,TRACKER_CONTEXT_SERIALIZATION_VERSION)
+
+
 #endif // TRACKERSERIALIZATION_H

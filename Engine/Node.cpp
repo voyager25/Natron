@@ -1190,6 +1190,10 @@ Node::loadKnobs(const NodeSerialization & serialization,bool updateKnobGui)
         _imp->rotoContext->load( serialization.getRotoContext() );
     }
     
+    if (serialization.hasTrackerContext() && _imp->trackContext) {
+        _imp->trackContext->load(serialization.getTrackerContext());
+    }
+    
     restoreUserKnobs(serialization);
     
     setKnobsAge( serialization.getKnobsAge() );

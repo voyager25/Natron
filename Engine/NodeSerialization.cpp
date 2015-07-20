@@ -34,6 +34,7 @@ NodeSerialization::NodeSerialization(const boost::shared_ptr<Natron::Node> & n,b
     , _pluginMajorVersion(-1)
     , _pluginMinorVersion(-1)
     , _hasRotoContext(false)
+    , _hasTrackerContext(false)
     , _node()
     , _pythonModuleVersion(0)
 {
@@ -112,7 +113,14 @@ NodeSerialization::NodeSerialization(const boost::shared_ptr<Natron::Node> & n,b
         } else {
             _hasRotoContext = false;
         }
-
+        
+        boost::shared_ptr<TrackerContext> tracker = n->getTrackerContext();
+        if (tracker) {
+            _hasTrackerContext = true;
+            tracker->save(&_trackerContext);
+        } else {
+            _hasTrackerContext = false;
+        }
         
         NodeGroup* isGrp = dynamic_cast<NodeGroup*>(n->getLiveInstance());
         if (isGrp) {

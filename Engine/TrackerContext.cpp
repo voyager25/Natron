@@ -30,6 +30,8 @@
 #include "Engine/NodeGroup.h"
 #include "Engine/KnobTypes.h"
 #include "Engine/Project.h"
+#include "Engine/Curve.h"
+#include "Engine/TrackerSerialization.h"
 
 #define kTrackBaseName "track"
 
@@ -297,6 +299,61 @@ TrackMarker::~TrackMarker()
     
 }
 
+void
+TrackMarker::clone(const TrackMarker& other)
+{
+    boost::shared_ptr<TrackMarker> thisShared = shared_from_this();
+    boost::shared_ptr<TrackerContext> context = getContext();
+    context->s_trackAboutToClone(thisShared);
+    
+    {
+        QMutexLocker k(&_imp->trackMutex);
+        _imp->trackLabel = other._imp->trackLabel;
+        _imp->trackScriptName = other._imp->trackScriptName;
+        _imp->userKeyframes = other._imp->userKeyframes;
+        _imp->enabled = other._imp->enabled;
+        
+        assert(_imp->knobs.size() == other._imp->knobs.size());
+        
+        std::list<boost::shared_ptr<KnobI> >::iterator itOther = other._imp->knobs.begin();
+        for (std::list<boost::shared_ptr<KnobI> >::iterator it =_imp->knobs.begin() ; it!= _imp->knobs.end(); ++it,++itOther) {
+            (*it)->clone(*itOther);
+        }
+    }
+    
+    context->s_trackCloned(thisShared);
+}
+
+void
+TrackMarker::load(const TrackSerialization& serialization)
+{
+    QMutexLocker k(&_imp->trackMutex);
+    _imp->enabled = serialization._enabled;
+    _imp->trackLabel = serialization._label;
+    _imp->trackScriptName = serialization._scriptName;
+    for (std::list<boost::shared_ptr<KnobSerialization> >::const_iterator it = serialization._knobs.begin(); it!=serialization._knobs.end(); ++it) {
+        for (std::list<boost::shared_ptr<KnobI> >::iterator it2 = _imp->knobs.begin(); it2!=_imp->knobs.end(); ++it2) {
+            if ((*it2)->getName() == (*it)->getName()) {
+                (*it2)->clone((*it)->getKnob());
+                break;
+            }
+        }
+    }
+}
+
+void
+TrackMarker::save(TrackSerialization* serialization) const
+{
+    QMutexLocker k(&_imp->trackMutex);
+    serialization->_enabled = _imp->enabled;
+    serialization->_label = _imp->trackLabel;
+    serialization->_scriptName = _imp->trackScriptName;
+    for (std::list<boost::shared_ptr<KnobI> >::const_iterator it = _imp->knobs.begin(); it!=_imp->knobs.end(); ++it) {
+        boost::shared_ptr<KnobSerialization> s(new KnobSerialization(*it));
+        serialization->_knobs.push_back(s);
+    }
+}
+
 boost::shared_ptr<TrackerContext>
 TrackMarker::getContext() const
 {
@@ -437,6 +494,17 @@ TrackMarker::getUserKeyframes(std::set<int>* keyframes) const
 {
     QMutexLocker k(&_imp->trackMutex);
     *keyframes = _imp->userKeyframes;
+}
+
+void
+TrackMarker::getCenterKeyframes(std::set<int>* keyframes) const
+{
+    boost::shared_ptr<Curve> curve = _imp->center->getCurve(0);
+    assert(curve);
+    KeyFrameSet keys = curve->getKeyFrames_mt_safe();
+    for (KeyFrameSet::iterator it = keys.begin(); it != keys.end(); ++it) {
+        keyframes->insert(it->getTime());
+    }
 }
 
 bool
@@ -1144,13 +1212,13 @@ struct TrackerContextPrivate
         
         
         //// Per-track knobs
-        
-        boost::shared_ptr<Group_Knob> searchWindowGroup = Natron::createKnob<Group_Knob>(effect, "Search-Window", 1 , false);
-        searchWindowGroup->setAsTab();
-        searchWindowGroup->setDefaultValue(false);
         boost::shared_ptr<Group_Knob> patternGroup = Natron::createKnob<Group_Knob>(effect, "Pattern-Window", 1 , false);
         patternGroup->setAsTab();
         patternGroup->setDefaultValue(false);
+        boost::shared_ptr<Group_Knob> searchWindowGroup = Natron::createKnob<Group_Knob>(effect, "Search-Window", 1 , false);
+        searchWindowGroup->setAsTab();
+        searchWindowGroup->setDefaultValue(false);
+        
         settingsPage->addKnob(searchWindowGroup);
         settingsPage->addKnob(patternGroup);
         
@@ -1161,6 +1229,7 @@ struct TrackerContextPrivate
         sWndBtmLeft->setDefaultValue(-25,1);
         sWndBtmLeft->setMaximum(0, 0);
         sWndBtmLeft->setMaximum(0, 1);
+        sWndBtmLeft->setIsPersistant(false);
         searchWindowGroup->addKnob(sWndBtmLeft);
         
         searchWindowBtmLeft = sWndBtmLeft;
@@ -1174,6 +1243,7 @@ struct TrackerContextPrivate
         sWndTopRight->setDefaultValue(25,1);
         sWndTopRight->setMinimum(0, 0);
         sWndTopRight->setMinimum(0, 1);
+        sWndTopRight->setIsPersistant(false);
         searchWindowGroup->addKnob(sWndTopRight);
         searchWindowTopRight = sWndTopRight;
         knobs.push_back(sWndTopRight);
@@ -1186,6 +1256,7 @@ struct TrackerContextPrivate
         ptnTopLeft->setDefaultValue(15,1);
         ptnTopLeft->setMaximum(0, 0);
         ptnTopLeft->setMinimum(0, 1);
+        ptnTopLeft->setIsPersistant(false);
         patternGroup->addKnob(ptnTopLeft);
         patternTopLeft = ptnTopLeft;
         knobs.push_back(ptnTopLeft);
@@ -1198,6 +1269,7 @@ struct TrackerContextPrivate
         ptnTopRight->setDefaultValue(15,1);
         ptnTopRight->setMinimum(0, 0);
         ptnTopRight->setMinimum(0, 1);
+        ptnTopRight->setIsPersistant(false);
         patternGroup->addKnob(ptnTopRight);
         patternTopRight = ptnTopRight;
         knobs.push_back(ptnTopRight);
@@ -1210,6 +1282,7 @@ struct TrackerContextPrivate
         ptnBtmRight->setDefaultValue(-15,1);
         ptnBtmRight->setMinimum(0, 0);
         ptnBtmRight->setMaximum(0, 1);
+        ptnBtmRight->setIsPersistant(false);
         patternGroup->addKnob(ptnBtmRight);
         patternBtmRight = ptnBtmRight;
         knobs.push_back(ptnBtmRight);
@@ -1231,6 +1304,7 @@ struct TrackerContextPrivate
         boost::shared_ptr<Double_Knob> centerKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamCenterLabel, 2, false);
         centerKnob->setName(kTrackerParamCenter);
         centerKnob->setHintToolTip(kTrackerParamCenterHint);
+        centerKnob->setIsPersistant(false);
         settingsPage->addKnob(centerKnob);
         center = centerKnob;
         knobs.push_back(centerKnob);
@@ -1239,6 +1313,7 @@ struct TrackerContextPrivate
         boost::shared_ptr<Double_Knob> offsetKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamOffsetLabel, 2, false);
         offsetKnob->setName(kTrackerParamOffset);
         offsetKnob->setHintToolTip(kTrackerParamOffsetHint);
+        offsetKnob->setIsPersistant(false);
         settingsPage->addKnob(offsetKnob);
         offset = offsetKnob;
         knobs.push_back(offsetKnob);
@@ -1248,6 +1323,7 @@ struct TrackerContextPrivate
         weightKnob->setName(kTrackerParamTrackWeight);
         weightKnob->setHintToolTip(kTrackerParamTrackWeightHint);
         weightKnob->setAnimationEnabled(false);
+        weightKnob->setIsPersistant(false);
         weightKnob->setMinimum(0.);
         weightKnob->setMaximum(1.);
         weightKnob->setDefaultValue(1.);
@@ -1264,6 +1340,7 @@ struct TrackerContextPrivate
         correlationKnob->setMaximum(1.);
         correlationKnob->setDefaultValue(1.);
         correlationKnob->disableSlider();
+        correlationKnob->setIsPersistant(false);
         correlationKnob->setAllDimensionsEnabled(false);
         settingsPage->addKnob(correlationKnob);
         correlation = correlationKnob;
@@ -1281,6 +1358,7 @@ struct TrackerContextPrivate
         motionModelKnob->setAnimationEnabled(false);
         motionModelKnob->setMinimum(0.);
         motionModelKnob->setMaximum(1.);
+        motionModelKnob->setIsPersistant(false);
         motionModelKnob->setDefaultValue(4);
         settingsPage->addKnob(motionModelKnob);
         motionModel = motionModelKnob;
@@ -1343,6 +1421,31 @@ TrackerContext::TrackerContext(const boost::shared_ptr<Natron::Node> &node)
 TrackerContext::~TrackerContext()
 {
     
+}
+
+void
+TrackerContext::load(const TrackerContextSerialization& serialization)
+{
+    
+    boost::shared_ptr<TrackerContext> thisShared = shared_from_this();
+    QMutexLocker k(&_imp->trackerContextMutex);
+
+    for (std::list<TrackSerialization>::const_iterator it = serialization._tracks.begin(); it != serialization._tracks.end(); ++it) {
+        boost::shared_ptr<TrackMarker> marker(new TrackMarker(thisShared));
+        marker->load(*it);
+        _imp->markers.push_back(marker);
+    }
+}
+
+void
+TrackerContext::save(TrackerContextSerialization* serialization) const
+{
+    QMutexLocker k(&_imp->trackerContextMutex);
+    for (std::size_t i = 0; i < _imp->markers.size(); ++i) {
+        TrackSerialization s;
+        _imp->markers[i]->save(&s);
+        serialization->_tracks.push_back(s);
+    }
 }
 
 int
@@ -2130,6 +2233,9 @@ TrackerContext::endSelection(TrackSelectionReason reason)
     if (_imp->markersToSlave.empty() && _imp->markersToUnslave.empty()) {
         return;
     }
+    
+    Q_EMIT selectionAboutToChange((int)reason);
+    
     {
         std::list<boost::shared_ptr<TrackMarker> >::const_iterator next = _imp->markersToSlave.begin();
         if (!_imp->markersToSlave.empty()) {

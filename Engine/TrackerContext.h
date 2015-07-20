@@ -35,6 +35,9 @@ class Choice_Knob;
 class KnobI;
 class TimeLine;
 class TrackerContext;
+class TrackSerialization;
+class TrackerContextSerialization;
+
 struct TrackMarkerPrivate;
 class TrackMarker : QObject, public boost::enable_shared_from_this<TrackMarker>
 {
@@ -45,6 +48,12 @@ public:
     TrackMarker(const boost::shared_ptr<TrackerContext>& context);
     
     ~TrackMarker();
+    
+    void clone(const TrackMarker& other);
+    
+    void load(const TrackSerialization& serialization);
+    
+    void save(TrackSerialization* serialization) const;
     
     boost::shared_ptr<TrackerContext> getContext() const;
     
@@ -73,6 +82,8 @@ public:
     bool isUserKeyframe(int time) const;
     
     void getUserKeyframes(std::set<int>* keyframes) const;
+    
+    void getCenterKeyframes(std::set<int>* keyframes) const;
     
     bool isEnabled() const;
     
@@ -211,6 +222,11 @@ public:
     
     ~TrackerContext();
     
+    void load(const TrackerContextSerialization& serialization);
+    
+    void save(TrackerContextSerialization* serialization) const;
+
+    
     boost::shared_ptr<Natron::Node> getNode() const;
     
     boost::shared_ptr<TrackMarker> createMarker();
@@ -268,6 +284,9 @@ public:
     void s_allKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker) { Q_EMIT allKeyframesRemovedOnTrackCenter(marker); }
     void s_multipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, const std::list<int>& keys) { Q_EMIT multipleKeyframesSetOnTrackCenter(marker,keys); }
     
+    void s_trackAboutToClone(boost::shared_ptr<TrackMarker> marker) { Q_EMIT trackAboutToClone(marker); }
+    void s_trackCloned(boost::shared_ptr<TrackMarker> marker) { Q_EMIT trackCloned(marker); }
+    
 public Q_SLOTS:
     
     void onSelectedKnobCurveChanged();
@@ -284,9 +303,12 @@ Q_SIGNALS:
     void allKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker);
     void multipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, std::list<int>);
     
+    void trackAboutToClone(boost::shared_ptr<TrackMarker> marker);
+    void trackCloned(boost::shared_ptr<TrackMarker> marker);
     
     //reason is of type TrackSelectionReason
     void selectionChanged(int reason);
+    void selectionAboutToChange(int reason);
     
 private:
     

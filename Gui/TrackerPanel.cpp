@@ -208,6 +208,9 @@ struct TrackKeys
     std::set<int> userKeys;
     std::set<int> centerKeys;
     bool visible;
+    
+    TrackKeys(): userKeys(), centerKeys(), visible(false) {}
+    
 };
 
 typedef std::map<boost::weak_ptr<TrackMarker>,TrackKeys  > TrackKeysMap;
@@ -278,7 +281,7 @@ struct TrackerPanelPrivate
     
     void createCornerPinFromSelection(const std::list<boost::shared_ptr<TrackMarker> > & selection,bool linked,bool useTransformRefFrame,bool invert);
     
-    void setVisibleItemKeyframes(const std::set<int>& keys,bool visible, bool emitSignal);
+    void setVisibleItemKeyframes(const std::list<int>& keys,bool visible, bool emitSignal);
 };
 
 TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
@@ -288,6 +291,13 @@ TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
 {
     boost::shared_ptr<TrackerContext> context = getContext();
     QObject::connect(context.get(), SIGNAL(selectionChanged(int)), this, SLOT(onContextSelectionChanged(int)));
+    QObject::connect(context.get(), SIGNAL(selectionAboutToChange(int)), this, SLOT(onContextSelectionAboutToChange(int)));
+    
+    QObject::connect(context.get(), SIGNAL(trackCloned(boost::shared_ptr<TrackMarker>)),
+                     this, SLOT(onTrackCloned(boost::shared_ptr<TrackMarker>)));
+    QObject::connect(context.get(), SIGNAL(trackAboutToClone(boost::shared_ptr<TrackMarker>)),
+                     this, SLOT(onTrackAboutToClone(boost::shared_ptr<TrackMarker>)));
+
     
     QObject::connect(context.get(), SIGNAL(keyframeSetOnTrack(boost::shared_ptr<TrackMarker>,int)),
                      this, SLOT(onTrackKeyframeSet(boost::shared_ptr<TrackMarker>,int)));
@@ -1172,6 +1182,101 @@ TrackerPanelPrivate::selectionToMarkers(const QItemSelection& selection, std::li
 }
 
 void
+TrackerPanel::onTrackAboutToClone(const boost::shared_ptr<TrackMarker>& marker)
+{
+    TrackKeysMap::iterator found = _imp->keys.find(marker);
+    if (found != _imp->keys.end()) {
+        
+            std::list<int> keys;
+            for (std::set<int>::iterator it = found->second.userKeys.begin(); it!=found->second.userKeys.end(); ++it) {
+                keys.push_back(*it);
+            }
+            for (std::set<int>::iterator it = found->second.centerKeys.begin(); it!=found->second.centerKeys.end(); ++it) {
+                keys.push_back(*it);
+            }
+
+        if (!found->second.visible) {
+
+            _imp->setVisibleItemKeyframes(keys, false, false);
+            ///Hack, making the visible flag to true, for the onTrackCloned() function
+            found->second.visible = true;
+        }
+        found->second.userKeys.clear();
+        found->second.centerKeys.clear();
+    }
+
+}
+
+void
+TrackerPanel::onTrackCloned(const boost::shared_ptr<TrackMarker>& marker)
+{
+    TrackKeys& k = _imp->keys[marker];
+    
+    
+        marker->getUserKeyframes(&k.userKeys);
+        marker->getCenterKeyframes(&k.centerKeys);
+        
+        std::list<int> keys;
+        for (std::set<int>::iterator it = k.userKeys.begin(); it!=k.userKeys.end(); ++it) {
+            keys.push_back(*it);
+        }
+        for (std::set<int>::iterator it = k.centerKeys.begin(); it!=k.centerKeys.end(); ++it) {
+            keys.push_back(*it);
+        }
+    
+    if (k.visible) {
+        _imp->setVisibleItemKeyframes(keys, true, true);
+        ///Hack, making the visible flag to true, for the onTrackCloned() function
+        k.visible = true;
+    }
+    
+}
+
+void
+TrackerPanel::onSelectionAboutToChangeInternal(const std::list<boost::shared_ptr<TrackMarker> >& selection)
+{
+    
+    ///Remove visible keyframes on timeline
+    std::list<int> toRemove;
+    for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = selection.begin(); it!=selection.end(); ++it) {
+        
+        TrackKeysMap::iterator found = _imp->keys.find(*it);
+        if (found != _imp->keys.end()) {
+            found->second.visible = false;
+            found->second.userKeys.clear();
+            found->second.centerKeys.clear();
+        }
+        
+        std::set<int> userKeys,centerKeys;
+        (*it)->getUserKeyframes(&userKeys);
+        (*it)->getCenterKeyframes(&centerKeys);
+        for (std::set<int>::iterator it2 = userKeys.begin(); it2 != userKeys.end(); ++it2) {
+            toRemove.push_back(*it2);
+        }
+        for (std::set<int>::iterator it2 = centerKeys.begin(); it2 != centerKeys.end(); ++it2) {
+            toRemove.push_back(*it2);
+        }
+    }
+    if (!toRemove.empty()) {
+        _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(toRemove, false);
+    }
+
+}
+
+void
+TrackerPanel::onContextSelectionAboutToChange(int reason)
+{
+    TrackerContext::TrackSelectionReason selectionReason = (TrackerContext::TrackSelectionReason)reason;
+    if (selectionReason == TrackerContext::eTrackSelectionSettingsPanel) {
+        //avoid recursions
+        return;
+    }
+    std::list<boost::shared_ptr<TrackMarker> > selection;
+    getContext()->getSelectedMarkers(&selection);
+    onSelectionAboutToChangeInternal(selection);
+}
+
+void
 TrackerPanel::onContextSelectionChanged(int reason)
 {
     TrackerContext::TrackSelectionReason selectionReason = (TrackerContext::TrackSelectionReason)reason;
@@ -1185,10 +1290,12 @@ TrackerPanel::onContextSelectionChanged(int reason)
 }
 
 void
-TrackerPanel::onModelSelectionChanged(const QItemSelection & /*oldSelection*/,const QItemSelection & newSelection)
+TrackerPanel::onModelSelectionChanged(const QItemSelection & oldSelection,const QItemSelection & newSelection)
 {
-    std::list<boost::shared_ptr<TrackMarker> > markers;
+    std::list<boost::shared_ptr<TrackMarker> > oldMarkers,markers;
     _imp->selectionToMarkers(newSelection, &markers);
+    _imp->selectionToMarkers(oldSelection, &oldMarkers);
+    onSelectionAboutToChangeInternal(oldMarkers);
     clearAndSelectTracks(markers, TrackerContext::eTrackSelectionSettingsPanel);
 }
 
@@ -1208,6 +1315,22 @@ TrackerPanel::selectInternal(const std::list<boost::shared_ptr<TrackMarker> >& m
         QItemSelection selection;
         _imp->markersToSelection(markers, &selection);
         _imp->view->selectionModel()->select(selection, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        
+        std::list<int> keysToAdd;
+        for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = markers.begin(); it!=markers.end(); ++it) {
+            TrackKeys k;
+            k.visible = true;
+            (*it)->getCenterKeyframes(&k.centerKeys);
+            (*it)->getUserKeyframes(&k.userKeys);
+            for (std::set<int>::iterator it2 = k.centerKeys.begin(); it2 != k.centerKeys.end(); ++it2) {
+                keysToAdd.push_back(*it2);
+            }
+            for (std::set<int>::iterator it2 = k.userKeys.begin(); it2 != k.userKeys.end(); ++it2) {
+                keysToAdd.push_back(*it2);
+            }
+            _imp->keys[*it] = k;
+        }
+        _imp->node.lock()->getNode()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(keysToAdd, true);
     }
     
     TrackerContext::TrackSelectionReason selectionReason = (TrackerContext::TrackSelectionReason)reason;
@@ -1309,7 +1432,16 @@ TrackerPanel::onTrackKeyframeSet(const boost::shared_ptr<TrackMarker>& marker, i
 {
     TrackKeysMap::iterator found = _imp->keys.find(marker);
     if (found == _imp->keys.end()) {
-        return;
+        TrackKeys k;
+        k.userKeys.insert(key);
+        _imp->keys[marker] = k;
+    } else {
+        
+        std::pair<std::set<int>::iterator,bool> ret = found->second.userKeys.insert(key);
+        if (ret.second && found->second.visible) {
+            _imp->node.lock()->getNode()->getApp()->getTimeLine()->addKeyframeIndicator(key);
+        }
+
     }
 }
 
@@ -1320,15 +1452,34 @@ TrackerPanel::onTrackKeyframeRemoved(const boost::shared_ptr<TrackMarker>& marke
     if (found == _imp->keys.end()) {
         return;
     }
+    std::set<int>::iterator it2 = found->second.userKeys.find(key);
+    if ( it2 != found->second.userKeys.end() ) {
+        found->second.userKeys.erase(it2);
+        if (found->second.visible) {
+            _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeKeyFrameIndicator(key);
+        }
+    }
 }
 
 void
 TrackerPanel::onTrackAllKeyframesRemoved(const boost::shared_ptr<TrackMarker>& marker)
 {
-    TrackKeysMap::iterator found = _imp->keys.find(marker);
-    if (found == _imp->keys.end()) {
+    TrackKeysMap::iterator it = _imp->keys.find(marker);
+    if (it == _imp->keys.end()) {
         return;
     }
+    std::list<SequenceTime> toRemove;
+    
+    for (std::set<int>::iterator it2 = it->second.userKeys.begin(); it2 != it->second.userKeys.end(); ++it2) {
+        toRemove.push_back(*it2);
+    }
+    it->second.userKeys.clear();
+
+    
+    if (it->second.visible) {
+        _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(toRemove, true);
+    }
+
 }
 
 void
@@ -1336,7 +1487,16 @@ TrackerPanel::onKeyframeSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, 
 {
     TrackKeysMap::iterator found = _imp->keys.find(marker);
     if (found == _imp->keys.end()) {
-        return;
+        TrackKeys k;
+        k.centerKeys.insert(key);
+        _imp->keys[marker] = k;
+    } else {
+        
+        std::pair<std::set<int>::iterator,bool> ret = found->second.centerKeys.insert(key);
+        if (ret.second && found->second.visible) {
+            _imp->node.lock()->getNode()->getApp()->getTimeLine()->addKeyframeIndicator(key);
+        }
+        
     }
 }
 
@@ -1347,14 +1507,32 @@ TrackerPanel::onKeyframeRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> mark
     if (found == _imp->keys.end()) {
         return;
     }
+    std::set<int>::iterator it2 = found->second.centerKeys.find(key);
+    if ( it2 != found->second.centerKeys.end() ) {
+        found->second.centerKeys.erase(it2);
+        if (found->second.visible) {
+            _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeKeyFrameIndicator(key);
+        }
+    }
 }
 
 void
 TrackerPanel::onAllKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker)
 {
-    TrackKeysMap::iterator found = _imp->keys.find(marker);
-    if (found == _imp->keys.end()) {
+    TrackKeysMap::iterator it = _imp->keys.find(marker);
+    if (it == _imp->keys.end()) {
         return;
+    }
+    std::list<SequenceTime> toRemove;
+    
+    for (std::set<int>::iterator it2 = it->second.centerKeys.begin(); it2 != it->second.centerKeys.end(); ++it2) {
+        toRemove.push_back(*it2);
+    }
+    it->second.centerKeys.clear();
+    
+    
+    if (it->second.visible) {
+        _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(toRemove, true);
     }
 }
 
@@ -1363,21 +1541,94 @@ TrackerPanel::onMultipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker>
 {
     TrackKeysMap::iterator found = _imp->keys.find(marker);
     if (found == _imp->keys.end()) {
-        return;
+        TrackKeys k;
+        for (std::list<int>::const_iterator it = keys.begin(); it!=keys.end(); ++it) {
+            k.centerKeys.insert(*it);
+        }
+        _imp->keys[marker] = k;
+    } else {
+        
+        std::list<int> reallyInserted;
+        for (std::list<int>::const_iterator it = keys.begin(); it!=keys.end(); ++it) {
+            std::pair<std::set<int>::iterator,bool> ret = found->second.centerKeys.insert(*it);
+            if (ret.second) {
+                reallyInserted.push_back(*it);
+            }
+            
+        }
+        if (!reallyInserted.empty() && found->second.visible) {
+            _imp->node.lock()->getNode()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(reallyInserted, true);
+        }
+        
     }
 }
 
 void
-TrackerPanelPrivate::setVisibleItemKeyframes(const std::set<int>& keyframes,bool visible, bool emitSignal)
+TrackerPanelPrivate::setVisibleItemKeyframes(const std::list<int>& keyframes,bool visible, bool emitSignal)
 {
-    std::list<SequenceTime> keys;
-    for (std::set<int>::iterator it2 = keyframes.begin(); it2 != keyframes.end(); ++it2) {
-        keys.push_back(*it2);
-    }
+  
     if (!visible) {
-        node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(keys, emitSignal);
+        node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(keyframes, emitSignal);
     } else {
-        node.lock()->getNode()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(keys, emitSignal);
+        node.lock()->getNode()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(keyframes, emitSignal);
     }
 
 }
+
+void
+TrackerPanel::onSettingsPanelClosed(bool closed)
+{
+    boost::shared_ptr<TimeLine> timeline = getNode()->getNode()->getApp()->getTimeLine();
+    if (closed) {
+        ///remove all keyframes from the structure kept
+        std::list<int> toRemove;
+        
+        for (TrackKeysMap::iterator it = _imp->keys.begin(); it != _imp->keys.end(); ++it) {
+
+                if (it->second.visible) {
+                    it->second.visible = false;
+                    toRemove.insert(toRemove.end(),it->second.userKeys.begin(), it->second.userKeys.end());
+                    toRemove.insert(toRemove.end(),it->second.centerKeys.begin(), it->second.centerKeys.end());
+                }
+        }
+    
+        _imp->setVisibleItemKeyframes(toRemove, false, true);
+        _imp->keys.clear();
+    } else {
+        ///rebuild all the keyframe structure
+        
+        std::list< boost::shared_ptr<TrackMarker> > selectedMarkers;
+        getContext()->getSelectedMarkers(&selectedMarkers);
+        
+        std::list<int> toAdd;
+        for (TrackItems::iterator it = _imp->items.begin(); it != _imp->items.end(); ++it) {
+            boost::shared_ptr<TrackMarker> marker = it->marker.lock();
+            if (!marker) {
+                continue;
+            }
+            TrackKeys keys;
+            marker->getUserKeyframes(&keys.userKeys);
+            keys.visible = false;
+            marker->getCenterKeyframes(&keys.centerKeys);
+            
+            
+            std::pair<TrackKeysMap::iterator,bool> ret = _imp->keys.insert(std::make_pair(marker, keys));
+            assert(ret.second);
+            
+            std::list< boost::shared_ptr<TrackMarker> >::iterator foundSelected =
+            std::find(selectedMarkers.begin(), selectedMarkers.end(), marker);
+            
+            ///If the item is selected, make its keyframes visible
+            if (foundSelected != selectedMarkers.end()) {
+                toAdd.insert(toAdd.end(),keys.userKeys.begin(), keys.userKeys.end());
+                toAdd.insert(toAdd.end(), keys.centerKeys.begin(), keys.centerKeys.end());
+                ret.first->second.visible = true;
+                break;
+            }
+            
+            
+        }
+        _imp->setVisibleItemKeyframes(toAdd, true, true);
+    }
+}
+
