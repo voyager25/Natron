@@ -856,10 +856,8 @@ static void updateLibMvTrackMinimal(const TrackMarker& marker,
                                     bool forward,
                                     mv::Marker* mvMarker)
 {
-    boost::shared_ptr<Double_Knob> patternTopLeftKnob = marker.getPatternTopLeftKnob();
-    boost::shared_ptr<Double_Knob> patternTopRightKnob = marker.getPatternTopRightKnob();
-    boost::shared_ptr<Double_Knob> patternBtmRightKnob = marker.getPatternBtmRightKnob();
-    boost::shared_ptr<Double_Knob> patternBtmLeftKnob = marker.getPatternBtmLeftKnob();
+    boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
+    boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
     boost::shared_ptr<Double_Knob> centerKnob = marker.getCenterKnob();
     boost::shared_ptr<Double_Knob> offsetKnob = marker.getOffsetKnob();
     mvMarker->reference_frame = marker.getReferenceFrame(time, forward);
@@ -870,6 +868,22 @@ static void updateLibMvTrackMinimal(const TrackMarker& marker,
     }
     mvMarker->center(0) = centerKnob->getValueAtTime(time, 0);
     mvMarker->center(1) = centerKnob->getValueAtTime(time, 1);
+    
+    Natron::Point searchWndBtmLeft,searchWndTopRight;
+    searchWndBtmLeft.x = searchWindowBtmLeftKnob->getValueAtTime(time, 0);
+    searchWndBtmLeft.y = searchWindowBtmLeftKnob->getValueAtTime(time, 1);
+    
+    searchWndTopRight.x = searchWindowTopRightKnob->getValueAtTime(time, 0);
+    searchWndTopRight.y = searchWindowTopRightKnob->getValueAtTime(time, 1);
+    
+    Natron::Point offset;
+    offset.x = offsetKnob->getValueAtTime(time,0);
+    offset.y = offsetKnob->getValueAtTime(time,1);
+    
+    mvMarker->search_region.min(0) = searchWndBtmLeft.x + mvMarker->center(0) + offset.x;
+    mvMarker->search_region.min(1) = searchWndTopRight.y + mvMarker->center(1) + offset.y;
+    mvMarker->search_region.max(0) = searchWndTopRight.x + mvMarker->center(0) + offset.x;
+    mvMarker->search_region.max(1) = searchWndBtmLeft.y + mvMarker->center(1) + offset.y;
 }
 
 /// Converts a Natron track marker to the one used in LibMV. This is expensive: many calls to getValue are made
@@ -880,8 +894,8 @@ static void natronTrackerToLibMVTracker(bool trackChannels[3],
                                         bool forward,
                                         mv::Marker* mvMarker)
 {
-    //boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
-    //boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
+    boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
+    boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
     boost::shared_ptr<Double_Knob> patternTopLeftKnob = marker.getPatternTopLeftKnob();
     boost::shared_ptr<Double_Knob> patternTopRightKnob = marker.getPatternTopRightKnob();
     boost::shared_ptr<Double_Knob> patternBtmRightKnob = marker.getPatternBtmRightKnob();
@@ -912,12 +926,12 @@ static void natronTrackerToLibMVTracker(bool trackChannels[3],
     (trackChannels[1] ? LIBMV_MARKER_CHANNEL_G : 0) |
     (trackChannels[2] ? LIBMV_MARKER_CHANNEL_B : 0);
     
-    /*Natron::Point searchWndBtmLeft,searchWndTopRight;
-     searchWndBtmLeft.x = searchWindowBtmLeftKnob->getValueAtTime(time, 0);
-     searchWndBtmLeft.y = searchWindowBtmLeftKnob->getValueAtTime(time, 1);
-     
-     searchWndTopRight.x = searchWindowTopRightKnob->getValueAtTime(time, 0);
-     searchWndTopRight.y = searchWindowTopRightKnob->getValueAtTime(time, 1);*/
+    Natron::Point searchWndBtmLeft,searchWndTopRight;
+    searchWndBtmLeft.x = searchWindowBtmLeftKnob->getValueAtTime(time, 0);
+    searchWndBtmLeft.y = searchWindowBtmLeftKnob->getValueAtTime(time, 1);
+    
+    searchWndTopRight.x = searchWindowTopRightKnob->getValueAtTime(time, 0);
+    searchWndTopRight.y = searchWindowTopRightKnob->getValueAtTime(time, 1);
     
     Natron::Point offset;
     offset.x = offsetKnob->getValueAtTime(time,0);
@@ -937,8 +951,6 @@ static void natronTrackerToLibMVTracker(bool trackChannels[3],
     bl.x = patternBtmLeftKnob->getValueAtTime(time, 0);
     bl.y = patternBtmLeftKnob->getValueAtTime(time, 1);
     
-    // Set the search-region since all markers stored in the auto-track have for search-region the pattern-region instead.
-    // we do this because otherwise inside Autotrack::TrackMarker it will try to fetch the whole search-region for the reference marker
     RectD patternBbox;
     patternBbox.setupInfinity();
     updateBbox(tl, &patternBbox);
@@ -946,10 +958,10 @@ static void natronTrackerToLibMVTracker(bool trackChannels[3],
     updateBbox(br, &patternBbox);
     updateBbox(bl, &patternBbox);
     
-    mvMarker->search_region.min(0) = patternBbox.x1 + mvMarker->center(0) + offset.x;
-    mvMarker->search_region.min(1) = patternBbox.y2 + mvMarker->center(1) + offset.y;
-    mvMarker->search_region.max(0) = patternBbox.x2 + mvMarker->center(0) + offset.x;
-    mvMarker->search_region.max(1) = patternBbox.y1 + mvMarker->center(1) + offset.y;
+    mvMarker->search_region.min(0) = searchWndBtmLeft.x + mvMarker->center(0) + offset.x;
+    mvMarker->search_region.min(1) = searchWndTopRight.y + mvMarker->center(1) + offset.y;
+    mvMarker->search_region.max(0) = searchWndTopRight.x + mvMarker->center(0) + offset.x;
+    mvMarker->search_region.max(1) = searchWndBtmLeft.y + mvMarker->center(1) + offset.y;
     
     mvMarker->patch.coordinates(0,0) = tl.x + mvMarker->center(0);
     mvMarker->patch.coordinates(0,1) = tl.y + mvMarker->center(1);
@@ -999,30 +1011,6 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
         track->mvMarker.reference_frame = track->natronMarker->getReferenceFrame(time, args.getForward());
         assert(track->mvMarker.reference_frame != track->mvMarker.frame);
         
-        // Set the search-region since all markers stored in the auto-track have for search-region the pattern-region instead.
-        // we do this because otherwise inside Autotrack::TrackMarker it will try to fetch the whole search-region for the reference marker
-        boost::shared_ptr<Double_Knob> searchBtmLeftKnob = track->natronMarker->getSearchWindowBottomLeftKnob();
-        boost::shared_ptr<Double_Knob> searchTopRightKnob = track->natronMarker->getSearchWindowTopRightKnob();
-        boost::shared_ptr<Double_Knob> offsetKnob = track->natronMarker->getOffsetKnob();
-        
-        Natron::Point offset;
-        offset.x = offsetKnob->getValueAtTime(time,0);
-        offset.y = offsetKnob->getValueAtTime(time,1);
-        
-        Natron::Point searchBtmLeft,searchTopRight;
-        searchBtmLeft.x = searchBtmLeftKnob->getValueAtTime(time, 0);
-        searchBtmLeft.y = searchBtmLeftKnob->getValueAtTime(time, 1);
-        
-        searchTopRight.x = searchTopRightKnob->getValueAtTime(time, 0);
-        searchTopRight.y = searchTopRightKnob->getValueAtTime(time, 1);
-        
-        
-        
-        track->mvMarker.search_region.min(0) = searchBtmLeft.x + track->mvMarker.center(0) + offset.x;
-        track->mvMarker.search_region.min(1) = searchTopRight.y + track->mvMarker.center(1) + offset.y;
-        track->mvMarker.search_region.max(0) = searchTopRight.x + track->mvMarker.center(0) + offset.x;
-        track->mvMarker.search_region.max(1) = searchBtmLeft.y + track->mvMarker.center(1) + offset.y;
-        
         libmv::TrackRegionResult result;
         if (!autoTrack->TrackMarker(&track->mvMarker, &result, &track->mvOptions) || !result.is_usable()) {
             return false;
@@ -1030,25 +1018,6 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
         
         //Ok the tracking has succeeded, now the marker is in this state:
         //the source is TRACKED, the search_window has been offset by the center delta,  the center has been offset
-        //We reset back the search_window to the pattern window before it gets added to the tracks. We do this
-        //because this track will probably be used as reference later on.
-        Natron::Point tl,tr,br,bl;
-        tl.x = track->mvMarker.patch.coordinates(0,0); tl.y = track->mvMarker.patch.coordinates(0,1);
-        tr.x = track->mvMarker.patch.coordinates(1,0); tr.y = track->mvMarker.patch.coordinates(1,1);
-        br.x = track->mvMarker.patch.coordinates(2,0); br.y = track->mvMarker.patch.coordinates(2,1);
-        bl.x = track->mvMarker.patch.coordinates(3,0); bl.y = track->mvMarker.patch.coordinates(3,1);
-        
-        RectD patternBbox;
-        patternBbox.setupInfinity();
-        updateBbox(tl, &patternBbox);
-        updateBbox(tr, &patternBbox);
-        updateBbox(br, &patternBbox);
-        updateBbox(bl, &patternBbox);
-        
-        track->mvMarker.search_region.min(0) = patternBbox.x1;
-        track->mvMarker.search_region.min(1) = patternBbox.y2;
-        track->mvMarker.search_region.max(0) = patternBbox.x2;
-        track->mvMarker.search_region.max(1) = patternBbox.y1;
         
         setKnobKeyframesFromMarker(track->mvMarker, &result, track->natronMarker);
         

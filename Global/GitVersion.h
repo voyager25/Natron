@@ -1,5 +1,5 @@
 #ifndef NATRON_GITVERSION_H_
 #define NATRON_GITVERSION_H_
 #define GIT_BRANCH "libmv"
-#define GIT_COMMIT "7ef8affd169f7a48d9edc8d4875332780c2a6587"
+#define GIT_COMMIT "5e1e945b9cce08e2246695f0913001e0cd153ee9"
 #endif
