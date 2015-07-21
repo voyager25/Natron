@@ -101,6 +101,7 @@ public:
     
     void removeAllKeyframes();
     
+    
 public Q_SLOTS:
     
     void onCenterKeyframeSet(SequenceTime time,int dimension,int reason,bool added);
@@ -274,6 +275,8 @@ public:
     void getAllMarkers(std::vector<boost::shared_ptr<TrackMarker> >* markers) const;
     
     void getSelectedMarkers(std::list<boost::shared_ptr<TrackMarker> >* markers) const;
+    
+    bool isMarkerSelected(const boost::shared_ptr<TrackMarker>& marker) const;
     
     static void getMotionModelsAndHelps(std::vector<std::string>* models,std::vector<std::string>* tooltips);
     

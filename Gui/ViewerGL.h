@@ -370,6 +370,9 @@ public:
     virtual int getCurrentlyDisplayedTime() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     
     QPointF toZoomCoordinates(const QPointF& position) const;
+    QPointF toWidgetCoordinates(const QPointF& position) const;
+    
+    void getTopLeftAndBottomRightInZoomCoords(QPointF* topLeft, QPointF* bottomRight) const;
     
 Q_SIGNALS:
 

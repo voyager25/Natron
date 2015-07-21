@@ -2236,6 +2236,18 @@ TrackerContext::getSelectedMarkers(std::list<boost::shared_ptr<TrackMarker> >* m
     *markers = _imp->selectedMarkers;
 }
 
+bool
+TrackerContext::isMarkerSelected(const boost::shared_ptr<TrackMarker>& marker) const
+{
+    QMutexLocker k(&_imp->trackerContextMutex);
+    for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->selectedMarkers.begin(); it!=_imp->selectedMarkers.end(); ++it) {
+        if (*it == marker) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void
 TrackerContext::endSelection(TrackSelectionReason reason)
 {

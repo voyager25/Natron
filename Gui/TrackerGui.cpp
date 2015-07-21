@@ -42,6 +42,7 @@ CLANG_DIAG_ON(uninitialized)
 
 #define POINT_SIZE 5
 #define CROSS_SIZE 6
+#define POINT_TOLERANCE 6
 #define ADDTRACK_SIZE 5
 
 using namespace Natron;
@@ -129,6 +130,11 @@ struct TrackerGuiPrivate
     QPointF lastMousePos;
     QRectF selectionRectangle;
     int controlDown;
+    
+    TrackerMouseStateEnum eventState;
+    TrackerDrawStateEnum hoverState;
+    
+    boost::shared_ptr<TrackMarker> interactMarker,hoverMarker;
 
     TrackerGuiPrivate(const boost::shared_ptr<TrackerPanelV1> & panelv1,
                       TrackerPanel* panel,
@@ -160,6 +166,9 @@ struct TrackerGuiPrivate
     , lastMousePos()
     , selectionRectangle()
     , controlDown(0)
+    , eventState(eMouseStateIdle)
+    , hoverState(eDrawStateInactive)
+    , interactMarker()
     {
     }
 };
@@ -318,8 +327,10 @@ TrackerGui::createGui()
     QObject::connect( _imp->updateViewerButton,SIGNAL( clicked(bool) ),this,SLOT( onUpdateViewerClicked(bool) ) );
     _imp->buttonsLayout->addWidget(_imp->updateViewerButton);
 
+    QPixmap centerViewerPix;
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CENTER_VIEWER_ON_TRACK, &centerViewerPix);
     
-    _imp->centerViewerButton = new Button(QIcon(),"Center viewer",_imp->buttonsBar);
+    _imp->centerViewerButton = new Button(QIcon(centerViewerPix),"",_imp->buttonsBar);
     _imp->centerViewerButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
     _imp->centerViewerButton->setCheckable(true);
     _imp->centerViewerButton->setChecked(false);
@@ -331,7 +342,10 @@ TrackerGui::createGui()
     
     if (_imp->panel) {
         /// This is for v2 only
-        _imp->createKeyOnMoveButton = new Button(QIcon(), "+ Key on move", _imp->buttonsBar);
+        QPixmap createKeyOnMovePix;
+        appPTR->getIcon(Natron::NATRON_PIXMAP_CREATE_USER_KEY_ON_MOVE, &createKeyOnMovePix);
+        
+        _imp->createKeyOnMoveButton = new Button(QIcon(createKeyOnMovePix), "", _imp->buttonsBar);
         _imp->createKeyOnMoveButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
         _imp->createKeyOnMoveButton->setToolTip(Natron::convertFromPlainText(tr("When enabled, adjusting a track on the viewer will create a new keyframe"), Qt::WhiteSpaceNormal));
         _imp->createKeyOnMoveButton->setCheckable(true);
@@ -362,10 +376,11 @@ TrackerGui::createGui()
         keyframeLayout->setContentsMargins(0, 0, 0, 0);
         keyframeLayout->setSpacing(0);
         
-        QPixmap addKeyPix,removeKeyPix,resetOffsetPix;
+        QPixmap addKeyPix,removeKeyPix,resetOffsetPix,removeAllUserKeysPix;
         appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_USER_KEY, &addKeyPix);
         appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_USER_KEY, &removeKeyPix);
         appPTR->getIcon(Natron::NATRON_PIXMAP_RESET_TRACK_OFFSET, &resetOffsetPix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_RESET_USER_KEYS, &removeAllUserKeysPix);
         
         _imp->setKeyFrameButton = new Button(QIcon(addKeyPix), "", keyframeContainer);
         _imp->setKeyFrameButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
@@ -379,7 +394,7 @@ TrackerGui::createGui()
         QObject::connect( _imp->removeKeyFrameButton,SIGNAL( clicked(bool) ),this,SLOT( onRemoveKeyframeButtonClicked() ) );
         keyframeLayout->addWidget(_imp->removeKeyFrameButton);
         
-        _imp->removeAllKeyFramesButton = new Button(QIcon(), "--", keyframeContainer);
+        _imp->removeAllKeyFramesButton = new Button(QIcon(removeAllUserKeysPix), "", keyframeContainer);
         _imp->removeAllKeyFramesButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
         _imp->removeAllKeyFramesButton->setToolTip(Natron::convertFromPlainText(tr("Remove all keyframes for the pattern for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->removeAllKeyFramesButton,SIGNAL( clicked(bool) ),this,SLOT( onRemoveAnimationButtonClicked() ) );
@@ -588,11 +603,44 @@ TrackerGui::drawOverlays(double time,
                         glEnd();
                     }
                     glPointSize(1.);
+                } else { // if (!isSelected) {
+                    
                 }
             }
         }
     } // GLProtectAttrib a(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT | GL_HINT_BIT);
 } // drawOverlays
+
+
+static bool isNearbyPoint(const boost::shared_ptr<Double_Knob>& knob,
+                          ViewerGL* viewer,
+                          double xWidget, double yWidget,
+                          double toleranceWidget,
+                          double time)
+{
+    QPointF p;
+    p.rx() = knob->getValueAtTime(time, 0);
+    p.ry() = knob->getValueAtTime(time, 1);
+    p = viewer->toWidgetCoordinates(p);
+    if (p.x() <= (xWidget + toleranceWidget) && p.x() >= (xWidget - toleranceWidget) &&
+        p.y() <= (yWidget + toleranceWidget) && p.y() >= (yWidget - toleranceWidget)) {
+        return true;
+    }
+    return false;
+}
+
+static bool isNearbyPoint(const QPointF& p,
+                          ViewerGL* viewer,
+                          double xWidget, double yWidget,
+                          double toleranceWidget)
+{
+    QPointF pw = viewer->toWidgetCoordinates(p);
+    if (pw.x() <= (xWidget + toleranceWidget) && pw.x() >= (xWidget - toleranceWidget) &&
+        pw.y() <= (yWidget + toleranceWidget) && pw.y() >= (yWidget - toleranceWidget)) {
+        return true;
+    }
+    return false;
+}
 
 bool
 TrackerGui::penDown(double time,
@@ -604,9 +652,9 @@ TrackerGui::penDown(double time,
                     QMouseEvent* e)
 {
     std::pair<double,double> pixelScale;
-    _imp->viewer->getViewer()->getPixelScale(pixelScale.first, pixelScale.second);
+    ViewerGL* viewer = _imp->viewer->getViewer();
+    viewer->getPixelScale(pixelScale.first, pixelScale.second);
     bool didSomething = false;
-    
     
     if (_imp->panelv1) {
         
@@ -663,10 +711,97 @@ TrackerGui::penDown(double time,
             _imp->panelv1->clearSelection();
         }
     } else { // if (_imp->panelv1) {
+        
+        boost::shared_ptr<TrackerContext> context = _imp->panel->getContext();
         std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
+        context->getAllMarkers(&allMarkers);
         for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
+            if (!(*it)->isEnabled()) {
+                continue;
+            }
+            
+            bool isSelected = context->isMarkerSelected((*it));
+            
+            boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
+            
+            boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
+            boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
+            boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
+            boost::shared_ptr<Double_Knob> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
+            
+            boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
+            boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
+            
+            if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                if (_imp->controlDown > 0) {
+                    _imp->eventState = eMouseStateDraggingOffset;
+                } else {
+                    _imp->eventState = eMouseStateDraggingCenter;
+                }
+                _imp->interactMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->eventState = eMouseStateDraggingInnerTopLeft;
+                _imp->interactMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->eventState = eMouseStateDraggingInnerTopRight;
+                _imp->interactMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->eventState = eMouseStateDraggingInnerBtmRight;
+                _imp->interactMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->eventState = eMouseStateDraggingInnerBtmLeft;
+                _imp->interactMarker = *it;
+                didSomething = true;
+            }
+            if (!didSomething && isSelected) {
+                ///Test search window
+                QPointF searchTopLeft,searchTopRight,searchBtmRight,searchBtmLeft;
+                searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0);
+                searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1);
                 
-        }
+                searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0);
+                searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1);
+                
+                searchTopLeft.rx() = searchBtmLeft.x();
+                searchTopLeft.ry() = searchTopRight.y();
+                
+                searchBtmRight.rx() = searchTopRight.x();
+                searchBtmRight.ry() = searchBtmLeft.y();
+                
+                if (isNearbyPoint(searchTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterTopLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterTopRight;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterBtmRight;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterBtmLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                }
+            }
+            
+            //If we hit the interact, make sure it is selected
+            if (_imp->interactMarker) {
+                if (!isSelected) {
+                    context->addTrackToSelection(_imp->interactMarker, TrackerContext::eTrackSelectionViewer);
+                }
+            }
+            
+            if (didSomething) {
+                break;
+            }
+        } // for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
     }
     _imp->lastMousePos = pos;
     
@@ -695,6 +830,9 @@ TrackerGui::penMotion(double time,
                       double pressure,
                       QInputEvent* /*e*/)
 {
+    std::pair<double,double> pixelScale;
+    ViewerGL* viewer = _imp->viewer->getViewer();
+    viewer->getPixelScale(pixelScale.first, pixelScale.second);
     bool didSomething = false;
     if (_imp->panelv1) {
         const std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> > & instances = _imp->panelv1->getInstances();
@@ -711,6 +849,86 @@ TrackerGui::penMotion(double time,
                 }
             }
         }
+    } else {
+        boost::shared_ptr<TrackerContext> context = _imp->panel->getContext();
+        std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
+        context->getAllMarkers(&allMarkers);
+        for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
+            if (!(*it)->isEnabled()) {
+                continue;
+            }
+            
+            bool isSelected = context->isMarkerSelected((*it));
+            
+            boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
+            
+            boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
+            boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
+            boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
+            boost::shared_ptr<Double_Knob> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
+            
+            boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
+            boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
+            
+            if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->hoverState = eDrawStateHoveringCenter;
+                _imp->hoverMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->hoverState = eDrawStateHoveringInnerTopLeft;
+                _imp->hoverMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->hoverState = eDrawStateHoveringInnerTopRight;
+                _imp->hoverMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->hoverState = eDrawStateHoveringInnerBtmRight;
+                _imp->hoverMarker = *it;
+                didSomething = true;
+            } else if (isSelected && isNearbyPoint(ptnBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->hoverState = eDrawStateHoveringInnerBtmLeft;
+                _imp->hoverMarker = *it;
+                didSomething = true;
+            }
+            if (!didSomething && isSelected) {
+                ///Test search window
+                QPointF searchTopLeft,searchTopRight,searchBtmRight,searchBtmLeft;
+                searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0);
+                searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1);
+                
+                searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0);
+                searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1);
+                
+                searchTopLeft.rx() = searchBtmLeft.x();
+                searchTopLeft.ry() = searchTopRight.y();
+                
+                searchBtmRight.rx() = searchTopRight.x();
+                searchBtmRight.ry() = searchBtmLeft.y();
+                
+                if (isNearbyPoint(searchTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterTopLeft;
+                    _imp->hoverMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterTopRight;
+                    _imp->hoverMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterBtmRight;
+                    _imp->hoverMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterBtmLeft;
+                    _imp->hoverMarker = *it;
+                    didSomething = true;
+                }
+            }
+            
+            if (didSomething) {
+                break;
+            }
+        } // for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
     }
     if (_imp->clickToAddTrackEnabled) {
         ///Refresh the overlay
@@ -747,6 +965,8 @@ TrackerGui::penUp(double time,
                 }
             }
         }
+    } else {
+        _imp->interactMarker.reset();
     }
 
     return didSomething;

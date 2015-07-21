@@ -256,5 +256,8 @@
         <file>Resources/Images/removeUserKey.png</file>
         <file>Resources/Images/resetTrackOffset.png</file>
         <file>Resources/Images/showTrackError.png</file>
+        <file>Resources/Images/centerOnTrack.png</file>
+        <file>Resources/Images/createKeyOnMove.png</file>
+        <file>Resources/Images/removeUserKeys.png</file>
     </qresource>
 </RCC>

@@ -3354,6 +3354,21 @@ ViewerGL::toZoomCoordinates(const QPointF& position) const
     return _imp->zoomCtx.toZoomCoordinates(position.x(), position.y());
 }
 
+QPointF
+ViewerGL::toWidgetCoordinates(const QPointF& position) const
+{
+    QMutexLocker l(&_imp->zoomCtxMutex);
+    return _imp->zoomCtx.toWidgetCoordinates(position.x(), position.y());
+}
+
+void
+ViewerGL::getTopLeftAndBottomRightInZoomCoords(QPointF* topLeft, QPointF* bottomRight) const
+{
+    QMutexLocker l(&_imp->zoomCtxMutex);
+    *topLeft = _imp->zoomCtx.toZoomCoordinates(0, 0);
+    *bottomRight = _imp->zoomCtx.toZoomCoordinates(_imp->zoomCtx.screenWidth() - 1, _imp->zoomCtx.screenHeight() - 1);
+}
+
 // used to update the information bar at the bottom of the viewer (not for the ctrl-click color picker)
 void
 ViewerGL::updateColorPicker(int textureIndex,
