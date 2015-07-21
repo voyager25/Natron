@@ -656,6 +656,10 @@ TrackerGui::penDown(double time,
     viewer->getPixelScale(pixelScale.first, pixelScale.second);
     bool didSomething = false;
     
+    Natron::Point delta;
+    delta.x = pos.x() - _imp->lastMousePos.x();
+    delta.y = pos.y() - _imp->lastMousePos.y();
+    
     if (_imp->panelv1) {
         
         const std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> > & instances = _imp->panelv1->getInstances();
@@ -723,7 +727,7 @@ TrackerGui::penDown(double time,
             bool isSelected = context->isMarkerSelected((*it));
             
             boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
-            
+            boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
             boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
             boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
             boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
@@ -758,13 +762,22 @@ TrackerGui::penDown(double time,
                 didSomething = true;
             }
             if (!didSomething && isSelected) {
+                
+                QPointF centerPoint;
+                centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
+                centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+                
+                QPointF offset;
+                offset.rx() = offsetKnob->getValueAtTime(time, 0);
+                offset.ry() = offsetKnob->getValueAtTime(time, 1);
+                
                 ///Test search window
                 QPointF searchTopLeft,searchTopRight,searchBtmRight,searchBtmLeft;
-                searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0);
-                searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1);
+                searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0) + centerPoint.x() + offset.x();
+                searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1) + centerPoint.y() + offset.y();
                 
-                searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0);
-                searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1);
+                searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0) + centerPoint.x() + offset.x();
+                searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1) + + centerPoint.y() + offset.y();
                 
                 searchTopLeft.rx() = searchBtmLeft.x();
                 searchTopLeft.ry() = searchTopRight.y();
@@ -802,6 +815,55 @@ TrackerGui::penDown(double time,
                 break;
             }
         } // for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
+        
+        boost::shared_ptr<Double_Knob> centerKnob,offsetKnob,ptnTopLeft,ptnTopRight,ptnBtmRight,ptnBtmLeft,searchWndTopRight,searchWndBtmLeft;
+        if (_imp->interactMarker) {
+            centerKnob = _imp->interactMarker->getCenterKnob();
+            offsetKnob = _imp->interactMarker->getOffsetKnob();
+            ptnTopLeft = _imp->interactMarker->getPatternTopLeftKnob();
+            ptnTopRight = _imp->interactMarker->getPatternTopRightKnob();
+            ptnBtmRight = _imp->interactMarker->getPatternBtmRightKnob();
+            ptnBtmLeft = _imp->interactMarker->getPatternBtmLeftKnob();
+            searchWndTopRight = _imp->interactMarker->getSearchWindowTopRightKnob();
+            searchWndBtmLeft = _imp->interactMarker->getSearchWindowBottomLeftKnob();
+        }
+        
+        
+        switch (_imp->eventState) {
+            case eMouseStateDraggingCenter:
+            case eMouseStateDraggingOffset:
+            {
+                ptnTopLeft->setValue(ptnTopLeft->getValueAtTime(time,0) + delta.x, 0);
+                ptnTopLeft->setValue(ptnTopLeft->getValueAtTime(time,1) + delta.y, 1);
+                
+                ptnTopRight->setValue(ptnTopRight->getValueAtTime(time,0) + delta.x, 0);
+                ptnTopRight->setValue(ptnTopRight->getValueAtTime(time,1) + delta.y, 1);
+                
+                ptnBtmRight->setValue(ptnBtmRight->getValueAtTime(time,0) + delta.x, 0);
+                ptnBtmRight->setValue(ptnBtmRight->getValueAtTime(time,1) + delta.y, 1);
+                
+                ptnBtmLeft->setValue(ptnBtmLeft->getValueAtTime(time,0) + delta.x, 0);
+                ptnBtmLeft->setValue(ptnBtmLeft->getValueAtTime(time,1) + delta.y, 1);
+                
+                if (_imp->eventState == eMouseStateDraggingOffset) {
+                    offsetKnob->setValue(offsetKnob->getValueAtTime(time,0) + delta.x, 0);
+                    offsetKnob->setValue(offsetKnob->getValueAtTime(time,1) + delta.y, 1);
+                } else {
+                    centerKnob->setValue(centerKnob->getValueAtTime(time,0) + delta.x, 0);
+                    centerKnob->setValue(centerKnob->getValueAtTime(time,1) + delta.y, 1);
+                }
+            }   break;
+            case eMouseStateDraggingInnerBtmLeft:
+            {
+                Natron::Point p;
+                p.x = ptnBtmLeft->getValueAtTime(time,0) + delta.x;
+                p.y = ptnBtmLeft->getValueAtTime(time,1) + delta.y;
+                //Clamp so the 4 points are still an homography
+                
+            }   break;
+            default:
+                break;
+        }
     }
     _imp->lastMousePos = pos;
     
@@ -861,6 +923,7 @@ TrackerGui::penMotion(double time,
             bool isSelected = context->isMarkerSelected((*it));
             
             boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
+            boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
             
             boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
             boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
@@ -892,13 +955,22 @@ TrackerGui::penMotion(double time,
                 didSomething = true;
             }
             if (!didSomething && isSelected) {
+                
+                QPointF centerPoint;
+                centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
+                centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+                
+                QPointF offset;
+                offset.rx() = offsetKnob->getValueAtTime(time, 0);
+                offset.ry() = offsetKnob->getValueAtTime(time, 1);
+                
                 ///Test search window
                 QPointF searchTopLeft,searchTopRight,searchBtmRight,searchBtmLeft;
-                searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0);
-                searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1);
+                searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0) + centerPoint.x() + offset.x();
+                searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1) + centerPoint.y() + offset.y();
                 
-                searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0);
-                searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1);
+                searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0) + centerPoint.x() + offset.x();
+                searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1) + + centerPoint.y() + offset.y();
                 
                 searchTopLeft.rx() = searchBtmLeft.x();
                 searchTopLeft.ry() = searchTopRight.y();
