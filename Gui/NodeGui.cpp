@@ -299,6 +299,8 @@ NodeGui::initialize(NodeGraph* dag,
             assert(panel);
             panel->onChildCreated(internalNode);
         }
+    } else if (internalNode->getLiveInstance()->isBuiltinTrackerNode()) {
+        ensurePanelCreated();
     }
     
     if (internalNode->getPluginID() == PLUGINID_OFX_MERGE) {

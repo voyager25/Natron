@@ -1400,6 +1400,8 @@ public:
 
     virtual bool isDoingInteractAction() const OVERRIDE FINAL WARN_UNUSED_RETURN;
 
+    void setDoingInteractAction(bool doing);
+
     /* @brief Overlay support:
     * Just overload this function in your operator.
     * No need to include any OpenGL related header.

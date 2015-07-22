@@ -296,6 +296,18 @@ public:
     
     int getTransformReferenceFrame() const;
     
+    boost::shared_ptr<Double_Knob> getSearchWindowBottomLeftKnob() const;
+    boost::shared_ptr<Double_Knob> getSearchWindowTopRightKnob() const;
+    boost::shared_ptr<Double_Knob> getPatternTopLeftKnob() const;
+    boost::shared_ptr<Double_Knob> getPatternTopRightKnob() const;
+    boost::shared_ptr<Double_Knob> getPatternBtmRightKnob() const;
+    boost::shared_ptr<Double_Knob> getPatternBtmLeftKnob() const;
+    boost::shared_ptr<Double_Knob> getWeightKnob() const;
+    boost::shared_ptr<Double_Knob> getCenterKnob() const;
+    boost::shared_ptr<Double_Knob> getOffsetKnob() const;
+    boost::shared_ptr<Double_Knob> getCorrelationKnob() const;
+    boost::shared_ptr<Choice_Knob> getMotionModelKnob() const;
+    
     void s_keyframeSetOnTrack(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeSetOnTrack(marker,key); }
     void s_keyframeRemovedOnTrack(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeRemovedOnTrack(marker,key); }
     void s_allKeyframesRemovedOnTrack(const boost::shared_ptr<TrackMarker>& marker) { Q_EMIT allKeyframesRemovedOnTrack(marker); }

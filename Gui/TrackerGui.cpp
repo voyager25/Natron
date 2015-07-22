@@ -175,6 +175,30 @@ struct TrackerGuiPrivate
     }
 };
 
+class DuringOverlayFlag_RAII
+{
+    EffectInstance* e;
+public:
+    
+    DuringOverlayFlag_RAII(TrackerGuiPrivate* p)
+    : e(0)
+    {
+        
+        if (p->panel) {
+            e = p->panel->getNode()->getNode()->getLiveInstance();
+        }
+        e->setDoingInteractAction(true);
+    }
+    ~DuringOverlayFlag_RAII()
+    {
+        if (e) {
+            e->setDoingInteractAction(false);
+        }
+    }
+};
+
+#define FLAG_DURING_INTERACT DuringOverlayFlag_RAII __flag_setter__(_imp.get());
+
 TrackerGui::TrackerGui(TrackerPanel* panel,
            ViewerTab* parent)
 : QObject()
@@ -477,6 +501,8 @@ TrackerGui::drawOverlays(double time,
                          double scaleX,
                          double scaleY) const
 {
+    FLAG_DURING_INTERACT
+    
     double pixelScaleX, pixelScaleY;
     ViewerGL* viewer = _imp->viewer->getViewer();
     viewer->getPixelScale(pixelScaleX, pixelScaleY);
@@ -612,7 +638,8 @@ TrackerGui::drawOverlays(double time,
                     }
                     glPointSize(1.);
                 } else { // if (!isSelected) {
-                    
+                    glEnable(GL_LINE_SMOOTH);
+                    glHint(GL_LINE_SMOOTH_HINT,GL_DONT_CARE);
                     GLdouble projection[16];
                     glGetDoublev( GL_PROJECTION_MATRIX, projection);
                     OfxPointD shadow; // how much to translate GL_PROJECTION to get exactly one pixel on screen
@@ -788,7 +815,7 @@ TrackerGui::drawOverlays(double time,
                         
                         if (offset.x() != 0 || offset.y() != 0) {
                             glBegin(GL_LINES);
-                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                            glColor3f((float)markerColor[0] * l * 0.5, (float)markerColor[1] * l * 0.5, (float)markerColor[2] * l * 0.5);
                             glVertex2d(center.x(), center.y());
                             glVertex2d(center.x() + offset.x(), center.y() + offset.y());
                             glEnd();
@@ -972,6 +999,8 @@ TrackerGui::penDown(double time,
                     double pressure,
                     QMouseEvent* e)
 {
+    FLAG_DURING_INTERACT
+    
     std::pair<double,double> pixelScale;
     ViewerGL* viewer = _imp->viewer->getViewer();
     viewer->getPixelScale(pixelScale.first, pixelScale.second);
@@ -1054,15 +1083,6 @@ TrackerGui::penDown(double time,
             boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
             boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
             
-            if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                if (_imp->controlDown > 0) {
-                    _imp->eventState = eMouseStateDraggingOffset;
-                } else {
-                    _imp->eventState = eMouseStateDraggingCenter;
-                }
-                _imp->interactMarker = *it;
-                didSomething = true;
-            }
             
             QPointF centerPoint;
             centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
@@ -1071,6 +1091,21 @@ TrackerGui::penDown(double time,
             QPointF offset;
             offset.rx() = offsetKnob->getValueAtTime(time, 0);
             offset.ry() = offsetKnob->getValueAtTime(time, 1);
+            
+            if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                if (_imp->controlDown > 0) {
+                    _imp->eventState = eMouseStateDraggingOffset;
+                } else {
+                    _imp->eventState = eMouseStateDraggingCenter;
+                }
+                _imp->interactMarker = *it;
+                didSomething = true;
+            } else if ((offset.x() != 0 || offset.y() != 0) && isNearbyPoint(QPointF(centerPoint.x() + offset.x(), centerPoint.y() + offset.y()), viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                _imp->eventState = eMouseStateDraggingOffset;
+                _imp->interactMarker = *it;
+                didSomething = true;
+            }
+            
             if (!didSomething && isSelected) {
                 
                 QPointF topLeft,topRight,btmRight,btmLeft;
@@ -1191,6 +1226,8 @@ TrackerGui::penMotion(double time,
                       double pressure,
                       QInputEvent* /*e*/)
 {
+    FLAG_DURING_INTERACT
+    
     std::pair<double,double> pixelScale;
     ViewerGL* viewer = _imp->viewer->getViewer();
     viewer->getPixelScale(pixelScale.first, pixelScale.second);
@@ -1247,12 +1284,6 @@ TrackerGui::penMotion(double time,
             boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
             boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
             
-            if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->hoverState = eDrawStateHoveringCenter;
-                _imp->hoverMarker = *it;
-                hoverProcess = true;
-            }
-            
             
             QPointF centerPoint;
             centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
@@ -1261,6 +1292,17 @@ TrackerGui::penMotion(double time,
             QPointF offset;
             offset.rx() = offsetKnob->getValueAtTime(time, 0);
             offset.ry() = offsetKnob->getValueAtTime(time, 1);
+            if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
+                _imp->hoverState = eDrawStateHoveringCenter;
+                _imp->hoverMarker = *it;
+                hoverProcess = true;
+            } else if ((offset.x() != 0 || offset.y() != 0) && isNearbyPoint(QPointF(centerPoint.x() + offset.x(), centerPoint.y() + offset.y()), viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                _imp->hoverState = eDrawStateHoveringCenter;
+                _imp->hoverMarker = *it;
+                didSomething = true;
+            }
+            
+            
             
             if (!hoverProcess) {
                 QPointF topLeft,topRight,btmRight,btmLeft;
@@ -1342,8 +1384,8 @@ TrackerGui::penMotion(double time,
         boost::shared_ptr<Double_Knob> centerKnob,offsetKnob,searchWndTopRight,searchWndBtmLeft;
         boost::shared_ptr<Double_Knob> patternCorners[4];
         if (_imp->interactMarker) {
-            centerKnob = _imp->interactMarker->getCenterKnob();
-            offsetKnob = _imp->interactMarker->getOffsetKnob();
+            centerKnob = context->getCenterKnob();
+            offsetKnob = context->getOffsetKnob();
             
             /*
              
@@ -1354,12 +1396,12 @@ TrackerGui::penMotion(double time,
              Btm left (1) ------------ Btm right (2)
              
              */
-            patternCorners[0] = _imp->interactMarker->getPatternTopLeftKnob();
-            patternCorners[1] = _imp->interactMarker->getPatternBtmLeftKnob();
-            patternCorners[2] = _imp->interactMarker->getPatternBtmRightKnob();
-            patternCorners[3] = _imp->interactMarker->getPatternTopRightKnob();
-            searchWndTopRight = _imp->interactMarker->getSearchWindowTopRightKnob();
-            searchWndBtmLeft = _imp->interactMarker->getSearchWindowBottomLeftKnob();
+            patternCorners[0] = context->getPatternTopLeftKnob();
+            patternCorners[1] = context->getPatternBtmLeftKnob();
+            patternCorners[2] = context->getPatternBtmRightKnob();
+            patternCorners[3] = context->getPatternTopRightKnob();
+            searchWndTopRight = context->getSearchWindowTopRightKnob();
+            searchWndBtmLeft = context->getSearchWindowBottomLeftKnob();
         }
         
         
@@ -1371,11 +1413,11 @@ TrackerGui::penMotion(double time,
                 if (_imp->eventState == eMouseStateDraggingOffset) {
                     offsetKnob->setValues(offsetKnob->getValueAtTime(time,0) + delta.x,
                                            offsetKnob->getValueAtTime(time,1) + delta.y,
-                                           Natron::eValueChangedReasonNatronInternalEdited);
+                                           Natron::eValueChangedReasonPluginEdited);
                 } else {
                     centerKnob->setValues(centerKnob->getValueAtTime(time,0) + delta.x,
                                           centerKnob->getValueAtTime(time,1) + delta.y,
-                                          Natron::eValueChangedReasonNatronInternalEdited);
+                                          Natron::eValueChangedReasonPluginEdited);
                 }
                 didSomething = true;
             }   break;
@@ -1429,33 +1471,36 @@ TrackerGui::penMotion(double time,
                 prevVec.y = cur.y - prev.y;
                 
                 Natron::Point nextDiagVec,prevDiagVec;
-                nextDiagVec.x = diag.x - next.x;
-                nextDiagVec.y = diag.y - next.y;
+                prevDiagVec.x = diag.x - next.x;
+                prevDiagVec.y = diag.y - next.y;
                 
-                prevDiagVec.x = prev.x - diag.x;
-                prevDiagVec.y = prev.y - diag.y;
+                nextDiagVec.x = prev.x - diag.x;
+                nextDiagVec.y = prev.y - diag.y;
                 
                 //Clamp so the 4 points remaing the same in the homography
                 if (prevVec.x * nextVec.y - prevVec.y * nextVec.x < 0.) { // cross-product
                     findLineIntersection(cur, prev, next, &cur);
                 }
-                if (nextDiagVec.x * prev.y - nextDiagVec.y * prev.x < 0.) { // cross-product
+                if (nextDiagVec.x * prevVec.y - nextDiagVec.y * prevVec.x < 0.) { // cross-product
                     findLineIntersection(cur, prev, diag, &cur);
                 }
-                if (next.x * prevDiagVec.y - next.y * prevDiagVec.x < 0.) { // cross-product
+                if (nextVec.x * prevDiagVec.y - nextVec.y * prevDiagVec.x < 0.) { // cross-product
                     findLineIntersection(cur, next, diag, &cur);
                 }
                 
                 
-                Natron::Point searchWindowCorners[4];
-                searchWindowCorners[1].x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
-                searchWindowCorners[1].y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+                Natron::Point searchWindowCorners[2];
+                searchWindowCorners[0].x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
+                searchWindowCorners[0].y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
                 
-                searchWindowCorners[3].x = searchWndTopRight->getValueAtTime(time, 0)  + center.x + offset.x;;
-                searchWindowCorners[3].y = searchWndTopRight->getValueAtTime(time, 1)  + center.y + offset.y;;
+                searchWindowCorners[1].x = searchWndTopRight->getValueAtTime(time, 0)  + center.x + offset.x;
+                searchWindowCorners[1].y = searchWndTopRight->getValueAtTime(time, 1)  + center.y + offset.y;
                 
-                cur.x = std::max(std::min(cur.x, searchWindowCorners[3].x), searchWindowCorners[1].x);
-                cur.y = std::max(std::min(cur.y, searchWindowCorners[3].y), searchWindowCorners[1].y);
+                cur.x = std::max(std::min(cur.x, searchWindowCorners[1].x), searchWindowCorners[0].x);
+                cur.y = std::max(std::min(cur.y, searchWindowCorners[1].y), searchWindowCorners[0].y);
+                
+                cur.x -= (center.x + offset.x);
+                cur.y -= (center.y + offset.y);
                 
                 if (patternCorners[index]->hasAnimation()) {
                     patternCorners[index]->setValuesAtTime(time, cur.x, cur.y, Natron::eValueChangedReasonNatronInternalEdited);
@@ -1466,9 +1511,6 @@ TrackerGui::penMotion(double time,
                 didSomething = true;
             }   break;
             case eMouseStateDraggingOuterBtmLeft:
-            case eMouseStateDraggingOuterBtmRight:
-            case eMouseStateDraggingOuterTopLeft:
-            case eMouseStateDraggingOuterTopRight:
             {
                 
                 Natron::Point center,offset;
@@ -1478,32 +1520,136 @@ TrackerGui::penMotion(double time,
                 offset.x = offsetKnob->getValueAtTime(time, 0);
                 offset.y = offsetKnob->getValueAtTime(time, 1);
                 
+                Natron::Point p;
+                p.x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x + delta.x;
+                p.y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y + delta.y;
                 
-                Natron::Point searchWindowCorners[4];
-                searchWindowCorners[1].x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
-                searchWindowCorners[1].y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+                Natron::Point btmLeft,btmRight,topLeft;
+                btmLeft.x = patternCorners[1]->getValueAtTime(time,0) + center.x + offset.x;
+                btmLeft.y = patternCorners[1]->getValueAtTime(time,1) + center.y + offset.y;
+                btmRight.y = patternCorners[2]->getValueAtTime(time,1) + center.y + offset.y;
+                topLeft.x = patternCorners[0]->getValueAtTime(time,0) + center.x + offset.x;
+
+                p.x = std::min(p.x, topLeft.x);
+                p.x = std::min(p.x, btmLeft.x);
+                p.y = std::min(p.y, btmLeft.y);
+                p.y = std::min(p.y, btmRight.y);
                 
-                searchWindowCorners[3].x = searchWndTopRight->getValueAtTime(time, 0)  + center.x + offset.x;;
-                searchWindowCorners[3].y = searchWndTopRight->getValueAtTime(time, 1)  + center.y + offset.y;;
-                
-                searchWindowCorners[0].x = searchWindowCorners[1].x;
-                searchWindowCorners[0].y = searchWindowCorners[3].y;
-                
-                searchWindowCorners[2].x = searchWindowCorners[3].x;
-                searchWindowCorners[2].y = searchWindowCorners[1].y;
-                
-                int index;
-                if (_imp->eventState == eMouseStateDraggingOuterBtmLeft) {
-                    index = 1;
-                } else if (_imp->eventState == eMouseStateDraggingOuterBtmRight) {
-                    index = 2;
-                } else if (_imp->eventState == eMouseStateDraggingOuterTopLeft) {
-                    index = 0;
-                } else if (_imp->eventState == eMouseStateDraggingOuterTopRight) {
-                    index = 3;
+                p.x -= (center.x + offset.x);
+                p.y -= (center.y + offset.y);
+                if (searchWndBtmLeft->hasAnimation()) {
+                    searchWndBtmLeft->setValuesAtTime(time, p.x, p.y, Natron::eValueChangedReasonNatronInternalEdited);
+                } else {
+                    searchWndBtmLeft->setValues(p.x, p.y, Natron::eValueChangedReasonNatronInternalEdited);
                 }
+                didSomething = true;
+            }   break;
+            case eMouseStateDraggingOuterBtmRight:
+            {
+                Natron::Point center,offset;
+                center.x = centerKnob->getValueAtTime(time,0);
+                center.y = centerKnob->getValueAtTime(time,1);
                 
+                offset.x = offsetKnob->getValueAtTime(time, 0);
+                offset.y = offsetKnob->getValueAtTime(time, 1);
                 
+                Natron::Point p;
+                p.x = searchWndTopRight->getValueAtTime(time, 0) + center.x + offset.x + delta.x;
+                p.y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y + delta.y;
+                
+                Natron::Point btmLeft,btmRight,topRight;
+                btmLeft.y = patternCorners[1]->getValueAtTime(time,1) + center.y + offset.y;
+                btmRight.x = patternCorners[2]->getValueAtTime(time,0) + center.x + offset.x;
+                btmRight.y = patternCorners[2]->getValueAtTime(time,1) + center.y + offset.y;
+                topRight.x = patternCorners[0]->getValueAtTime(time,0) + center.x + offset.x;
+                p.x = std::max(p.x, topRight.x);
+                p.x = std::max(p.x, btmRight.x);
+                p.y = std::min(p.y, btmRight.y);
+                p.y = std::min(p.y, btmLeft.y);
+                
+                p.x -= (center.x + offset.x);
+                p.y -= (center.y + offset.y);
+                if (searchWndBtmLeft->hasAnimation()) {
+                    searchWndBtmLeft->setValueAtTime(time, p.y , 1);
+                } else {
+                    searchWndBtmLeft->setValue(p.y,1);
+                }
+                if (searchWndTopRight->hasAnimation()) {
+                    searchWndTopRight->setValueAtTime(time, p.x , 0);
+                } else {
+                    searchWndTopRight->setValue(p.x,0);
+                }
+                didSomething = true;
+            }   break;
+            case eMouseStateDraggingOuterTopRight:
+            {
+                Natron::Point center,offset;
+                center.x = centerKnob->getValueAtTime(time,0);
+                center.y = centerKnob->getValueAtTime(time,1);
+                
+                offset.x = offsetKnob->getValueAtTime(time, 0);
+                offset.y = offsetKnob->getValueAtTime(time, 1);
+                
+                Natron::Point p;
+                p.x = searchWndTopRight->getValueAtTime(time, 0) + center.x + offset.x + delta.x;
+                p.y = searchWndTopRight->getValueAtTime(time, 1) + center.y + offset.y + delta.y;
+                
+                Natron::Point topLeft,btmRight,topRight;
+                topRight.x = patternCorners[3]->getValueAtTime(time,0) + center.x + offset.x;
+                topRight.y = patternCorners[3]->getValueAtTime(time,1) + center.y + offset.y;
+                btmRight.x = patternCorners[2]->getValueAtTime(time,0) + center.x + offset.x;
+                topLeft.y = patternCorners[0]->getValueAtTime(time,1) + center.y + offset.y;
+                
+                p.x = std::max(p.x, topRight.x);
+                p.y = std::max(p.y, topRight.y);
+                p.x = std::max(p.x, btmRight.x);
+                p.y = std::max(p.y, topLeft.y);
+                
+                p.x -= (center.x + offset.x);
+                p.y -= (center.y + offset.y);
+                if (searchWndTopRight->hasAnimation()) {
+                    searchWndTopRight->setValuesAtTime(time, p.x , p.y, Natron::eValueChangedReasonNatronInternalEdited);
+                } else {
+                    searchWndTopRight->setValues(p.x, p.y,Natron::eValueChangedReasonNatronInternalEdited);
+                }
+                didSomething = true;
+            }   break;
+            case eMouseStateDraggingOuterTopLeft:
+            {
+                Natron::Point center,offset;
+                center.x = centerKnob->getValueAtTime(time,0);
+                center.y = centerKnob->getValueAtTime(time,1);
+                
+                offset.x = offsetKnob->getValueAtTime(time, 0);
+                offset.y = offsetKnob->getValueAtTime(time, 1);
+                
+                Natron::Point p;
+                p.x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x + delta.x;
+                p.y = searchWndTopRight->getValueAtTime(time, 1) + center.y + offset.y + delta.y;
+                
+                Natron::Point btmLeft,topLeft,topRight;
+                topLeft.x = patternCorners[0]->getValueAtTime(time,0) + center.x + offset.x;
+                topLeft.y = patternCorners[0]->getValueAtTime(time,1) + center.y + offset.y;
+                btmLeft.x = patternCorners[1]->getValueAtTime(time,0) + center.x + offset.x;
+                topRight.y = patternCorners[3]->getValueAtTime(time,1) + center.y + offset.y;
+                p.x = std::min(p.x, topLeft.x);
+                p.y = std::max(p.y, topLeft.y);
+                p.x = std::min(p.x, btmLeft.x);
+                p.y = std::max(p.y, topRight.y);
+                
+                p.x -= (center.x + offset.x);
+                p.y -= (center.y + offset.y);
+                if (searchWndBtmLeft->hasAnimation()) {
+                    searchWndBtmLeft->setValueAtTime(time, p.x , 0);
+                } else {
+                    searchWndBtmLeft->setValue(p.x,0);
+                }
+                if (searchWndTopRight->hasAnimation()) {
+                    searchWndTopRight->setValueAtTime(time, p.y , 1);
+                } else {
+                    searchWndTopRight->setValue(p.y,1);
+                }
+                didSomething = true;
             }   break;
             default:
                 break;
@@ -1528,6 +1674,8 @@ TrackerGui::penUp(double time,
                   double pressure,
                   QMouseEvent* /*e*/)
 {
+    FLAG_DURING_INTERACT
+    
     bool didSomething = false;
     
     TrackerMouseStateEnum state = _imp->eventState;
@@ -1562,6 +1710,9 @@ TrackerGui::keyDown(double time,
                     double scaleY,
                     QKeyEvent* e)
 {
+    
+    FLAG_DURING_INTERACT
+    
     bool didSomething = false;
     Qt::KeyboardModifiers modifiers = e->modifiers();
     Qt::Key key = (Qt::Key)e->key();
@@ -1602,6 +1753,9 @@ TrackerGui::keyDown(double time,
             std::list<Natron::Node*> selectedInstances;
             _imp->panelv1->getSelectedInstances(&selectedInstances);
             didSomething = !selectedInstances.empty();
+        } else {
+            _imp->panel->getContext()->selectAll(TrackerContext::eTrackSelectionInternal);
+            didSomething = false; //viewer is refreshed already
         }
     } else if ( isKeybind(kShortcutGroupTracking, kShortcutIDActionTrackingDelete, modifiers, key) ) {
         if (_imp->panelv1) {
@@ -1655,6 +1809,9 @@ TrackerGui::keyUp(double time,
                   double scaleY,
                   QKeyEvent* e)
 {
+    
+    FLAG_DURING_INTERACT
+    
     bool didSomething = false;
 
     if (e->key() == Qt::Key_Control) {
@@ -1747,6 +1904,28 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
             }
         }
         _imp->panelv1->selectNodes( currentSelection, (_imp->controlDown > 0) );
+    } else {
+        std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
+        std::list<boost::shared_ptr<TrackMarker> > selectedMarkers;
+        boost::shared_ptr<TrackerContext> context = _imp->panel->getContext();
+        context->getAllMarkers(&allMarkers);
+        for (std::size_t i = 0; i < allMarkers.size(); ++i) {
+            if (!allMarkers[i]->isEnabled()) {
+                continue;
+            }
+            boost::shared_ptr<Double_Knob> center = allMarkers[i]->getCenterKnob();
+            double x,y;
+            x = center->getValue(0);
+            y = center->getValue(1);
+            if ( (x >= l) && (x <= r) && (y >= b) && (y <= t) ) {
+                selectedMarkers.push_back(allMarkers[i]);
+            }
+        }
+        
+        context->beginEditSelection();
+        context->clearSelection(TrackerContext::eTrackSelectionInternal);
+        context->addTracksToSelection(selectedMarkers,TrackerContext::eTrackSelectionInternal);
+        context->endEditSelection(TrackerContext::eTrackSelectionInternal);
     }
 }
 

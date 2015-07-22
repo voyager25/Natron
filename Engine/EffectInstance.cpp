@@ -5255,6 +5255,12 @@ EffectInstance::setCurrentViewportForOverlays_public(OverlaySupport* viewport)
 }
 
 void
+EffectInstance::setDoingInteractAction(bool doing)
+{
+    _imp->setDuringInteractAction(doing);
+}
+
+void
 EffectInstance::drawOverlay_public(double time,
                                    double scaleX,
                                    double scaleY)
