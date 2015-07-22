@@ -837,15 +837,9 @@ TrackerPanel::pushUndoCommand(QUndoCommand* command)
 void
 TrackerPanel::onRemoveButtonClicked()
 {
-    std::set<int> rows;
-    getSelectedRows(&rows);
+
     std::list<boost::shared_ptr<TrackMarker> > markers;
-    for (std::set<int>::iterator it = rows.begin(); it!=rows.end(); ++it) {
-        boost::shared_ptr<TrackMarker> marker = getRowMarker(*it);
-        if (marker) {
-            markers.push_back(marker);
-        }
-    }
+    getContext()->getSelectedMarkers(&markers);
     if (!markers.empty()) {
         pushUndoCommand(new RemoveTracksCommand(markers, getContext()));
     }
