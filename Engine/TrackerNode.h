@@ -103,6 +103,11 @@ public:
         return false;
     }
     
+    virtual bool hasOverlay() const OVERRIDE FINAL
+    {
+        return true;
+    }
+
 private:
     
     virtual bool isIdentity(double time,

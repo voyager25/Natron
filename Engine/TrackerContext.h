@@ -87,7 +87,7 @@ public:
     
     bool isEnabled() const;
     
-    void setEnabled(bool enabled);
+    void setEnabled(bool enabled, int reason);
     
     void resetCenter();
     
@@ -109,6 +109,20 @@ public Q_SLOTS:
     void onCenterKeyframeMoved(int dimension,int oldTime,int newTime);
     void onCenterKeyframesSet(const std::list<SequenceTime>& keys, int dimension, int reason);
     void onCenterAnimationRemoved(int dimension);
+    
+    void onCenterKnobValueChanged(int dimension,int reason);
+    void onOffsetKnobValueChanged(int dimension,int reason);
+    void onCorrelationKnobValueChanged(int dimension,int reason);
+    void onWeightKnobValueChanged(int dimension,int reason);
+    void onMotionModelKnobValueChanged(int dimension,int reason);
+    
+    /*void onPatternTopLeftKnobValueChanged(int dimension,int reason);
+    void onPatternTopRightKnobValueChanged(int dimension,int reason);
+    void onPatternBtmRightKnobValueChanged(int dimension,int reason);
+    void onPatternBtmLeftKnobValueChanged(int dimension,int reason);
+    
+    void onSearchBtmLeftKnobValueChanged(int dimension,int reason);
+    void onSearchTopRightKnobValueChanged(int dimension,int reason);*/
     
 private:
     
@@ -282,17 +296,33 @@ public:
     
     int getTransformReferenceFrame() const;
     
-    void s_keyframeSetOnTrack(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeSetOnTrack(marker,key); }
-    void s_keyframeRemovedOnTrack(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeRemovedOnTrack(marker,key); }
-    void s_allKeyframesRemovedOnTrack(boost::shared_ptr<TrackMarker> marker) { Q_EMIT allKeyframesRemovedOnTrack(marker); }
+    void s_keyframeSetOnTrack(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeSetOnTrack(marker,key); }
+    void s_keyframeRemovedOnTrack(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeRemovedOnTrack(marker,key); }
+    void s_allKeyframesRemovedOnTrack(const boost::shared_ptr<TrackMarker>& marker) { Q_EMIT allKeyframesRemovedOnTrack(marker); }
     
-    void s_keyframeSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeSetOnTrackCenter(marker,key); }
-    void s_keyframeRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker,int key) { Q_EMIT keyframeRemovedOnTrackCenter(marker,key); }
-    void s_allKeyframesRemovedOnTrackCenter(boost::shared_ptr<TrackMarker> marker) { Q_EMIT allKeyframesRemovedOnTrackCenter(marker); }
-    void s_multipleKeyframesSetOnTrackCenter(boost::shared_ptr<TrackMarker> marker, const std::list<int>& keys) { Q_EMIT multipleKeyframesSetOnTrackCenter(marker,keys); }
+    void s_keyframeSetOnTrackCenter(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeSetOnTrackCenter(marker,key); }
+    void s_keyframeRemovedOnTrackCenter(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeRemovedOnTrackCenter(marker,key); }
+    void s_allKeyframesRemovedOnTrackCenter(const boost::shared_ptr<TrackMarker>& marker) { Q_EMIT allKeyframesRemovedOnTrackCenter(marker); }
+    void s_multipleKeyframesSetOnTrackCenter(const boost::shared_ptr<TrackMarker>& marker, const std::list<int>& keys) { Q_EMIT multipleKeyframesSetOnTrackCenter(marker,keys); }
     
-    void s_trackAboutToClone(boost::shared_ptr<TrackMarker> marker) { Q_EMIT trackAboutToClone(marker); }
-    void s_trackCloned(boost::shared_ptr<TrackMarker> marker) { Q_EMIT trackCloned(marker); }
+    void s_trackAboutToClone(const boost::shared_ptr<TrackMarker>& marker) { Q_EMIT trackAboutToClone(marker); }
+    void s_trackCloned(const boost::shared_ptr<TrackMarker>& marker) { Q_EMIT trackCloned(marker); }
+    
+    void s_enabledChanged(boost::shared_ptr<TrackMarker> marker,int reason) { Q_EMIT enabledChanged(marker, reason); }
+    
+    void s_centerKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT centerKnobValueChanged(marker,dimension,reason); }
+    void s_offsetKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT offsetKnobValueChanged(marker,dimension,reason); }
+    void s_correlationKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT correlationKnobValueChanged(marker,dimension,reason); }
+    void s_weightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT weightKnobValueChanged(marker,dimension,reason); }
+    void s_motionModelKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT motionModelKnobValueChanged(marker,dimension,reason); }
+    
+   /* void s_patternTopLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternTopLeftKnobValueChanged(marker,dimension,reason); }
+    void s_patternTopRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternTopRightKnobValueChanged(marker,dimension, reason); }
+    void s_patternBtmRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternBtmRightKnobValueChanged(marker,dimension, reason); }
+    void s_patternBtmLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternBtmLeftKnobValueChanged(marker,dimension, reason); }
+    
+    void s_searchBtmLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT searchBtmLeftKnobValueChanged(marker,dimension,reason); }
+    void s_searchTopRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT searchTopRightKnobValueChanged(marker, dimension, reason); }*/
     
 public Q_SLOTS:
     
@@ -316,6 +346,25 @@ Q_SIGNALS:
     //reason is of type TrackSelectionReason
     void selectionChanged(int reason);
     void selectionAboutToChange(int reason);
+    
+    void trackInserted(boost::shared_ptr<TrackMarker> marker,int index);
+    void trackRemoved(boost::shared_ptr<TrackMarker> marker);
+    
+    void enabledChanged(boost::shared_ptr<TrackMarker> marker,int reason);
+    
+    void centerKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void offsetKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void correlationKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void weightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void motionModelKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    
+    /*void patternTopLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void patternTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void patternBtmRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void patternBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    
+    void searchBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void searchTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);*/
     
 private:
     

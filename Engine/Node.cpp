@@ -604,9 +604,10 @@ Node::load(const std::string & parentMultiInstanceName,
         assert(_imp->liveInstance);
         _imp->liveInstance->initializeData();
         
+        
+        initializeInputs();
         createRotoContextConditionnally();
         createTrackerContextConditionnally();
-        initializeInputs();
         initializeKnobs(renderScaleSupportPreference);
         
         if (!serialization.isNull()) {

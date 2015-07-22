@@ -1420,7 +1420,8 @@ private:
                          Natron::ValueChangedReasonEnum reason,
                          bool copyState) OVERRIDE FINAL;
 
-    
+public:
+  
        /**
      * @brief Set the value of the knob at the given time and for the given dimension with the given reason.
      * @param newKey[out] The keyframe that was added if the return value is true.
@@ -1432,7 +1433,6 @@ private:
                         Natron::ValueChangedReasonEnum reason,
                         KeyFrame* newKey);
 
-public:
 
     /**
      * @brief Set the value of the knob in the given dimension with the given reason.

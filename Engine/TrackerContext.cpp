@@ -286,13 +286,45 @@ TrackMarker::TrackMarker(const boost::shared_ptr<TrackerContext>& context)
 , _imp(new TrackMarkerPrivate(context))
 {
     boost::shared_ptr<KnobSignalSlotHandler> handler = _imp->center->getSignalSlotHandler();
-    QObject::connect(handler.get(), SIGNAL(keyframeSet(SequenceTime,int,int,bool)), this , SLOT(onCenterKeyframeSet(SequenceTime,int,int,bool)));
+    QObject::connect(handler.get(), SIGNAL(keyFrameSet(SequenceTime,int,int,bool)), this , SLOT(onCenterKeyframeSet(SequenceTime,int,int,bool)));
     QObject::connect(handler.get(), SIGNAL(keyFrameRemoved(SequenceTime,int,int)), this , SLOT(onCenterKeyframeRemoved(SequenceTime,int,int)));
     QObject::connect(handler.get(), SIGNAL(keyFrameMoved(int,int,int)), this , SLOT(onCenterKeyframeMoved(int,int,int)));
     QObject::connect(handler.get(), SIGNAL(multipleKeyFramesSet(std::list<SequenceTime>, int, int)), this ,
                      SLOT(onCenterKeyframesSet(std::list<SequenceTime>, int, int)));
     QObject::connect(handler.get(), SIGNAL(animationRemoved(int)), this , SLOT(onCenterAnimationRemoved(int)));
+    
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onCenterKnobValueChanged(int, int)));
+    handler = _imp->offset->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onOffsetKnobValueChanged(int, int)));
+    
+    handler = _imp->correlation->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onCorrelationKnobValueChanged(int, int)));
+    
+    handler = _imp->weight->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onWeightKnobValueChanged(int, int)));
+    
+    handler = _imp->motionModel->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onMotionModelKnobValueChanged(int, int)));
+    
+    /*handler = _imp->patternBtmLeft->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onPatternBtmLeftKnobValueChanged(int, int)));
+    
+    handler = _imp->patternTopLeft->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onPatternTopLeftKnobValueChanged(int, int)));
+    
+    handler = _imp->patternTopRight->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onPatternTopRightKnobValueChanged(int, int)));
+    
+    handler = _imp->patternBtmRight->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onPatternBtmRightKnobValueChanged(int, int)));
+    
+    handler = _imp->searchWindowBtmLeft->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onSearchBtmLeftKnobValueChanged(int, int)));
+
+    handler = _imp->searchWindowTopRight->getSignalSlotHandler();
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onSearchTopRightKnobValueChanged(int, int)));*/
 }
+
 
 TrackMarker::~TrackMarker()
 {
@@ -515,10 +547,13 @@ TrackMarker::isEnabled() const
 }
 
 void
-TrackMarker::setEnabled(bool enabled)
+TrackMarker::setEnabled(bool enabled, int reason)
 {
-    QMutexLocker k(&_imp->trackMutex);
-    _imp->enabled = enabled;
+    {
+        QMutexLocker k(&_imp->trackMutex);
+        _imp->enabled = enabled;
+    }
+    getContext()->s_enabledChanged(shared_from_this(), reason);
 }
 
 int
@@ -674,6 +709,72 @@ TrackMarker::onCenterAnimationRemoved(int /*dimension*/)
 {
     getContext()->s_allKeyframesRemovedOnTrackCenter(shared_from_this());
 }
+
+void
+TrackMarker::onCenterKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_centerKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onOffsetKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_offsetKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onCorrelationKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_correlationKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onWeightKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_weightKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onMotionModelKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_motionModelKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+/*void
+TrackMarker::onPatternTopLeftKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_patternTopLeftKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onPatternTopRightKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_patternTopRightKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onPatternBtmRightKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_patternBtmRightKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onPatternBtmLeftKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_patternBtmLeftKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onSearchBtmLeftKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_searchBtmLeftKnobValueChanged(shared_from_this(), dimension, reason);
+}
+
+void
+TrackMarker::onSearchTopRightKnobValueChanged(int dimension,int reason)
+{
+    getContext()->s_searchTopRightKnobValueChanged(shared_from_this(), dimension, reason);
+}*/
 
 
 struct TrackMarkerAndOptions
@@ -1473,10 +1574,13 @@ TrackerContext::createMarker()
     track->setScriptName(name);
     track->setLabel(name);
     track->resetCenter();
+    int index;
     {
         QMutexLocker k(&_imp->trackerContextMutex);
+        index  = _imp->markers.size();
         _imp->markers.push_back(track);
     }
+    Q_EMIT trackInserted(track, index);
     return track;
     
 }
@@ -1524,22 +1628,30 @@ TrackerContext::getNextMarker(const boost::shared_ptr<TrackMarker>& marker, bool
 void
 TrackerContext::appendMarker(const boost::shared_ptr<TrackMarker>& marker)
 {
-    QMutexLocker k(&_imp->trackerContextMutex);
-    _imp->markers.push_back(marker);
+    int index;
+    {
+        QMutexLocker k(&_imp->trackerContextMutex);
+        index = _imp->markers.size();
+        _imp->markers.push_back(marker);
+    }
+    Q_EMIT trackInserted(marker, index);
 }
 
 void
 TrackerContext::insertMarker(const boost::shared_ptr<TrackMarker>& marker, int index)
 {
-    QMutexLocker k(&_imp->trackerContextMutex);
-    assert(index >= 0);
-    if (index >= (int)_imp->markers.size()) {
-        _imp->markers.push_back(marker);
-    } else {
-        std::vector<boost::shared_ptr<TrackMarker> >::iterator it = _imp->markers.begin();
-        std::advance(it, index);
-        _imp->markers.insert(it, marker);
+    {
+        QMutexLocker k(&_imp->trackerContextMutex);
+        assert(index >= 0);
+        if (index >= (int)_imp->markers.size()) {
+            _imp->markers.push_back(marker);
+        } else {
+            std::vector<boost::shared_ptr<TrackMarker> >::iterator it = _imp->markers.begin();
+            std::advance(it, index);
+            _imp->markers.insert(it, marker);
+        }
     }
+    Q_EMIT trackInserted(marker,index);
 }
 
 void
@@ -1557,6 +1669,7 @@ TrackerContext::removeMarker(const boost::shared_ptr<TrackMarker>& marker)
     beginEditSelection();
     removeTrackFromSelection(marker, TrackerContext::eTrackSelectionInternal);
     endEditSelection(TrackerContext::eTrackSelectionInternal);
+    Q_EMIT trackRemoved(marker);
 }
 
 boost::shared_ptr<Natron::Node>
@@ -2100,9 +2213,17 @@ TrackerContext::beginEditSelection()
 void
 TrackerContext::endEditSelection(TrackSelectionReason reason)
 {
-    QMutexLocker k(&_imp->trackerContextMutex);
-    _imp->decrementSelectionCounter();
-    if (_imp->beginSelectionCounter == 0) {
+    bool doEnd = false;
+    {
+        QMutexLocker k(&_imp->trackerContextMutex);
+        _imp->decrementSelectionCounter();
+        
+        if (_imp->beginSelectionCounter == 0) {
+            doEnd = true;
+            
+        }
+    }
+    if (doEnd) {
         endSelection(reason);
     }
 }
@@ -2118,21 +2239,26 @@ TrackerContext::addTrackToSelection(const boost::shared_ptr<TrackMarker>& mark, 
 void
 TrackerContext::addTracksToSelection(const std::list<boost::shared_ptr<TrackMarker> >& marks, TrackSelectionReason reason)
 {
-    QMutexLocker k(&_imp->trackerContextMutex);
-    
     bool hasCalledBegin = false;
-    if (!_imp->beginSelectionCounter) {
-        _imp->incrementSelectionCounter();
-        hasCalledBegin = true;
+    {
+        QMutexLocker k(&_imp->trackerContextMutex);
+        
+        if (!_imp->beginSelectionCounter) {
+            _imp->incrementSelectionCounter();
+            hasCalledBegin = true;
+        }
+        
+        for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = marks.begin() ; it!=marks.end(); ++it) {
+            _imp->addToSelectionList(*it);
+        }
+        
+        if (hasCalledBegin) {
+            _imp->decrementSelectionCounter();
+        }
     }
-    
-    for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = marks.begin() ; it!=marks.end(); ++it) {
-        _imp->addToSelectionList(*it);
-    }
-    
     if (hasCalledBegin) {
-        _imp->decrementSelectionCounter();
         endSelection(reason);
+        
     }
 }
 
@@ -2147,24 +2273,27 @@ TrackerContext::removeTrackFromSelection(const boost::shared_ptr<TrackMarker>& m
 void
 TrackerContext::removeTracksFromSelection(const std::list<boost::shared_ptr<TrackMarker> >& marks, TrackSelectionReason reason)
 {
-    
-    QMutexLocker k(&_imp->trackerContextMutex);
-    
     bool hasCalledBegin = false;
-    if (!_imp->beginSelectionCounter) {
-        _imp->incrementSelectionCounter();
-        hasCalledBegin = true;
-    }
     
-    for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = marks.begin() ; it!=marks.end(); ++it) {
-        _imp->removeFromSelectionList(*it);
+    {
+        QMutexLocker k(&_imp->trackerContextMutex);
+        
+        if (!_imp->beginSelectionCounter) {
+            _imp->incrementSelectionCounter();
+            hasCalledBegin = true;
+        }
+        
+        for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = marks.begin() ; it!=marks.end(); ++it) {
+            _imp->removeFromSelectionList(*it);
+        }
+        
+        if (hasCalledBegin) {
+            _imp->decrementSelectionCounter();
+        }
     }
-    
     if (hasCalledBegin) {
-        _imp->decrementSelectionCounter();
         endSelection(reason);
     }
-
 }
 
 void
@@ -2221,142 +2350,144 @@ void
 TrackerContext::endSelection(TrackSelectionReason reason)
 {
     
-    assert(!_imp->trackerContextMutex.tryLock());
-    
-    // Slave newly selected knobs
-    bool selectionIsDirty = _imp->selectedMarkers.size() > 1;
-    bool selectionEmpty = _imp->selectedMarkers.empty();
-    if (_imp->markersToSlave.empty() && _imp->markersToUnslave.empty()) {
-        return;
-    }
-    
     Q_EMIT selectionAboutToChange((int)reason);
     
     {
-        std::list<boost::shared_ptr<TrackMarker> >::const_iterator next = _imp->markersToSlave.begin();
-        if (!_imp->markersToSlave.empty()) {
-            ++next;
+        QMutexLocker k(&_imp->trackerContextMutex);
+        
+        // Slave newly selected knobs
+        bool selectionIsDirty = _imp->selectedMarkers.size() > 1;
+        bool selectionEmpty = _imp->selectedMarkers.empty();
+        if (_imp->markersToSlave.empty() && _imp->markersToUnslave.empty()) {
+            return;
         }
         
         
-        for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToSlave.begin() ; it!=_imp->markersToSlave.end(); ++it) {
-            const std::list<boost::shared_ptr<KnobI> >& trackKnobs = (*it)->getKnobs();
-            for (std::list<boost::shared_ptr<KnobI> >::const_iterator it2 = trackKnobs.begin(); it2 != trackKnobs.end(); ++it2) {
-                
-                // Find the knob in the TrackerContext knobs
-                boost::shared_ptr<KnobI> found;
-                for (std::list<boost::weak_ptr<KnobI> >::iterator it3 = _imp->perTrackKnobs.begin(); it3 != _imp->perTrackKnobs.end(); ++it3) {
-                    boost::shared_ptr<KnobI> k = it3->lock();
-                    if (k->getName() == (*it2)->getName()) {
-                        found = k;
-                        break;
-                    }
-                }
-                
-                if (!found) {
-                    continue;
-                }
-                
-                //Clone current state only for the last marker
-                if (next == _imp->markersToSlave.end()) {
-                    found->cloneAndUpdateGui(it2->get());
-                }
-                
-                //Slave internal knobs of the bezier
-                assert((*it2)->getDimension() == found->getDimension());
-                for (int i = 0; i < (*it2)->getDimension(); ++i) {
-                    (*it2)->slaveTo(i, found, i);
-                }
-                
-                QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameSet(SequenceTime,int,int,bool)),
-                                 this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameRemoved(SequenceTime,int,int)),
-                                 this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameMoved(int,int,int)),
-                                 this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(animationRemoved(int)),
-                                 this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(derivativeMoved(SequenceTime,int)),
-                                 this, SLOT(onSelectedKnobCurveChanged()));
-                
-                QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameInterpolationChanged(SequenceTime,int)),
-                                 this, SLOT(onSelectedKnobCurveChanged()));
-                
-                
-            }
-            if (next != _imp->markersToSlave.end()) {
+        {
+            std::list<boost::shared_ptr<TrackMarker> >::const_iterator next = _imp->markersToSlave.begin();
+            if (!_imp->markersToSlave.empty()) {
                 ++next;
             }
-        } // for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToSlave.begin() ; it!=_imp->markersToSlave.end(); ++it)
-        _imp->markersToSlave.clear();
-    }
-    
-    {
-        std::list<boost::shared_ptr<TrackMarker> >::const_iterator next = _imp->markersToUnslave.begin();
-        if (!_imp->markersToUnslave.empty()) {
-            ++next;
-        }
-        for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToUnslave.begin() ; it!=_imp->markersToUnslave.end(); ++it) {
-            const std::list<boost::shared_ptr<KnobI> >& trackKnobs = (*it)->getKnobs();
-            for (std::list<boost::shared_ptr<KnobI> >::const_iterator it2 = trackKnobs.begin(); it2 != trackKnobs.end(); ++it2) {
-                
-                // Find the knob in the TrackerContext knobs
-                boost::shared_ptr<KnobI> found;
-                for (std::list<boost::weak_ptr<KnobI> >::iterator it3 = _imp->perTrackKnobs.begin(); it3 != _imp->perTrackKnobs.end(); ++it3) {
-                    boost::shared_ptr<KnobI> k = it3->lock();
-                    if (k->getName() == (*it2)->getName()) {
-                        found = k;
-                        break;
+            
+            
+            for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToSlave.begin() ; it!=_imp->markersToSlave.end(); ++it) {
+                const std::list<boost::shared_ptr<KnobI> >& trackKnobs = (*it)->getKnobs();
+                for (std::list<boost::shared_ptr<KnobI> >::const_iterator it2 = trackKnobs.begin(); it2 != trackKnobs.end(); ++it2) {
+                    
+                    // Find the knob in the TrackerContext knobs
+                    boost::shared_ptr<KnobI> found;
+                    for (std::list<boost::weak_ptr<KnobI> >::iterator it3 = _imp->perTrackKnobs.begin(); it3 != _imp->perTrackKnobs.end(); ++it3) {
+                        boost::shared_ptr<KnobI> k = it3->lock();
+                        if (k->getName() == (*it2)->getName()) {
+                            found = k;
+                            break;
+                        }
                     }
+                    
+                    if (!found) {
+                        continue;
+                    }
+                    
+                    //Clone current state only for the last marker
+                    if (next == _imp->markersToSlave.end()) {
+                        found->cloneAndUpdateGui(it2->get());
+                    }
+                    
+                    //Slave internal knobs of the bezier
+                    assert((*it2)->getDimension() == found->getDimension());
+                    for (int i = 0; i < (*it2)->getDimension(); ++i) {
+                        (*it2)->slaveTo(i, found, i);
+                    }
+                    
+                    QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameSet(SequenceTime,int,int,bool)),
+                                     this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameRemoved(SequenceTime,int,int)),
+                                     this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameMoved(int,int,int)),
+                                     this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(animationRemoved(int)),
+                                     this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(derivativeMoved(SequenceTime,int)),
+                                     this, SLOT(onSelectedKnobCurveChanged()));
+                    
+                    QObject::connect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameInterpolationChanged(SequenceTime,int)),
+                                     this, SLOT(onSelectedKnobCurveChanged()));
+                    
+                    
                 }
-                
-                if (!found) {
-                    continue;
+                if (next != _imp->markersToSlave.end()) {
+                    ++next;
                 }
-                
-                //Clone current state only for the last marker
-                if (next == _imp->markersToSlave.end()) {
-                    found->cloneAndUpdateGui(it2->get());
-                }
-                
-                //Slave internal knobs of the bezier
-                assert((*it2)->getDimension() == found->getDimension());
-                for (int i = 0; i < (*it2)->getDimension(); ++i) {
-                    (*it2)->unSlave(i, !selectionIsDirty);
-                }
-                
-                QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameSet(SequenceTime,int,int,bool)),
-                                    this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameRemoved(SequenceTime,int,int)),
-                                    this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameMoved(int,int,int)),
-                                    this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(animationRemoved(int)),
-                                    this, SLOT(onSelectedKnobCurveChanged()));
-                QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(derivativeMoved(SequenceTime,int)),
-                                    this, SLOT(onSelectedKnobCurveChanged()));
-                
-                QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameInterpolationChanged(SequenceTime,int)),
-                                    this, SLOT(onSelectedKnobCurveChanged()));
-                
-                
-            }
-            if (next != _imp->markersToUnslave.end()) {
+            } // for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToSlave.begin() ; it!=_imp->markersToSlave.end(); ++it)
+            _imp->markersToSlave.clear();
+        }
+        
+        {
+            std::list<boost::shared_ptr<TrackMarker> >::const_iterator next = _imp->markersToUnslave.begin();
+            if (!_imp->markersToUnslave.empty()) {
                 ++next;
             }
-        } // for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToUnslave() ; it!=_imp->markersToUnslave(); ++it)
-        _imp->markersToUnslave.clear();
-    }
-    
-    for (std::list<boost::weak_ptr<KnobI> >::iterator it = _imp->perTrackKnobs.begin(); it != _imp->perTrackKnobs.end(); ++it) {
-        boost::shared_ptr<KnobI> k = it->lock();
-        if (!k) {
-            continue;
+            for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToUnslave.begin() ; it!=_imp->markersToUnslave.end(); ++it) {
+                const std::list<boost::shared_ptr<KnobI> >& trackKnobs = (*it)->getKnobs();
+                for (std::list<boost::shared_ptr<KnobI> >::const_iterator it2 = trackKnobs.begin(); it2 != trackKnobs.end(); ++it2) {
+                    
+                    // Find the knob in the TrackerContext knobs
+                    boost::shared_ptr<KnobI> found;
+                    for (std::list<boost::weak_ptr<KnobI> >::iterator it3 = _imp->perTrackKnobs.begin(); it3 != _imp->perTrackKnobs.end(); ++it3) {
+                        boost::shared_ptr<KnobI> k = it3->lock();
+                        if (k->getName() == (*it2)->getName()) {
+                            found = k;
+                            break;
+                        }
+                    }
+                    
+                    if (!found) {
+                        continue;
+                    }
+                    
+                    //Clone current state only for the last marker
+                    if (next == _imp->markersToSlave.end()) {
+                        found->cloneAndUpdateGui(it2->get());
+                    }
+                    
+                    //Slave internal knobs of the bezier
+                    assert((*it2)->getDimension() == found->getDimension());
+                    for (int i = 0; i < (*it2)->getDimension(); ++i) {
+                        (*it2)->unSlave(i, !selectionIsDirty);
+                    }
+                    
+                    QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameSet(SequenceTime,int,int,bool)),
+                                        this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameRemoved(SequenceTime,int,int)),
+                                        this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameMoved(int,int,int)),
+                                        this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(animationRemoved(int)),
+                                        this, SLOT(onSelectedKnobCurveChanged()));
+                    QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(derivativeMoved(SequenceTime,int)),
+                                        this, SLOT(onSelectedKnobCurveChanged()));
+                    
+                    QObject::disconnect((*it2)->getSignalSlotHandler().get(), SIGNAL(keyFrameInterpolationChanged(SequenceTime,int)),
+                                        this, SLOT(onSelectedKnobCurveChanged()));
+                    
+                    
+                }
+                if (next != _imp->markersToUnslave.end()) {
+                    ++next;
+                }
+            } // for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markersToUnslave() ; it!=_imp->markersToUnslave(); ++it)
+            _imp->markersToUnslave.clear();
         }
-        k->setAllDimensionsEnabled(!selectionEmpty);
-        k->setDirty(selectionIsDirty);
-    }
-    
+        
+        for (std::list<boost::weak_ptr<KnobI> >::iterator it = _imp->perTrackKnobs.begin(); it != _imp->perTrackKnobs.end(); ++it) {
+            boost::shared_ptr<KnobI> k = it->lock();
+            if (!k) {
+                continue;
+            }
+            k->setAllDimensionsEnabled(!selectionEmpty);
+            k->setDirty(selectionIsDirty);
+        }
+    } //  QMutexLocker k(&_imp->trackerContextMutex);
     Q_EMIT selectionChanged((int)reason);
 }
 

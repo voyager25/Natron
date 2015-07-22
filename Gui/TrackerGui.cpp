@@ -44,6 +44,8 @@ CLANG_DIAG_ON(uninitialized)
 #define CROSS_SIZE 6
 #define POINT_TOLERANCE 6
 #define ADDTRACK_SIZE 5
+#define HANDLE_SIZE 6
+
 
 using namespace Natron;
 
@@ -443,13 +445,43 @@ TrackerGui::onAddTrackClicked(bool clicked)
     _imp->viewer->getViewer()->redraw();
 }
 
+static QPointF computeMidPointExtent(const QPointF& prev, const QPointF& next, const QPointF& point, double handleSize)
+{
+    Natron::Point leftDeriv,rightDeriv;
+    leftDeriv.x = prev.x() - point.x();
+    leftDeriv.y = prev.y() - point.y();
+    
+    rightDeriv.x = next.x() - point.x();
+    rightDeriv.y = next.y() - point.y();
+    double derivNorm = std::sqrt((rightDeriv.x - leftDeriv.x) * (rightDeriv.x - leftDeriv.x) + (rightDeriv.y - leftDeriv.y) * (rightDeriv.y - leftDeriv.y));
+    QPointF ret;
+    if (derivNorm == 0) {
+        double norm = std::sqrt((leftDeriv.x - point.x()) * (leftDeriv.x - point.x()) + (leftDeriv.y - point.y()) * (leftDeriv.y  - point.y()));
+        if (norm != 0) {
+            ret.rx() = point.x() + ((leftDeriv.y - point.y()) / norm) * handleSize;
+            ret.ry() = point.y() - ((leftDeriv.x - point.x()) / norm) * handleSize;
+            return ret;
+        } else {
+            return QPointF(0,0);
+        }
+
+    } else {
+        ret.rx() = point.x() + ((rightDeriv.y - leftDeriv.y) / derivNorm) * handleSize;
+        ret.ry() = point.y() - ((rightDeriv.x - leftDeriv.x) / derivNorm) * handleSize;
+    }
+    return ret;
+}
+
 void
 TrackerGui::drawOverlays(double time,
                          double scaleX,
                          double scaleY) const
 {
     double pixelScaleX, pixelScaleY;
-    _imp->viewer->getViewer()->getPixelScale(pixelScaleX, pixelScaleY);
+    ViewerGL* viewer = _imp->viewer->getViewer();
+    viewer->getPixelScale(pixelScaleX, pixelScaleY);
+    double viewportSize[2];
+    viewer->getViewportSize(viewportSize[0], viewportSize[1]);
     
     {
         GLProtectAttrib a(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_POINT_BIT | GL_ENABLE_BIT | GL_HINT_BIT | GL_TRANSFORM_BIT);
@@ -511,49 +543,14 @@ TrackerGui::drawOverlays(double time,
                 }
             }
             
-            if (_imp->clickToAddTrackEnabled) {
-                ///draw a square of 20px around the mouse cursor
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glEnable(GL_LINE_SMOOTH);
-                glHint(GL_LINE_SMOOTH_HINT, GL_DONT_CARE);
-                glLineWidth(1.5);
-                //GLProtectMatrix p(GL_PROJECTION); // useless (we do two glTranslate in opposite directions)
-                for (int l = 0; l < 2; ++l) {
-                    // shadow (uses GL_PROJECTION)
-                    glMatrixMode(GL_PROJECTION);
-                    int direction = (l == 0) ? 1 : -1;
-                    // translate (1,-1) pixels
-                    glTranslated(direction * pixelScaleX / 256, -direction * pixelScaleY / 256, 0);
-                    glMatrixMode(GL_MODELVIEW);
-                    
-                    if (l == 0) {
-                        glColor4d(0., 0., 0., 0.8);
-                    } else {
-                        glColor4d(0., 1., 0.,0.8);
-                    }
-                    
-                    glBegin(GL_LINE_LOOP);
-                    glVertex2d(_imp->lastMousePos.x() - ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() - ADDTRACK_SIZE * 2 * pixelScaleY);
-                    glVertex2d(_imp->lastMousePos.x() - ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() + ADDTRACK_SIZE * 2 * pixelScaleY);
-                    glVertex2d(_imp->lastMousePos.x() + ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() + ADDTRACK_SIZE * 2 * pixelScaleY);
-                    glVertex2d(_imp->lastMousePos.x() + ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() - ADDTRACK_SIZE * 2 * pixelScaleY);
-                    glEnd();
-                    
-                    ///draw a cross at the cursor position
-                    glBegin(GL_LINES);
-                    glVertex2d( _imp->lastMousePos.x() - ADDTRACK_SIZE * pixelScaleX, _imp->lastMousePos.y() );
-                    glVertex2d( _imp->lastMousePos.x() + ADDTRACK_SIZE * pixelScaleX, _imp->lastMousePos.y() );
-                    glVertex2d(_imp->lastMousePos.x(), _imp->lastMousePos.y() - ADDTRACK_SIZE * pixelScaleY);
-                    glVertex2d(_imp->lastMousePos.x(), _imp->lastMousePos.y() + ADDTRACK_SIZE * pixelScaleY);
-                    glEnd();
-                }
-            }
+            
         } // if (_imp->panelv1) {
         else {
             assert(_imp->panel);
             double markerColor[3];
-            _imp->panel->getNode()->getOverlayColor(&markerColor[0], &markerColor[1], &markerColor[2]);
+            if (!_imp->panel->getNode()->getOverlayColor(&markerColor[0], &markerColor[1], &markerColor[2])) {
+                markerColor[0] = markerColor[1] = markerColor[2] = 0.8;
+            }
             
             std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
             std::list<boost::shared_ptr<TrackMarker> > selectedMarkers;
@@ -569,9 +566,20 @@ TrackerGui::drawOverlays(double time,
                 std::list<boost::shared_ptr<TrackMarker> >::iterator foundSelected = std::find(selectedMarkers.begin(),selectedMarkers.end(),*it);
                 bool isSelected = foundSelected != selectedMarkers.end();
                 
+                boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
+                boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
+                boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
+                boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
+                boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
+                boost::shared_ptr<Double_Knob> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
+                boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
+                boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
+                
                 if (!isSelected) {
                     ///Draw a custom interact, indicating the track isn't selected
-                    boost::shared_ptr<Double_Knob> center = (*it)->getCenterKnob();
+                    glEnable(GL_LINE_SMOOTH);
+                    glHint(GL_LINE_SMOOTH_HINT,GL_DONT_CARE);
+                    glLineWidth(1.5f);
                     for (int l = 0; l < 2; ++l) {
                         // shadow (uses GL_PROJECTION)
                         glMatrixMode(GL_PROJECTION);
@@ -587,8 +595,8 @@ TrackerGui::drawOverlays(double time,
                         }
                         
                         
-                        double x = center->getValueAtTime(time,0);
-                        double y = center->getValueAtTime(time,1);
+                        double x = centerKnob->getValueAtTime(time,0);
+                        double y = centerKnob->getValueAtTime(time,1);
                         glPointSize(POINT_SIZE);
                         glBegin(GL_POINTS);
                         glVertex2d(x,y);
@@ -605,7 +613,305 @@ TrackerGui::drawOverlays(double time,
                     glPointSize(1.);
                 } else { // if (!isSelected) {
                     
+                    GLdouble projection[16];
+                    glGetDoublev( GL_PROJECTION_MATRIX, projection);
+                    OfxPointD shadow; // how much to translate GL_PROJECTION to get exactly one pixel on screen
+                    shadow.x = 2./(projection[0] * viewportSize[0]);
+                    shadow.y = 2./(projection[5] * viewportSize[1]);
+                    
+                    QPointF offset,center,topLeft,topRight,btmRight,btmLeft;
+                    QPointF searchTopLeft,searchTopRight,searchBtmLeft,searchBtmRight;
+                    center.rx() = centerKnob->getValueAtTime(time, 0);
+                    center.ry() = centerKnob->getValueAtTime(time, 1);
+                    offset.rx() = offsetKnob->getValueAtTime(time, 0);
+                    offset.ry() = offsetKnob->getValueAtTime(time, 1);
+                    
+                    topLeft.rx() = ptnTopLeft->getValueAtTime(time, 0) + offset.x() + center.x();
+                    topLeft.ry() = ptnTopLeft->getValueAtTime(time, 1) + offset.y() + center.y();
+                    
+                    topRight.rx() = ptnTopRight->getValueAtTime(time, 0) + offset.x() + center.x();
+                    topRight.ry() = ptnTopRight->getValueAtTime(time, 1) + offset.y() + center.y();
+                    
+                    btmRight.rx() = ptnBtmRight->getValueAtTime(time, 0) + offset.x() + center.x();
+                    btmRight.ry() = ptnBtmRight->getValueAtTime(time, 1) + offset.y() + center.y();
+                    
+                    btmLeft.rx() = ptnBtmLeft->getValueAtTime(time, 0) + offset.x() + center.x();
+                    btmLeft.ry() = ptnBtmLeft->getValueAtTime(time, 1) + offset.y() + center.y();
+                    
+                    searchBtmLeft.rx() = searchWndBtmLeft->getValueAtTime(time, 0) + offset.x() + center.x();
+                    searchBtmLeft.ry() = searchWndBtmLeft->getValueAtTime(time, 1) + offset.y() + center.y();
+                    
+                    searchTopRight.rx() = searchWndTopRight->getValueAtTime(time, 0) + offset.x() + center.x();
+                    searchTopRight.ry() = searchWndTopRight->getValueAtTime(time, 1) + offset.y() + center.y();
+                    
+                    searchTopLeft.rx() = searchBtmLeft.x();
+                    searchTopLeft.ry() = searchTopRight.y();
+                    
+                    searchBtmRight.rx() = searchTopRight.x();
+                    searchBtmRight.ry() = searchBtmLeft.y();
+                    
+                    QPointF innerMidLeft((btmLeft.x() + topLeft.x()) / 2., (btmLeft.y() + topLeft.y()) / 2.),
+                    innerMidTop((topLeft.x() + topRight.x()) / 2., (topLeft.y() + topRight.y()) / 2.),
+                    innerMidRight((btmRight.x() + topRight.x()) / 2., (btmRight.y() + topRight.y()) / 2.),
+                    innerMidBtm((btmLeft.x() + btmRight.x()) / 2., (btmLeft.y() + btmRight.y()) / 2.),
+                    outterMidLeft((searchBtmLeft.x() + searchTopLeft.x()) / 2., (searchBtmLeft.y() + searchTopLeft.y()) / 2.),
+                    outterMidTop((searchTopLeft.x() + searchTopRight.x()) / 2., (searchTopLeft.y() + searchTopRight.y()) / 2.),
+                    outterMidRight((searchBtmRight.x() + searchTopRight.x()) / 2., (searchBtmRight.y() + searchTopRight.y()) / 2.),
+                    outterMidBtm((searchBtmLeft.x() + searchBtmRight.x()) / 2., (searchBtmLeft.y() + searchBtmRight.y()) / 2.);
+                    
+                    double handleSize = HANDLE_SIZE * pixelScaleX;
+                    
+                    QPointF innerMidLeftExt = computeMidPointExtent(topLeft, btmLeft, innerMidLeft, handleSize);
+                    QPointF innerMidRightExt = computeMidPointExtent(btmRight, topRight, innerMidRight, handleSize);
+                    QPointF innerMidTopExt = computeMidPointExtent(topRight, topLeft, innerMidTop, handleSize);
+                    QPointF innerMidBtmExt = computeMidPointExtent(btmLeft, btmRight, innerMidBtm, handleSize);
+                    
+                    QPointF outterMidLeftExt = computeMidPointExtent(searchTopLeft, searchBtmLeft, outterMidLeft, handleSize);
+                    QPointF outterMidRightExt = computeMidPointExtent(searchBtmRight, searchTopRight, outterMidRight, handleSize);
+                    QPointF outterMidTopExt = computeMidPointExtent(searchTopRight, searchTopLeft, outterMidTop, handleSize);
+                    QPointF outterMidBtmExt = computeMidPointExtent(searchBtmLeft,searchBtmRight, outterMidBtm, handleSize);
+                    
+                    std::string name = (*it)->getLabel();
+
+                    for (int l = 0; l < 2; ++l) {
+                        // shadow (uses GL_PROJECTION)
+                        glMatrixMode(GL_PROJECTION);
+                        int direction = (l == 0) ? 1 : -1;
+                        // translate (1,-1) pixels
+                        glTranslated(direction * shadow.x, -direction * shadow.y, 0);
+                        glMatrixMode(GL_MODELVIEW);
+                        
+                        glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        glBegin(GL_LINE_LOOP);
+                        glVertex2d(topLeft.x(), topLeft.y());
+                        glVertex2d(topRight.x(), topRight.y());
+                        glVertex2d(btmRight.x(), btmRight.y());
+                        glVertex2d(btmLeft.x(), btmLeft.y());
+                        glEnd();
+                        
+                        glBegin(GL_LINE_LOOP);
+                        glVertex2d(searchTopLeft.x(),searchTopLeft.y());
+                        glVertex2d(searchTopRight.x(), searchTopRight.y());
+                        glVertex2d(searchBtmRight.x(), searchBtmRight.y());
+                        glVertex2d(searchBtmLeft.x(), searchBtmRight.y());
+                        glEnd();
+                        
+                        glPointSize(POINT_SIZE);
+                        glBegin(GL_POINTS);
+                        
+                        ///draw center
+                        if ( (_imp->hoverState == eDrawStateHoveringCenter) || (_imp->eventState == eMouseStateDraggingCenter)) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(center.x(), center.y());
+                        
+                        if (offset.x() != 0 || offset.y() != 0) {
+                            glVertex2d(center.x() + offset.x(), center.y() + offset.y());
+                        }
+                        
+                        //////DRAWING INNER POINTS
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerBtmLeft) || (_imp->eventState == eMouseStateDraggingInnerBtmLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(btmLeft.x(), btmLeft.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerBtmMid) || (_imp->eventState == eMouseStateDraggingInnerBtmMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(innerMidBtm.x(), innerMidBtm.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerBtmRight) || (_imp->eventState == eMouseStateDraggingInnerBtmRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(btmRight.x(), btmRight.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerMidLeft) || (_imp->eventState == eMouseStateDraggingInnerMidLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(innerMidLeft.x(), innerMidLeft.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerMidRight) || (_imp->eventState == eMouseStateDraggingInnerMidRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(innerMidRight.x(), innerMidRight.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerTopLeft) || (_imp->eventState == eMouseStateDraggingInnerTopLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(topLeft.x(), topLeft.y());
+                        }
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerTopMid) || (_imp->eventState == eMouseStateDraggingInnerTopMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(innerMidTop.x(), innerMidTop.y());
+                        }
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerTopRight) || (_imp->eventState == eMouseStateDraggingInnerTopRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(topRight.x(), topRight.y());
+                        }
+                        
+                        
+                        //////DRAWING OUTTER POINTS
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterBtmLeft) || (_imp->eventState == eMouseStateDraggingOuterBtmLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(searchBtmLeft.x(), searchBtmLeft.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterBtmMid) || (_imp->eventState == eMouseStateDraggingOuterBtmMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(outterMidBtm.x(), outterMidBtm.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterBtmRight) || (_imp->eventState == eMouseStateDraggingOuterBtmRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(searchBtmRight.x() , searchBtmRight.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterMidLeft) || (_imp->eventState == eMouseStateDraggingOuterMidLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(outterMidLeft.x(), outterMidLeft.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterMidRight) || (_imp->eventState == eMouseStateDraggingOuterMidRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(outterMidRight.x(), outterMidRight.y());
+                        }
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterTopLeft) || (_imp->eventState == eMouseStateDraggingOuterTopLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(searchTopLeft.x(), searchTopLeft.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterTopMid) || (_imp->eventState == eMouseStateDraggingOuterTopMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(outterMidTop.x(), outterMidTop.y());
+                        }
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterTopRight) || (_imp->eventState == eMouseStateDraggingOuterTopRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                            glVertex2d(searchTopRight.x(), searchTopRight.y());
+                        }
+                        
+                        glEnd();
+                        
+                        if (offset.x() != 0 || offset.y() != 0) {
+                            glBegin(GL_LINES);
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                            glVertex2d(center.x(), center.y());
+                            glVertex2d(center.x() + offset.x(), center.y() + offset.y());
+                            glEnd();
+                        }
+                        
+                        ///now show small lines at handle positions
+                        glBegin(GL_LINES);
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerMidLeft) || (_imp->eventState == eMouseStateDraggingInnerMidLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(innerMidLeft.x(), innerMidLeft.y());
+                        glVertex2d(innerMidLeftExt.x(), innerMidLeftExt.y());
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerTopMid) || (_imp->eventState == eMouseStateDraggingInnerTopMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(innerMidTop.x(), innerMidTop.y());
+                        glVertex2d(innerMidTopExt.x(), innerMidTopExt.y());
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerMidRight) || (_imp->eventState == eMouseStateDraggingInnerMidRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(innerMidRight.x(), innerMidRight.y());
+                        glVertex2d(innerMidRightExt.x(), innerMidRightExt.y());
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringInnerBtmMid) || (_imp->eventState == eMouseStateDraggingInnerBtmMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(innerMidBtm.x(), innerMidBtm.y());
+                        glVertex2d(innerMidBtmExt.x(), innerMidBtmExt.y());
+                        
+                        //////DRAWING OUTTER HANDLES
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterMidLeft) || (_imp->eventState == eMouseStateDraggingOuterMidLeft) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(outterMidLeft.x(), outterMidLeft.y());
+                        glVertex2d(outterMidLeftExt.x(), outterMidLeftExt.y());
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterTopMid) || (_imp->eventState == eMouseStateDraggingOuterTopMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(outterMidTop.x(), outterMidTop.y());
+                        glVertex2d(outterMidTopExt.x(), outterMidTopExt.y());
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterMidRight) || (_imp->eventState == eMouseStateDraggingOuterMidRight) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(outterMidRight.x(), outterMidRight.y());
+                        glVertex2d(outterMidRightExt.x(), outterMidRightExt.y());
+                        
+                        if ( (_imp->hoverState == eDrawStateHoveringOuterBtmMid) || (_imp->eventState == eMouseStateDraggingOuterBtmMid) ) {
+                            glColor3f(0.f * l, 1.f * l, 0.f * l);
+                        } else {
+                            glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                        }
+                        glVertex2d(outterMidBtm.x(), outterMidBtm.y());
+                        glVertex2d(outterMidBtmExt.x(), outterMidBtmExt.y());
+                        glEnd();
+                        
+                        glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
+                       
+                        QColor c;
+                        c.setRgbF(markerColor[0], markerColor[1], markerColor[2]);
+                        viewer->renderText(center.x(), center.y(), name.c_str(), c, viewer->font());
+                    }
+
                 }
+            }
+        } // // if (_imp->panelv1) {
+        
+        
+        if (_imp->clickToAddTrackEnabled) {
+            ///draw a square of 20px around the mouse cursor
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_LINE_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_DONT_CARE);
+            glLineWidth(1.5);
+            //GLProtectMatrix p(GL_PROJECTION); // useless (we do two glTranslate in opposite directions)
+            for (int l = 0; l < 2; ++l) {
+                // shadow (uses GL_PROJECTION)
+                glMatrixMode(GL_PROJECTION);
+                int direction = (l == 0) ? 1 : -1;
+                // translate (1,-1) pixels
+                glTranslated(direction * pixelScaleX / 256, -direction * pixelScaleY / 256, 0);
+                glMatrixMode(GL_MODELVIEW);
+                
+                if (l == 0) {
+                    glColor4d(0., 0., 0., 0.8);
+                } else {
+                    glColor4d(0., 1., 0.,0.8);
+                }
+                
+                glBegin(GL_LINE_LOOP);
+                glVertex2d(_imp->lastMousePos.x() - ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() - ADDTRACK_SIZE * 2 * pixelScaleY);
+                glVertex2d(_imp->lastMousePos.x() - ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() + ADDTRACK_SIZE * 2 * pixelScaleY);
+                glVertex2d(_imp->lastMousePos.x() + ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() + ADDTRACK_SIZE * 2 * pixelScaleY);
+                glVertex2d(_imp->lastMousePos.x() + ADDTRACK_SIZE * 2 * pixelScaleX, _imp->lastMousePos.y() - ADDTRACK_SIZE * 2 * pixelScaleY);
+                glEnd();
+                
+                ///draw a cross at the cursor position
+                glBegin(GL_LINES);
+                glVertex2d( _imp->lastMousePos.x() - ADDTRACK_SIZE * pixelScaleX, _imp->lastMousePos.y() );
+                glVertex2d( _imp->lastMousePos.x() + ADDTRACK_SIZE * pixelScaleX, _imp->lastMousePos.y() );
+                glVertex2d(_imp->lastMousePos.x(), _imp->lastMousePos.y() - ADDTRACK_SIZE * pixelScaleY);
+                glVertex2d(_imp->lastMousePos.x(), _imp->lastMousePos.y() + ADDTRACK_SIZE * pixelScaleY);
+                glEnd();
             }
         }
     } // GLProtectAttrib a(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT | GL_HINT_BIT);
@@ -642,6 +948,21 @@ static bool isNearbyPoint(const QPointF& p,
     return false;
 }
 
+static void findLineIntersection(const Natron::Point& p, const Natron::Point& l1, const Natron::Point& l2, Natron::Point* inter)
+{
+    Natron::Point h,u;
+    double a;
+    h.x = p.x - l1.x;
+    h.y = p.y - l1.y;
+    
+    u.x = l2.x - l1.x;
+    u.y = l2.y - l1.y;
+    
+    a = (u.x * h.x + u.y * h.y) / (u.x * u.x + u.y * u.y);
+    inter->x = l1.x + u.x * a;
+    inter->y = l1.y + u.y * a;
+}
+
 bool
 TrackerGui::penDown(double time,
                     double scaleX,
@@ -655,10 +976,7 @@ TrackerGui::penDown(double time,
     ViewerGL* viewer = _imp->viewer->getViewer();
     viewer->getPixelScale(pixelScale.first, pixelScale.second);
     bool didSomething = false;
-    
-    Natron::Point delta;
-    delta.x = pos.x() - _imp->lastMousePos.x();
-    delta.y = pos.y() - _imp->lastMousePos.y();
+ 
     
     if (_imp->panelv1) {
         
@@ -744,32 +1062,50 @@ TrackerGui::penDown(double time,
                 }
                 _imp->interactMarker = *it;
                 didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->eventState = eMouseStateDraggingInnerTopLeft;
-                _imp->interactMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->eventState = eMouseStateDraggingInnerTopRight;
-                _imp->interactMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->eventState = eMouseStateDraggingInnerBtmRight;
-                _imp->interactMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->eventState = eMouseStateDraggingInnerBtmLeft;
-                _imp->interactMarker = *it;
-                didSomething = true;
             }
+            
+            QPointF centerPoint;
+            centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
+            centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+            
+            QPointF offset;
+            offset.rx() = offsetKnob->getValueAtTime(time, 0);
+            offset.ry() = offsetKnob->getValueAtTime(time, 1);
             if (!didSomething && isSelected) {
                 
-                QPointF centerPoint;
-                centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
-                centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+                QPointF topLeft,topRight,btmRight,btmLeft;
+                topLeft.rx() = ptnTopLeft->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                topLeft.ry() = ptnTopLeft->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
                 
-                QPointF offset;
-                offset.rx() = offsetKnob->getValueAtTime(time, 0);
-                offset.ry() = offsetKnob->getValueAtTime(time, 1);
+                topRight.rx() = ptnTopRight->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                topRight.ry() = ptnTopRight->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
+                
+                btmRight.rx() = ptnBtmRight->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                btmRight.ry() = ptnBtmRight->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
+                
+                btmLeft.rx() = ptnBtmLeft->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                btmLeft.ry() = ptnBtmLeft->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
+                
+                if (isSelected && isNearbyPoint(topLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerTopLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(topRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerTopRight;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(btmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerBtmRight;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(btmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerBtmLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                }
+            }
+            if (!didSomething && isSelected) {
+              
                 
                 ///Test search window
                 QPointF searchTopLeft,searchTopRight,searchBtmRight,searchBtmLeft;
@@ -816,53 +1152,16 @@ TrackerGui::penDown(double time,
             }
         } // for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
         
-        boost::shared_ptr<Double_Knob> centerKnob,offsetKnob,ptnTopLeft,ptnTopRight,ptnBtmRight,ptnBtmLeft,searchWndTopRight,searchWndBtmLeft;
-        if (_imp->interactMarker) {
-            centerKnob = _imp->interactMarker->getCenterKnob();
-            offsetKnob = _imp->interactMarker->getOffsetKnob();
-            ptnTopLeft = _imp->interactMarker->getPatternTopLeftKnob();
-            ptnTopRight = _imp->interactMarker->getPatternTopRightKnob();
-            ptnBtmRight = _imp->interactMarker->getPatternBtmRightKnob();
-            ptnBtmLeft = _imp->interactMarker->getPatternBtmLeftKnob();
-            searchWndTopRight = _imp->interactMarker->getSearchWindowTopRightKnob();
-            searchWndBtmLeft = _imp->interactMarker->getSearchWindowBottomLeftKnob();
+        if (_imp->clickToAddTrackEnabled && !didSomething) {
+            boost::shared_ptr<TrackMarker> marker = context->createMarker();
+            boost::shared_ptr<Double_Knob> centerKnob = marker->getCenterKnob();
+            centerKnob->setValuesAtTime(time, pos.x(), pos.y(), Natron::eValueChangedReasonNatronInternalEdited);
+            didSomething = true;
         }
         
-        
-        switch (_imp->eventState) {
-            case eMouseStateDraggingCenter:
-            case eMouseStateDraggingOffset:
-            {
-                ptnTopLeft->setValue(ptnTopLeft->getValueAtTime(time,0) + delta.x, 0);
-                ptnTopLeft->setValue(ptnTopLeft->getValueAtTime(time,1) + delta.y, 1);
-                
-                ptnTopRight->setValue(ptnTopRight->getValueAtTime(time,0) + delta.x, 0);
-                ptnTopRight->setValue(ptnTopRight->getValueAtTime(time,1) + delta.y, 1);
-                
-                ptnBtmRight->setValue(ptnBtmRight->getValueAtTime(time,0) + delta.x, 0);
-                ptnBtmRight->setValue(ptnBtmRight->getValueAtTime(time,1) + delta.y, 1);
-                
-                ptnBtmLeft->setValue(ptnBtmLeft->getValueAtTime(time,0) + delta.x, 0);
-                ptnBtmLeft->setValue(ptnBtmLeft->getValueAtTime(time,1) + delta.y, 1);
-                
-                if (_imp->eventState == eMouseStateDraggingOffset) {
-                    offsetKnob->setValue(offsetKnob->getValueAtTime(time,0) + delta.x, 0);
-                    offsetKnob->setValue(offsetKnob->getValueAtTime(time,1) + delta.y, 1);
-                } else {
-                    centerKnob->setValue(centerKnob->getValueAtTime(time,0) + delta.x, 0);
-                    centerKnob->setValue(centerKnob->getValueAtTime(time,1) + delta.y, 1);
-                }
-            }   break;
-            case eMouseStateDraggingInnerBtmLeft:
-            {
-                Natron::Point p;
-                p.x = ptnBtmLeft->getValueAtTime(time,0) + delta.x;
-                p.y = ptnBtmLeft->getValueAtTime(time,1) + delta.y;
-                //Clamp so the 4 points are still an homography
-                
-            }   break;
-            default:
-                break;
+        if ( !didSomething && !modCASIsShift(e) ) {
+            context->clearSelection(TrackerContext::eTrackSelectionViewer);
+            didSomething = true;
         }
     }
     _imp->lastMousePos = pos;
@@ -896,6 +1195,12 @@ TrackerGui::penMotion(double time,
     ViewerGL* viewer = _imp->viewer->getViewer();
     viewer->getPixelScale(pixelScale.first, pixelScale.second);
     bool didSomething = false;
+    
+    
+    Natron::Point delta;
+    delta.x = pos.x() - _imp->lastMousePos.x();
+    delta.y = pos.y() - _imp->lastMousePos.y();
+    
     if (_imp->panelv1) {
         const std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> > & instances = _imp->panelv1->getInstances();
         
@@ -912,9 +1217,18 @@ TrackerGui::penMotion(double time,
             }
         }
     } else {
+        
+        if (_imp->hoverState != eDrawStateInactive) {
+            _imp->hoverState = eDrawStateInactive;
+            _imp->hoverMarker.reset();
+            didSomething = true;
+        }
+        
         boost::shared_ptr<TrackerContext> context = _imp->panel->getContext();
         std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
         context->getAllMarkers(&allMarkers);
+        
+        bool hoverProcess = false;
         for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
             if (!(*it)->isEnabled()) {
                 continue;
@@ -936,33 +1250,52 @@ TrackerGui::penMotion(double time,
             if (isNearbyPoint(centerKnob, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
                 _imp->hoverState = eDrawStateHoveringCenter;
                 _imp->hoverMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->hoverState = eDrawStateHoveringInnerTopLeft;
-                _imp->hoverMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->hoverState = eDrawStateHoveringInnerTopRight;
-                _imp->hoverMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->hoverState = eDrawStateHoveringInnerBtmRight;
-                _imp->hoverMarker = *it;
-                didSomething = true;
-            } else if (isSelected && isNearbyPoint(ptnBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE, time)) {
-                _imp->hoverState = eDrawStateHoveringInnerBtmLeft;
-                _imp->hoverMarker = *it;
-                didSomething = true;
+                hoverProcess = true;
             }
-            if (!didSomething && isSelected) {
+            
+            
+            QPointF centerPoint;
+            centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
+            centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+            
+            QPointF offset;
+            offset.rx() = offsetKnob->getValueAtTime(time, 0);
+            offset.ry() = offsetKnob->getValueAtTime(time, 1);
+            
+            if (!hoverProcess) {
+                QPointF topLeft,topRight,btmRight,btmLeft;
+                topLeft.rx() = ptnTopLeft->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                topLeft.ry() = ptnTopLeft->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
                 
-                QPointF centerPoint;
-                centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
-                centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+                topRight.rx() = ptnTopRight->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                topRight.ry() = ptnTopRight->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
                 
-                QPointF offset;
-                offset.rx() = offsetKnob->getValueAtTime(time, 0);
-                offset.ry() = offsetKnob->getValueAtTime(time, 1);
+                btmRight.rx() = ptnBtmRight->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                btmRight.ry() = ptnBtmRight->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
+                
+                btmLeft.rx() = ptnBtmLeft->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
+                btmLeft.ry() = ptnBtmLeft->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
+                
+                if (isSelected && isNearbyPoint(topLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerTopLeft;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(topRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerTopRight;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(btmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerBtmRight;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(btmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerBtmLeft;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                }
+            }
+            if (!hoverProcess && isSelected) {
+               
                 
                 ///Test search window
                 QPointF searchTopLeft,searchTopRight,searchBtmRight,searchBtmLeft;
@@ -981,26 +1314,201 @@ TrackerGui::penMotion(double time,
                 if (isNearbyPoint(searchTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringOuterTopLeft;
                     _imp->hoverMarker = *it;
-                    didSomething = true;
+                    hoverProcess = true;
                 } else if (isNearbyPoint(searchTopRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringOuterTopRight;
                     _imp->hoverMarker = *it;
-                    didSomething = true;
+                    hoverProcess = true;
                 } else if (isNearbyPoint(searchBtmRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringOuterBtmRight;
                     _imp->hoverMarker = *it;
-                    didSomething = true;
+                    hoverProcess = true;
                 } else if (isNearbyPoint(searchBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringOuterBtmLeft;
                     _imp->hoverMarker = *it;
-                    didSomething = true;
+                    hoverProcess = true;
                 }
             }
             
-            if (didSomething) {
+            if (hoverProcess) {
                 break;
             }
         } // for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
+        
+        if (hoverProcess) {
+            didSomething = true;
+        }
+        
+        boost::shared_ptr<Double_Knob> centerKnob,offsetKnob,searchWndTopRight,searchWndBtmLeft;
+        boost::shared_ptr<Double_Knob> patternCorners[4];
+        if (_imp->interactMarker) {
+            centerKnob = _imp->interactMarker->getCenterKnob();
+            offsetKnob = _imp->interactMarker->getOffsetKnob();
+            
+            /*
+             
+             TopLeft(0) ------------- Top right(3)
+             |                        |
+             |                        |
+             |                        |
+             Btm left (1) ------------ Btm right (2)
+             
+             */
+            patternCorners[0] = _imp->interactMarker->getPatternTopLeftKnob();
+            patternCorners[1] = _imp->interactMarker->getPatternBtmLeftKnob();
+            patternCorners[2] = _imp->interactMarker->getPatternBtmRightKnob();
+            patternCorners[3] = _imp->interactMarker->getPatternTopRightKnob();
+            searchWndTopRight = _imp->interactMarker->getSearchWindowTopRightKnob();
+            searchWndBtmLeft = _imp->interactMarker->getSearchWindowBottomLeftKnob();
+        }
+        
+        
+        switch (_imp->eventState) {
+            case eMouseStateDraggingCenter:
+            case eMouseStateDraggingOffset:
+            {
+                assert(_imp->interactMarker);
+                if (_imp->eventState == eMouseStateDraggingOffset) {
+                    offsetKnob->setValues(offsetKnob->getValueAtTime(time,0) + delta.x,
+                                           offsetKnob->getValueAtTime(time,1) + delta.y,
+                                           Natron::eValueChangedReasonNatronInternalEdited);
+                } else {
+                    centerKnob->setValues(centerKnob->getValueAtTime(time,0) + delta.x,
+                                          centerKnob->getValueAtTime(time,1) + delta.y,
+                                          Natron::eValueChangedReasonNatronInternalEdited);
+                }
+                didSomething = true;
+            }   break;
+            case eMouseStateDraggingInnerBtmLeft:
+            case eMouseStateDraggingInnerTopRight:
+            case eMouseStateDraggingInnerTopLeft:
+            case eMouseStateDraggingInnerBtmRight:
+            {
+                int index;
+                if (_imp->eventState == eMouseStateDraggingInnerBtmLeft) {
+                    index = 1;
+                } else if (_imp->eventState == eMouseStateDraggingInnerBtmRight) {
+                    index = 2;
+                } else if (_imp->eventState == eMouseStateDraggingInnerTopRight) {
+                    index = 3;
+                } else if (_imp->eventState == eMouseStateDraggingInnerTopLeft) {
+                    index = 0;
+                }
+                
+                int nextIndex = (index + 1) % 4;
+                int prevIndex = (index + 3) % 4;
+                int diagIndex = (index + 2) % 4;
+                
+                
+                Natron::Point center,offset;
+                center.x = centerKnob->getValueAtTime(time,0);
+                center.y = centerKnob->getValueAtTime(time,1);
+                
+                offset.x = offsetKnob->getValueAtTime(time, 0);
+                offset.y = offsetKnob->getValueAtTime(time, 1);
+                
+                Natron::Point cur,prev,next,diag;
+                cur.x = patternCorners[index]->getValueAtTime(time,0) + delta.x  + center.x + offset.x;;
+                cur.y = patternCorners[index]->getValueAtTime(time,1) + delta.y  + center.y + offset.y;
+                
+                prev.x = patternCorners[prevIndex]->getValueAtTime(time,0)  + center.x + offset.x;;
+                prev.y = patternCorners[prevIndex]->getValueAtTime(time,1) + center.y + offset.y;
+                
+                next.x = patternCorners[nextIndex]->getValueAtTime(time,0)  + center.x + offset.x;;
+                next.y = patternCorners[nextIndex]->getValueAtTime(time,1)  + center.y + offset.y;
+                
+                diag.x = patternCorners[diagIndex]->getValueAtTime(time,0)  + center.x + offset.x;;
+                diag.y = patternCorners[diagIndex]->getValueAtTime(time,1) + center.y + offset.y;
+                
+                Natron::Point nextVec;
+                nextVec.x = next.x - cur.x;
+                nextVec.y = next.y - cur.y;
+                
+                Natron::Point prevVec;
+                prevVec.x = cur.x - prev.x;
+                prevVec.y = cur.y - prev.y;
+                
+                Natron::Point nextDiagVec,prevDiagVec;
+                nextDiagVec.x = diag.x - next.x;
+                nextDiagVec.y = diag.y - next.y;
+                
+                prevDiagVec.x = prev.x - diag.x;
+                prevDiagVec.y = prev.y - diag.y;
+                
+                //Clamp so the 4 points remaing the same in the homography
+                if (prevVec.x * nextVec.y - prevVec.y * nextVec.x < 0.) { // cross-product
+                    findLineIntersection(cur, prev, next, &cur);
+                }
+                if (nextDiagVec.x * prev.y - nextDiagVec.y * prev.x < 0.) { // cross-product
+                    findLineIntersection(cur, prev, diag, &cur);
+                }
+                if (next.x * prevDiagVec.y - next.y * prevDiagVec.x < 0.) { // cross-product
+                    findLineIntersection(cur, next, diag, &cur);
+                }
+                
+                
+                Natron::Point searchWindowCorners[4];
+                searchWindowCorners[1].x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
+                searchWindowCorners[1].y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+                
+                searchWindowCorners[3].x = searchWndTopRight->getValueAtTime(time, 0)  + center.x + offset.x;;
+                searchWindowCorners[3].y = searchWndTopRight->getValueAtTime(time, 1)  + center.y + offset.y;;
+                
+                cur.x = std::max(std::min(cur.x, searchWindowCorners[3].x), searchWindowCorners[1].x);
+                cur.y = std::max(std::min(cur.y, searchWindowCorners[3].y), searchWindowCorners[1].y);
+                
+                if (patternCorners[index]->hasAnimation()) {
+                    patternCorners[index]->setValuesAtTime(time, cur.x, cur.y, Natron::eValueChangedReasonNatronInternalEdited);
+                } else {
+                    patternCorners[index]->setValues(cur.x, cur.y, Natron::eValueChangedReasonNatronInternalEdited);
+                }
+                
+                didSomething = true;
+            }   break;
+            case eMouseStateDraggingOuterBtmLeft:
+            case eMouseStateDraggingOuterBtmRight:
+            case eMouseStateDraggingOuterTopLeft:
+            case eMouseStateDraggingOuterTopRight:
+            {
+                
+                Natron::Point center,offset;
+                center.x = centerKnob->getValueAtTime(time,0);
+                center.y = centerKnob->getValueAtTime(time,1);
+                
+                offset.x = offsetKnob->getValueAtTime(time, 0);
+                offset.y = offsetKnob->getValueAtTime(time, 1);
+                
+                
+                Natron::Point searchWindowCorners[4];
+                searchWindowCorners[1].x = searchWndBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
+                searchWindowCorners[1].y = searchWndBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+                
+                searchWindowCorners[3].x = searchWndTopRight->getValueAtTime(time, 0)  + center.x + offset.x;;
+                searchWindowCorners[3].y = searchWndTopRight->getValueAtTime(time, 1)  + center.y + offset.y;;
+                
+                searchWindowCorners[0].x = searchWindowCorners[1].x;
+                searchWindowCorners[0].y = searchWindowCorners[3].y;
+                
+                searchWindowCorners[2].x = searchWindowCorners[3].x;
+                searchWindowCorners[2].y = searchWindowCorners[1].y;
+                
+                int index;
+                if (_imp->eventState == eMouseStateDraggingOuterBtmLeft) {
+                    index = 1;
+                } else if (_imp->eventState == eMouseStateDraggingOuterBtmRight) {
+                    index = 2;
+                } else if (_imp->eventState == eMouseStateDraggingOuterTopLeft) {
+                    index = 0;
+                } else if (_imp->eventState == eMouseStateDraggingOuterTopRight) {
+                    index = 3;
+                }
+                
+                
+            }   break;
+            default:
+                break;
+        }
+
     }
     if (_imp->clickToAddTrackEnabled) {
         ///Refresh the overlay
@@ -1021,6 +1529,9 @@ TrackerGui::penUp(double time,
                   QMouseEvent* /*e*/)
 {
     bool didSomething = false;
+    
+    TrackerMouseStateEnum state = _imp->eventState;
+    _imp->eventState = eMouseStateIdle;
     if (_imp->panelv1) {
         const std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> > & instances = _imp->panelv1->getInstances();
         
@@ -1037,9 +1548,10 @@ TrackerGui::penUp(double time,
                 }
             }
         }
-    } else {
+    } else { // if (_imp->panelv1) {
         _imp->interactMarker.reset();
-    }
+        (void)state;
+    } // if (_imp->panelv1) {
 
     return didSomething;
 }
