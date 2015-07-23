@@ -1414,6 +1414,15 @@ public:
         return false;
     }
 
+    virtual void redrawOverlayInteract();
+
+    /**
+    * @brief Flag that the overlays should be redrawn when this knob changes.
+    **/
+    void addOverlaySlaveParam(const boost::shared_ptr<KnobI>& knob);
+
+    bool isOverlaySlaveParam(const KnobI* knob) const;
+
     /**
     * @brief Returns the components available on each input for this effect at the given time.
     **/
@@ -1505,6 +1514,7 @@ protected:
     virtual void cloneExtras()
     {
     }
+
 
 
     virtual void drawOverlay(double /*time*/,

@@ -176,7 +176,6 @@ OfxEffectInstance::OfxEffectInstance(boost::shared_ptr<Natron::Node> node)
 , _isOutput(false)
 , _penDown(false)
 , _overlayInteract(0)
-, _overlaySlaves()
 , _created(false)
 , _initialized(false)
 , _renderButton()
@@ -504,7 +503,7 @@ OfxEffectInstance::tryInitializeOverlayInteracts()
             if (!param) {
                 qDebug() << "OfxEffectInstance::tryInitializeOverlayInteracts(): slaveToParam " << slaveParams[i].c_str() << " not available";
             } else {
-                _overlaySlaves.push_back((void*)param.get());
+                addOverlaySlaveParam(param);
             }
         }
         
@@ -2476,6 +2475,13 @@ OfxEffectInstance::hasOverlay() const
     return _overlayInteract != NULL;
 }
 
+void
+OfxEffectInstance::redrawOverlayInteract()
+{
+    assert(_overlayInteract);
+    _overlayInteract->redraw();
+}
+
 std::string
 OfxEffectInstance::natronValueChangedReasonToOfxValueChangedReason(Natron::ValueChangedReasonEnum reason)
 {
@@ -2576,18 +2582,6 @@ OfxEffectInstance::knobChanged(KnobI* k,
         if ( _effect->isClipPreferencesSlaveParam( k->getOriginalName() ) ) {
             RECURSIVE_ACTION();
             checkOFXClipPreferences_public(time, renderScale, ofxReason,true, true);
-        }
-        if (_overlayInteract && getNode()->shouldDrawOverlay() && !getNode()->hasDefaultOverlayForParam(k)) {
-            // Some plugins (e.g. by digital film tools) forget to set kOfxInteractPropSlaveToParam.
-            // Most hosts trigger a redraw if the plugin has an active overlay.
-            //if (std::find(_overlaySlaves.begin(), _overlaySlaves.end(), (void*)k) != _overlaySlaves.end()) {
-            incrementRedrawNeededCounter();
-            //}
-
-            if (recursionLevel == 1 && checkIfOverlayRedrawNeeded()) {
-                stat = _overlayInteract->redraw();
-                assert(stat == kOfxStatOK || stat == kOfxStatReplyDefault);
-            }
         }
     }
 } // knobChanged

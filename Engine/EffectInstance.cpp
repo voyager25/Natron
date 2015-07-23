@@ -444,6 +444,7 @@ struct EffectInstance::Implementation
     , outputComponentsAvailable()
     , renderingTimersMutex()
     , totalTimeSpentRendering(0.)
+    , overlaySlaves()
     {
     }
 
@@ -506,6 +507,8 @@ struct EffectInstance::Implementation
     
     mutable QMutex renderingTimersMutex;
     double totalTimeSpentRendering;
+    
+    std::list< boost::weak_ptr<KnobI> > overlaySlaves;
     
     void runChangedParamCallback(KnobI* k,bool userEdited,const std::string& callback);
     
@@ -6497,6 +6500,38 @@ EffectInstance::Implementation::runChangedParamCallback(KnobI* k,bool userEdited
 }
 
 void
+EffectInstance::addOverlaySlaveParam(const boost::shared_ptr<KnobI>& knob)
+{
+    _imp->overlaySlaves.push_back(knob);
+}
+
+bool
+EffectInstance::isOverlaySlaveParam(const KnobI* knob) const
+{
+    for (std::list<boost::weak_ptr<KnobI> >::const_iterator it = _imp->overlaySlaves.begin(); it!=_imp->overlaySlaves.end(); ++it) {
+        boost::shared_ptr<KnobI> k = it->lock();
+        if (!k) {
+            continue;
+        }
+        if (k.get() == knob) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+EffectInstance::redrawOverlayInteract()
+{
+    if (isDoingInteractAction()) {
+        getApp()->queueRedrawForAllViewers();
+    } else {
+        getApp()->redrawAllViewers();
+    }
+
+}
+
+void
 EffectInstance::onKnobValueChanged_public(KnobI* k,
                                           Natron::ValueChangedReasonEnum reason,
                                           SequenceTime time,
@@ -6536,6 +6571,19 @@ EffectInstance::onKnobValueChanged_public(KnobI* k,
         RECURSIVE_ACTION();
         EffectPointerThreadProperty_RAII propHolder_raii(this);
         knobChanged(k, reason, /*view*/ 0, time, originatedFromMainThread);
+        
+        
+        if (hasOverlay() && getNode()->shouldDrawOverlay() && !getNode()->hasDefaultOverlayForParam(k)) {
+            // Some plugins (e.g. by digital film tools) forget to set kOfxInteractPropSlaveToParam.
+            // Most hosts trigger a redraw if the plugin has an active overlay.
+            //if (isOverlaySlaveParam(k)) {
+            incrementRedrawNeededCounter();
+            //}
+            
+            if (getRecursionLevel() == 1 && checkIfOverlayRedrawNeeded()) {
+                redrawOverlayInteract();
+            }
+        }
     }
     
     node->onEffectKnobValueChanged(k, reason);

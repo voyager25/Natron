@@ -841,7 +841,8 @@ Knob<T>::setValue(const T & v,
     }
 #endif
     
-    if ( holder && (reason == Natron::eValueChangedReasonPluginEdited) && getKnobGuiPointer() ) {
+    if ( holder && (reason == Natron::eValueChangedReasonPluginEdited ||
+                    reason == Natron::eValueChangedReasonNatronInternalEdited) && getKnobGuiPointer() ) {
         KnobHolder::MultipleParamsEditEnum paramEditLevel = holder->getMultipleParamsEditLevel();
         switch (paramEditLevel) {
         case KnobHolder::eMultipleParamsEditOff:
@@ -1165,7 +1166,8 @@ Knob<T>::setValueAtTime(int time,
     }
 #endif
     
-    if ( holder && (reason == Natron::eValueChangedReasonPluginEdited) && getKnobGuiPointer() ) {
+    if ( holder && (reason == Natron::eValueChangedReasonPluginEdited ||
+                    reason == Natron::eValueChangedReasonNatronInternalEdited) && getKnobGuiPointer() ) {
         KnobHolder::MultipleParamsEditEnum paramEditLevel = holder->getMultipleParamsEditLevel();
         switch (paramEditLevel) {
         case KnobHolder::eMultipleParamsEditOff:

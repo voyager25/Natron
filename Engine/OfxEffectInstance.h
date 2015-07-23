@@ -188,6 +188,7 @@ public:
     virtual void getFrameRange(double *first,double *last) OVERRIDE;
     virtual void initializeOverlayInteract() OVERRIDE FINAL;
     virtual bool hasOverlay() const OVERRIDE FINAL;
+    virtual void redrawOverlayInteract() OVERRIDE FINAL;
     virtual void drawOverlay(double time, double scaleX, double scaleY) OVERRIDE FINAL;
     virtual bool onOverlayPenDown(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure) OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual bool onOverlayPenMotion(double time, double scaleX, double scaleY,
@@ -398,7 +399,6 @@ private:
     bool _isOutput; //if the OfxNode can output a file somehow
     bool _penDown; // true when the overlay trapped a penDow action
     Natron::OfxOverlayInteract* _overlayInteract; // ptr to the overlay interact if any
-    std::list< void* > _overlaySlaves; //void* to actually a KnobI* but stored as void to avoid dereferencing
 
     bool _created; // true after the call to createInstance
     bool _initialized; //true when the image effect instance has been created and populated
