@@ -2566,6 +2566,13 @@ void Knob<T>::computeHasModifications()
             }
         }
         
+        if (!hasModif) {
+            std::pair<int,boost::shared_ptr<KnobI> > master = getMaster(i);
+            if (master.second) {
+                hasModif = true;
+            }
+        }
+        
         ///Check expressions too in the future
         if (!hasModif) {
             QMutexLocker k(&_valueMutex);

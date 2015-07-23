@@ -1449,6 +1449,10 @@ KnobGui::hide()
 
     if (shouldRemoveWidget) {
         _imp->field->hide();
+    } else {
+        if (!_imp->field->isVisible()) {
+            _imp->field->show();
+        }
     }
     if (_imp->descriptionLabel) {
         _imp->descriptionLabel->hide();
@@ -2302,6 +2306,10 @@ void
 KnobGui::onFrozenChanged(bool frozen)
 {
     boost::shared_ptr<KnobI> knob = getKnob();
+    Button_Knob* isBtn = dynamic_cast<Button_Knob*>(knob.get());
+    if (isBtn) {
+        return;
+    }
     int dims = knob->getDimension();
 
     for (int i = 0; i < dims; ++i) {
