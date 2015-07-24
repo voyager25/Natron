@@ -1806,7 +1806,7 @@ TrackerContext::removeMarker(const boost::shared_ptr<TrackMarker>& marker)
 {
     {
         QMutexLocker k(&_imp->trackerContextMutex);
-        for (std::vector<boost::shared_ptr<TrackMarker> >::const_iterator it = _imp->markers.begin(); it != _imp->markers.end(); ++it) {
+        for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = _imp->markers.begin(); it != _imp->markers.end(); ++it) {
             if (*it == marker) {
                 _imp->markers.erase(it);
                 return;
