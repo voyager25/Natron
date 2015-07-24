@@ -40,6 +40,8 @@
 #include "Gui/NodeGui.h"
 #include "Gui/TrackerUndoCommand.h"
 #include "Gui/NodeGraph.h"
+#include "Gui/ClickableLabel.h"
+#include "Gui/SpinBox.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/Gui.h"
 
@@ -247,6 +249,16 @@ struct TrackerPanelPrivate
     
     TrackKeysMap keys;
     
+    ClickableLabel* trackLabel;
+    SpinBox* currentKeyframe;
+    ClickableLabel* ofLabel;
+    SpinBox* totalKeyframes;
+    Button* prevKeyframe;
+    Button* nextKeyframe;
+    Button* addKeyframe;
+    Button* removeKeyframe;
+    Button* clearAnimation;
+    
     TrackerPanelPrivate(TrackerPanel* publicI, const boost::shared_ptr<NodeGui>& n)
     : _publicInterface(publicI)
     , node(n)
@@ -270,6 +282,15 @@ struct TrackerPanelPrivate
     , selectionBlocked(0)
     , selectionRecursion(0)
     , keys()
+    , trackLabel(0)
+    , currentKeyframe(0)
+    , ofLabel(0)
+    , totalKeyframes(0)
+    , prevKeyframe(0)
+    , nextKeyframe(0)
+    , addKeyframe(0)
+    , removeKeyframe(0)
+    , clearAnimation(0)
     {
         context = n->getNode()->getTrackerContext();
         assert(context.lock());
@@ -284,6 +305,8 @@ struct TrackerPanelPrivate
     void createCornerPinFromSelection(const std::list<boost::shared_ptr<TrackMarker> > & selection,bool linked,bool useTransformRefFrame,bool invert);
     
     void setVisibleItemKeyframes(const std::list<int>& keys,bool visible, bool emitSignal);
+    
+    void updateTrackKeysInfoBar(int time);
 };
 
 TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
@@ -336,6 +359,80 @@ TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
                      SLOT(onMotionModelKnobValueChanged(boost::shared_ptr<TrackMarker>, int, int)));
     
     _imp->mainLayout = new QVBoxLayout(this);
+    
+    QWidget* trackContainer = new QWidget(this);
+    _imp->mainLayout->addWidget(trackContainer);
+    
+    QHBoxLayout* trackLayout = new QHBoxLayout(trackContainer);
+    trackLayout->setSpacing(2);
+    _imp->trackLabel = new ClickableLabel(tr("Track keyframe:"),trackContainer);
+    _imp->trackLabel->setSunken(false);
+    _imp->trackLabel->setEnabled(false);
+    trackLayout->addWidget(_imp->trackLabel);
+    
+    _imp->currentKeyframe = new SpinBox(trackContainer,SpinBox::eSpinBoxTypeDouble);
+    _imp->currentKeyframe->setEnabled(false);
+    _imp->currentKeyframe->setReadOnly(true);
+    _imp->currentKeyframe->setToolTip(Natron::convertFromPlainText(tr("The current keyframe for the selected track(s)."), Qt::WhiteSpaceNormal));
+    trackLayout->addWidget(_imp->currentKeyframe);
+    
+    _imp->ofLabel = new ClickableLabel(tr("of"),trackContainer);
+    _imp->ofLabel->setEnabled(false);
+    trackLayout->addWidget(_imp->ofLabel);
+    
+    _imp->totalKeyframes = new SpinBox(trackContainer,SpinBox::eSpinBoxTypeInt);
+    _imp->totalKeyframes->setEnabled(false);
+    _imp->totalKeyframes->setReadOnly(true);
+    _imp->totalKeyframes->setToolTip(Natron::convertFromPlainText(tr("The keyframe count for all the selected tracks."), Qt::WhiteSpaceNormal));
+    trackLayout->addWidget(_imp->totalKeyframes);
+    
+    QPixmap prevPix,nextPix,addPix,removePix,clearAnimPix;
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS_KEY, &prevPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT_KEY, &nextPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_USER_KEY, &addPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_USER_KEY, &removePix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION, &clearAnimPix);
+    
+    _imp->prevKeyframe = new Button(QIcon(prevPix),"",trackContainer);
+    _imp->prevKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->prevKeyframe->setToolTip(Natron::convertFromPlainText(tr("Go to the previous keyframe."), Qt::WhiteSpaceNormal));
+    _imp->prevKeyframe->setEnabled(false);
+    QObject::connect( _imp->prevKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onGoToPrevKeyframeButtonClicked() ) );
+    trackLayout->addWidget(_imp->prevKeyframe);
+    
+    _imp->nextKeyframe = new Button(QIcon(nextPix),"",trackContainer);
+    _imp->nextKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->nextKeyframe->setToolTip(Natron::convertFromPlainText(tr("Go to the next keyframe."), Qt::WhiteSpaceNormal));
+    _imp->nextKeyframe->setEnabled(false);
+    QObject::connect( _imp->nextKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onGoToNextKeyframeButtonClicked() ) );
+    trackLayout->addWidget(_imp->nextKeyframe);
+    
+    _imp->addKeyframe = new Button(QIcon(addPix),"",trackContainer);
+    _imp->addKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->addKeyframe->setToolTip(Natron::convertFromPlainText(tr("Add keyframe at the current timeline's time."), Qt::WhiteSpaceNormal));
+    _imp->addKeyframe->setEnabled(false);
+    QObject::connect( _imp->addKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onAddKeyframeButtonClicked() ) );
+    trackLayout->addWidget(_imp->addKeyframe);
+    
+    _imp->removeKeyframe = new Button(QIcon(removePix),"",trackContainer);
+    _imp->removeKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->removeKeyframe->setToolTip(Natron::convertFromPlainText(tr("Remove keyframe at the current timeline's time."), Qt::WhiteSpaceNormal));
+    _imp->removeKeyframe->setEnabled(false);
+    QObject::connect( _imp->removeKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onRemoveKeyframeButtonClicked() ) );
+    trackLayout->addWidget(_imp->removeKeyframe);
+    
+    _imp->clearAnimation = new Button(QIcon(clearAnimPix),"",trackContainer);
+    _imp->clearAnimation->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->clearAnimation->setToolTip(Natron::convertFromPlainText(tr("Remove all animation for the selected track(s)."), Qt::WhiteSpaceNormal));
+    _imp->clearAnimation->setEnabled(false);
+    QObject::connect( _imp->clearAnimation, SIGNAL( clicked(bool) ), this, SLOT( onRemoveAnimationButtonClicked() ) );
+    trackLayout->addWidget(_imp->clearAnimation);
+    
+    
+    trackLayout->addStretch();
+
+    
+    ///-------- TableView
     
     _imp->view = new TableView(this);
     QObject::connect( _imp->view,SIGNAL( deleteKeyPressed() ),this,SLOT( onRemoveButtonClicked() ) );
@@ -860,9 +957,12 @@ TrackerPanel::onResetButtonClicked()
     assert(context);
     std::list<boost::shared_ptr<TrackMarker> > markers;
     context->getSelectedMarkers(&markers);
+    
+    context->clearSelection(TrackerContext::eTrackSelectionInternal);
     for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it!=markers.end(); ++it) {
         (*it)->resetTrack();
     }
+    context->addTracksToSelection(markers, TrackerContext::eTrackSelectionInternal);
 }
 
 boost::shared_ptr<TrackMarker>
@@ -1346,6 +1446,9 @@ TrackerPanel::selectInternal(const std::list<boost::shared_ptr<TrackMarker> >& m
         
         _imp->view->selectionModel()->select(selection, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         
+        boost::shared_ptr<TimeLine> timeline = _imp->node.lock()->getNode()->getApp()->getTimeLine();
+        _imp->updateTrackKeysInfoBar(timeline->currentFrame());
+        
         std::list<int> keysToAdd;
         for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = markers.begin(); it!=markers.end(); ++it) {
             TrackKeys k;
@@ -1488,7 +1591,9 @@ TrackerPanel::onTrackKeyframeRemoved(const boost::shared_ptr<TrackMarker>& marke
     if ( it2 != found->second.userKeys.end() ) {
         found->second.userKeys.erase(it2);
         if (found->second.visible) {
-            _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeKeyFrameIndicator(key);
+            boost::shared_ptr<TimeLine> timeline = _imp->node.lock()->getNode()->getApp()->getTimeLine();
+            _imp->updateTrackKeysInfoBar(timeline->currentFrame());
+            timeline->removeKeyFrameIndicator(key);
         }
     }
 }
@@ -1509,7 +1614,9 @@ TrackerPanel::onTrackAllKeyframesRemoved(const boost::shared_ptr<TrackMarker>& m
 
     
     if (it->second.visible) {
-        _imp->node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(toRemove, true);
+        boost::shared_ptr<TimeLine> timeline = _imp->node.lock()->getNode()->getApp()->getTimeLine();
+        _imp->updateTrackKeysInfoBar(timeline->currentFrame());
+        timeline->removeMultipleKeyframeIndicator(toRemove, true);
     }
 
 }
@@ -1526,7 +1633,9 @@ TrackerPanel::onKeyframeSetOnTrackCenter(const boost::shared_ptr<TrackMarker> &m
         
         std::pair<std::set<int>::iterator,bool> ret = found->second.centerKeys.insert(key);
         if (ret.second && found->second.visible) {
-            _imp->node.lock()->getNode()->getApp()->getTimeLine()->addKeyframeIndicator(key);
+            boost::shared_ptr<TimeLine> timeline = _imp->node.lock()->getNode()->getApp()->getTimeLine();
+            _imp->updateTrackKeysInfoBar(timeline->currentFrame());
+            timeline->addKeyframeIndicator(key);
         }
         
     }
@@ -1763,4 +1872,97 @@ TrackerPanel::onEnabledChanged(const boost::shared_ptr<TrackMarker>& marker,int 
         return;
     }
     w->setChecked(marker->isEnabled());
+}
+
+void
+TrackerPanel::onGoToPrevKeyframeButtonClicked()
+{
+    getContext()->goToPreviousKeyFrame(getNode()->getNode()->getApp()->getTimeLine()->currentFrame());
+}
+
+void
+TrackerPanel::onGoToNextKeyframeButtonClicked()
+{
+    getContext()->goToNextKeyFrame(getNode()->getNode()->getApp()->getTimeLine()->currentFrame());
+}
+
+void
+TrackerPanel::onAddKeyframeButtonClicked()
+{
+    int time = getNode()->getNode()->getApp()->getTimeLine()->currentFrame();
+    std::list<boost::shared_ptr<TrackMarker> > markers;
+    getContext()->getSelectedMarkers(&markers);
+    for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it!=markers.end(); ++it) {
+        (*it)->setUserKeyframe(time);
+    }
+}
+
+void
+TrackerPanel::onRemoveKeyframeButtonClicked()
+{
+    int time = getNode()->getNode()->getApp()->getTimeLine()->currentFrame();
+    std::list<boost::shared_ptr<TrackMarker> > markers;
+    getContext()->getSelectedMarkers(&markers);
+    for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it!=markers.end(); ++it) {
+        (*it)->removeUserKeyframe(time);
+    }
+}
+
+void
+TrackerPanel::onRemoveAnimationButtonClicked()
+{
+    std::list<boost::shared_ptr<TrackMarker> > markers;
+    getContext()->getSelectedMarkers(&markers);
+    for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it!=markers.end(); ++it) {
+        (*it)->removeAllKeyframes();
+    }
+}
+
+void
+TrackerPanelPrivate::updateTrackKeysInfoBar(int time)
+{
+    std::set<int> keyframes;
+    std::list<boost::shared_ptr<TrackMarker> > markers;
+    context.lock()->getSelectedMarkers(&markers);
+    for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it!=markers.end(); ++it) {
+        std::set<int> keys;
+        (*it)->getUserKeyframes(&keys);
+        keyframes.insert(keys.begin(), keys.end());
+    }
+    
+    totalKeyframes->setValue( (double)keyframes.size() );
+    
+    if ( keyframes.empty() ) {
+        currentKeyframe->setValue(1.);
+        currentKeyframe->setAnimation(0);
+    } else {
+        ///get the first time that is equal or greater to the current time
+        std::set<int>::iterator lowerBound = keyframes.lower_bound(time);
+        int dist = 0;
+        if ( lowerBound != keyframes.end() ) {
+            dist = std::distance(keyframes.begin(), lowerBound);
+        }
+        
+        if ( lowerBound == keyframes.end() ) {
+            ///we're after the last keyframe
+            currentKeyframe->setValue( (double)keyframes.size() );
+            currentKeyframe->setAnimation(1);
+        } else if (*lowerBound == time) {
+            currentKeyframe->setValue(dist + 1);
+            currentKeyframe->setAnimation(2);
+        } else {
+            ///we're in-between 2 keyframes, interpolate
+            if ( lowerBound == keyframes.begin() ) {
+                currentKeyframe->setValue(1.);
+            } else {
+                std::set<int>::iterator prev = lowerBound;
+                if (prev != keyframes.begin()) {
+                    --prev;
+                }
+                currentKeyframe->setValue( (double)(time - *prev) / (double)(*lowerBound - *prev) + dist );
+            }
+            
+            currentKeyframe->setAnimation(1);
+        }
+    }
 }

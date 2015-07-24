@@ -99,6 +99,12 @@ public Q_SLOTS:
     void onAverageButtonClicked();
     void onExportButtonClicked();
     
+    void onGoToPrevKeyframeButtonClicked();
+    void onGoToNextKeyframeButtonClicked();
+    void onAddKeyframeButtonClicked();
+    void onRemoveKeyframeButtonClicked();
+    void onRemoveAnimationButtonClicked();
+    
     void onModelSelectionChanged(const QItemSelection & oldSelection,const QItemSelection & newSelection);
     void onItemDataChanged(TableItem* item);
     void onItemEnabledCheckBoxChecked(bool checked);

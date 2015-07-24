@@ -324,7 +324,7 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
     _imp->currentKeyframe->setToolTip(Natron::convertFromPlainText(tr("The current keyframe for the selected shape(s)."), Qt::WhiteSpaceNormal));
     _imp->splineLayout->addWidget(_imp->currentKeyframe);
 
-    _imp->ofLabel = new ClickableLabel("of",_imp->splineContainer);
+    _imp->ofLabel = new ClickableLabel(tr("of"),_imp->splineContainer);
     _imp->ofLabel->setEnabled(false);
     _imp->splineLayout->addWidget(_imp->ofLabel);
 

@@ -81,6 +81,10 @@ public:
     
     bool isUserKeyframe(int time) const;
     
+    int getPreviousKeyframe(int time) const;
+    
+    int getNextKeyframe( int time) const;
+    
     void getUserKeyframes(std::set<int>* keyframes) const;
     
     void getCenterKeyframes(std::set<int>* keyframes) const;
@@ -173,6 +177,8 @@ public:
     {
         
     }
+    
+    ~TrackArgsV1() {}
     
     void operator=(const TrackArgsV1& other)
     {
@@ -295,6 +301,12 @@ public:
     static void getMotionModelsAndHelps(std::vector<std::string>* models,std::vector<std::string>* tooltips);
     
     int getTransformReferenceFrame() const;
+    
+    void goToPreviousKeyFrame(int time);
+    void goToNextKeyFrame(int time);
+    
+    static bool trackStepV1(int trackIndex, const TrackArgsV1& args, int time);
+
     
     boost::shared_ptr<Double_Knob> getSearchWindowBottomLeftKnob() const;
     boost::shared_ptr<Double_Knob> getSearchWindowTopRightKnob() const;
@@ -455,8 +467,6 @@ public:
     void quitThread();
     
     bool isWorking() const;
-    
-
     
 private:
     

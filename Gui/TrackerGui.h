@@ -105,7 +105,6 @@ public Q_SLOTS:
     
     void onSetKeyframeButtonClicked();
     void onRemoveKeyframeButtonClicked();
-    void onRemoveAnimationButtonClicked();
     void onResetOffsetButtonClicked();
     void onResetTrackButtonClicked();
     

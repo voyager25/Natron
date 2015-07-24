@@ -521,6 +521,30 @@ TrackMarker::isUserKeyframe(int time) const
     return _imp->userKeyframes.find(time) != _imp->userKeyframes.end();
 }
 
+int
+TrackMarker::getPreviousKeyframe(int time) const
+{
+    QMutexLocker k(&_imp->trackMutex);
+    for (std::set<int>::const_reverse_iterator it = _imp->userKeyframes.rbegin(); it != _imp->userKeyframes.rend(); ++it) {
+        if (*it < time) {
+            return *it;
+        }
+    }
+    return INT_MIN;
+}
+
+int
+TrackMarker::getNextKeyframe( int time) const
+{
+    QMutexLocker k(&_imp->trackMutex);
+    for (std::set<int>::const_iterator it = _imp->userKeyframes.begin(); it != _imp->userKeyframes.end(); ++it) {
+        if (*it > time) {
+            return *it;
+        }
+    }
+    return INT_MAX;
+}
+
 void
 TrackMarker::getUserKeyframes(std::set<int>* keyframes) const
 {
@@ -627,13 +651,28 @@ TrackMarker::resetOffset()
 void
 TrackMarker::resetTrack()
 {
+    
+    Natron::Point curCenter;
+    curCenter.x = _imp->center->getValue(0);
+    curCenter.y = _imp->center->getValue(1);
+    
+    EffectInstance* effect = getContext()->getNode()->getLiveInstance();
+    effect->beginChanges();
     for (std::list<boost::shared_ptr<KnobI> >::iterator it = _imp->knobs.begin(); it!=_imp->knobs.end(); ++it) {
-        for (int i = 0; i < (*it)->getDimension(); ++i) {
-            (*it)->resetToDefaultValue(i);
+        if (*it != _imp->center) {
+            for (int i = 0; i < (*it)->getDimension(); ++i) {
+                (*it)->resetToDefaultValue(i);
+            }
+        } else {
+            for (int i = 0; i < (*it)->getDimension(); ++i) {
+                (*it)->removeAnimation(i);
+            }
+            _imp->center->setValue(curCenter.x, 0);
+            _imp->center->setValue(curCenter.y, 1);
         }
     }
-    resetCenter();
-    
+    effect->endChanges();
+    removeAllKeyframes();
     
 }
 
@@ -1136,6 +1175,16 @@ static bool trackStepLibMV(int trackIndex, const TrackArgsLibMV& args, int time)
     return true;
 }
 
+bool
+TrackerContext::trackStepV1(int trackIndex, const TrackArgsV1& args, int time)
+{
+    assert(trackIndex >= 0 && trackIndex < (int)args.getInstances().size());
+    Button_Knob* selectedInstance = args.getInstances()[trackIndex];
+    selectedInstance->getHolder()->onKnobValueChanged_public(selectedInstance,eValueChangedReasonNatronInternalEdited,time,
+                                                             true);
+    return true;
+}
+
 struct TrackerContextPrivate
 {
     
@@ -1523,6 +1572,45 @@ int
 TrackerContext::getTransformReferenceFrame() const
 {
     return _imp->referenceFrame.lock()->getValue();
+}
+
+
+void
+TrackerContext::goToPreviousKeyFrame(int time)
+{
+    std::list<boost::shared_ptr<TrackMarker> > markers;
+    getSelectedMarkers(&markers);
+    
+    int minimum = INT_MIN;
+    for (std::list<boost::shared_ptr<TrackMarker> > ::iterator it = markers.begin(); it != markers.end(); ++it) {
+        int t = (*it)->getPreviousKeyframe(time);
+        if ( (t != INT_MIN) && (t > minimum) ) {
+            minimum = t;
+        }
+    }
+    if (minimum != INT_MIN) {
+        getNode()->getApp()->setLastViewerUsingTimeline(boost::shared_ptr<Natron::Node>());
+        getNode()->getApp()->getTimeLine()->seekFrame(minimum, false,  NULL, Natron::eTimelineChangeReasonPlaybackSeek);
+    }
+}
+
+void
+TrackerContext::goToNextKeyFrame(int time)
+{
+    std::list<boost::shared_ptr<TrackMarker> > markers;
+    getSelectedMarkers(&markers);
+    
+    int maximum = INT_MAX;
+    for (std::list<boost::shared_ptr<TrackMarker> > ::iterator it = markers.begin(); it != markers.end(); ++it) {
+        int t = (*it)->getNextKeyframe(time);
+        if ( (t != INT_MAX) && (t < maximum) ) {
+            maximum = t;
+        }
+    }
+    if (maximum != INT_MAX) {
+        getNode()->getApp()->setLastViewerUsingTimeline(boost::shared_ptr<Natron::Node>());
+        getNode()->getApp()->getTimeLine()->seekFrame(maximum, false,  NULL, Natron::eTimelineChangeReasonPlaybackSeek);
+    }
 }
 
 boost::shared_ptr<Double_Knob>

@@ -1669,15 +1669,7 @@ namespace  {
 
 
 
-static bool
-handleTrackNextAndPrevious(int trackIndex, const TrackArgsV1& args, int time)
-{
-    assert(trackIndex >= 0 && trackIndex < (int)args.getInstances().size());
-    Button_Knob* selectedInstance = args.getInstances()[trackIndex];
-    selectedInstance->getHolder()->onKnobValueChanged_public(selectedInstance,eValueChangedReasonNatronInternalEdited,time,
-                                                             true);
-    return true;
-}
+
 
 /////////////// Tracker panel
 struct TrackerPanelPrivateV1
@@ -1713,7 +1705,7 @@ struct TrackerPanelPrivateV1
           , exportButton(0)
           , transformPage()
           , referenceFrame()
-          , scheduler(handleTrackNextAndPrevious)
+          , scheduler(TrackerContext::trackStepV1)
     {
     }
 

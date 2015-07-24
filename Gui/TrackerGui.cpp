@@ -24,6 +24,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/Node.h"
 #include "Engine/TrackerContext.h"
 #include "Engine/TimeLine.h"
+#include "Engine/Curve.h"
 
 #include "Gui/Gui.h"
 #include "Gui/GuiAppInstance.h"
@@ -46,6 +47,8 @@ CLANG_DIAG_ON(uninitialized)
 #define ADDTRACK_SIZE 5
 #define HANDLE_SIZE 6
 
+//Controls how many center keyframes should be displayed before and after the time displayed
+#define MAX_CENTER_POINTS_DISPLAYED 20
 
 using namespace Natron;
 
@@ -122,7 +125,6 @@ struct TrackerGuiPrivate
     Button* createKeyOnMoveButton;
     Button* setKeyFrameButton;
     Button* removeKeyFrameButton;
-    Button* removeAllKeyFramesButton;
     Button* resetOffsetButton;
     Button* resetTrackButton;
     Button* showCorrelationButton;
@@ -160,7 +162,6 @@ struct TrackerGuiPrivate
     , createKeyOnMoveButton(0)
     , setKeyFrameButton(0)
     , removeKeyFrameButton(0)
-    , removeAllKeyFramesButton(0)
     , resetOffsetButton(0)
     , resetTrackButton(0)
     , showCorrelationButton(0)
@@ -422,21 +423,19 @@ TrackerGui::createGui()
         QObject::connect( _imp->removeKeyFrameButton,SIGNAL( clicked(bool) ),this,SLOT( onRemoveKeyframeButtonClicked() ) );
         keyframeLayout->addWidget(_imp->removeKeyFrameButton);
         
-        _imp->removeAllKeyFramesButton = new Button(QIcon(removeAllUserKeysPix), "", keyframeContainer);
-        _imp->removeAllKeyFramesButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-        _imp->removeAllKeyFramesButton->setToolTip(Natron::convertFromPlainText(tr("Remove all keyframes for the pattern for the selected tracks"), Qt::WhiteSpaceNormal));
-        QObject::connect( _imp->removeAllKeyFramesButton,SIGNAL( clicked(bool) ),this,SLOT( onRemoveAnimationButtonClicked() ) );
-        keyframeLayout->addWidget(_imp->removeAllKeyFramesButton);
+
         
         _imp->buttonsLayout->addWidget(keyframeContainer);
         
+        QPixmap resetPix;
+        appPTR->getIcon(Natron::NATRON_PIXMAP_RESTORE_DEFAULTS_ENABLED, &resetPix);
         _imp->resetOffsetButton = new Button(QIcon(resetOffsetPix), "", _imp->buttonsBar);
         _imp->resetOffsetButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
         _imp->resetOffsetButton->setToolTip(Natron::convertFromPlainText(tr("Resets the offset for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->resetOffsetButton,SIGNAL( clicked(bool) ),this,SLOT( onResetOffsetButtonClicked() ) );
         _imp->buttonsLayout->addWidget(_imp->resetOffsetButton);
         
-        _imp->resetTrackButton = new Button(QIcon(), "Reset track", _imp->buttonsBar);
+        _imp->resetTrackButton = new Button(QIcon(resetPix), "", _imp->buttonsBar);
         _imp->resetTrackButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
         _imp->resetTrackButton->setToolTip(Natron::convertFromPlainText(tr("Resets animation for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->resetTrackButton,SIGNAL( clicked(bool) ),this,SLOT( onResetTrackButtonClicked() ) );
@@ -588,6 +587,8 @@ TrackerGui::drawOverlays(double time,
             context->getSelectedMarkers(&selectedMarkers);
             context->getAllMarkers(&allMarkers);
             
+            bool showErrorColor = _imp->showCorrelationButton->isChecked();
+            
             for (std::vector<boost::shared_ptr<TrackMarker> >::iterator it = allMarkers.begin(); it!=allMarkers.end(); ++it) {
                 if (!(*it)->isEnabled()) {
                     continue;
@@ -597,6 +598,7 @@ TrackerGui::drawOverlays(double time,
                 
                 boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
                 boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
+                boost::shared_ptr<Double_Knob> correlationKnob = (*it)->getCorrelationKnob();
                 boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
                 boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
                 boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
@@ -705,6 +707,46 @@ TrackerGui::drawOverlays(double time,
                     
                     std::string name = (*it)->getLabel();
 
+                    std::map<int,std::pair<Natron::Point,double> > centerPoints;
+                    int floorTime = std::floor(time + 0.5);
+                    
+                    boost::shared_ptr<Curve> xCurve = centerKnob->getCurve(0);
+                    boost::shared_ptr<Curve> yCurve = centerKnob->getCurve(1);
+                    boost::shared_ptr<Curve> errorCurve = correlationKnob->getCurve(0);
+                    
+                    for (int i = floorTime; i < MAX_CENTER_POINTS_DISPLAYED; ++i) {
+                        KeyFrame k;
+                        if (xCurve->getKeyFrameWithTime(i, &k)) {
+                            std::pair<Natron::Point,double>& p = centerPoints[k.getTime()];
+                            p.first.x = k.getValue();
+                            p.first.y = INT_MIN;
+                            
+                            if (yCurve->getKeyFrameWithTime(i, &k)) {
+                                p.first.y = k.getValue();
+                            }
+                            if (showErrorColor && errorCurve->getKeyFrameWithTime(i, &k)) {
+                                p.second = k.getValue();
+                            }
+                        }
+                    }
+                    for (int i = floorTime - 1; i > (floorTime - MAX_CENTER_POINTS_DISPLAYED); --i) {
+                        KeyFrame k;
+                        if (xCurve->getKeyFrameWithTime(i, &k)) {
+                            std::pair<Natron::Point,double>& p = centerPoints[k.getTime()];
+                            p.first.x = k.getValue();
+                            p.first.y = INT_MIN;
+                            
+                            if (yCurve->getKeyFrameWithTime(i, &k)) {
+                                p.first.y = k.getValue();
+                            }
+                            if (showErrorColor && errorCurve->getKeyFrameWithTime(i, &k)) {
+                                p.second = k.getValue();
+                            }
+                        }
+                    }
+
+                  
+                    
                     for (int l = 0; l < 2; ++l) {
                         // shadow (uses GL_PROJECTION)
                         glMatrixMode(GL_PROJECTION);
@@ -712,6 +754,38 @@ TrackerGui::drawOverlays(double time,
                         // translate (1,-1) pixels
                         glTranslated(direction * shadow.x, -direction * shadow.y, 0);
                         glMatrixMode(GL_MODELVIEW);
+                        
+                        ///Draw center position
+                        
+                        glBegin(GL_POINTS);
+                        if (!showErrorColor) {
+                            glColor3f(0.5 * l,0.5 * l,0.5 * l);
+                        }
+                        for (std::map<int,std::pair<Natron::Point,double> >::iterator it = centerPoints.begin() ;it!=centerPoints.end(); ++it) {
+                            if (showErrorColor) {
+                                if (l != 0) {
+                                    /*
+                                     Map the correlation to [0, 0.33] since 0 is Red for HSV and 0.33 is Green. 
+                                     Also clamp to the interval if the correlation is higher, and reverse.
+                                     */
+                                    double mappedError = 0.33 - std::max(std::min(0.33,it->second.second / 3.),0.);
+                                    QColor c;
+                                    c.setHsvF(mappedError, 1., 1.);
+                                    glColor3f(c.redF(), c.greenF(), c.blueF());
+                                } else {
+                                    glColor3f(0., 0., 0.);
+                                }
+                            }
+                            glVertex2d(it->second.first.x, it->second.first.y);
+                        }
+                        glEnd();
+                        
+                        glBegin(GL_LINE_STRIP);
+                        glColor3f(0.5 * l,0.5 * l,0.5 * l);
+                        for (std::map<int,std::pair<Natron::Point,double> >::iterator it = centerPoints.begin() ;it!=centerPoints.end(); ++it) {
+                            glVertex2d(it->second.first.x, it->second.first.y);
+                        }
+                        glEnd();
                         
                         glColor3f((float)markerColor[0] * l, (float)markerColor[1] * l, (float)markerColor[2] * l);
                         glBegin(GL_LINE_LOOP);
@@ -2485,15 +2559,6 @@ TrackerGui::onRemoveKeyframeButtonClicked()
     }
 }
 
-void
-TrackerGui::onRemoveAnimationButtonClicked()
-{
-    std::list<boost::shared_ptr<TrackMarker> > markers;
-    _imp->panel->getContext()->getSelectedMarkers(&markers);
-    for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it != markers.end(); ++it) {
-        (*it)->removeAllKeyframes();
-    }
-}
 
 void
 TrackerGui::onResetOffsetButtonClicked()
@@ -2508,9 +2573,5 @@ TrackerGui::onResetOffsetButtonClicked()
 void
 TrackerGui::onResetTrackButtonClicked()
 {
-    std::list<boost::shared_ptr<TrackMarker> > markers;
-    _imp->panel->getContext()->getSelectedMarkers(&markers);
-    for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it != markers.end(); ++it) {
-        (*it)->resetTrack();
-    }
+    _imp->panel->onResetButtonClicked();
 }
