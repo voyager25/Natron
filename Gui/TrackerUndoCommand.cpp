@@ -61,7 +61,7 @@ RemoveTracksCommand::RemoveTracksCommand(const std::list<boost::shared_ptr<Track
 , _markers()
 , _context(context)
 {
-    assert(!_markers.empty());
+    assert(!markers.empty());
     for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = markers.begin(); it!=markers.end(); ++it) {
         TrackToRemove t;
         t.track = *it;

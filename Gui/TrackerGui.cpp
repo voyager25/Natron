@@ -173,6 +173,8 @@ struct TrackerGuiPrivate
     , interactMarker()
     {
     }
+    
+    void transformPattern(double time, TrackerMouseStateEnum state, const Natron::Point& delta);
 };
 
 class DuringOverlayFlag_RAII
@@ -469,7 +471,8 @@ TrackerGui::onAddTrackClicked(bool clicked)
     _imp->viewer->getViewer()->redraw();
 }
 
-static QPointF computeMidPointExtent(const QPointF& prev, const QPointF& next, const QPointF& point, double handleSize)
+static QPointF computeMidPointExtent(const QPointF& prev, const QPointF& next, const QPointF& point,
+                                     const QPointF& handleSize)
 {
     Natron::Point leftDeriv,rightDeriv;
     leftDeriv.x = prev.x() - point.x();
@@ -482,16 +485,16 @@ static QPointF computeMidPointExtent(const QPointF& prev, const QPointF& next, c
     if (derivNorm == 0) {
         double norm = std::sqrt((leftDeriv.x - point.x()) * (leftDeriv.x - point.x()) + (leftDeriv.y - point.y()) * (leftDeriv.y  - point.y()));
         if (norm != 0) {
-            ret.rx() = point.x() + ((leftDeriv.y - point.y()) / norm) * handleSize;
-            ret.ry() = point.y() - ((leftDeriv.x - point.x()) / norm) * handleSize;
+            ret.rx() = point.x() + ((leftDeriv.y - point.y()) / norm) * handleSize.x();
+            ret.ry() = point.y() - ((leftDeriv.x - point.x()) / norm) * handleSize.y();
             return ret;
         } else {
             return QPointF(0,0);
         }
 
     } else {
-        ret.rx() = point.x() + ((rightDeriv.y - leftDeriv.y) / derivNorm) * handleSize;
-        ret.ry() = point.y() - ((rightDeriv.x - leftDeriv.x) / derivNorm) * handleSize;
+        ret.rx() = point.x() + ((rightDeriv.y - leftDeriv.y) / derivNorm) * handleSize.x();
+        ret.ry() = point.y() - ((rightDeriv.x - leftDeriv.x) / derivNorm) * handleSize.y();
     }
     return ret;
 }
@@ -686,7 +689,9 @@ TrackerGui::drawOverlays(double time,
                     outterMidRight((searchBtmRight.x() + searchTopRight.x()) / 2., (searchBtmRight.y() + searchTopRight.y()) / 2.),
                     outterMidBtm((searchBtmLeft.x() + searchBtmRight.x()) / 2., (searchBtmLeft.y() + searchBtmRight.y()) / 2.);
                     
-                    double handleSize = HANDLE_SIZE * pixelScaleX;
+                    QPointF handleSize;
+                    handleSize.rx() = HANDLE_SIZE * pixelScaleX;
+                    handleSize.ry() = handleSize.x();
                     
                     QPointF innerMidLeftExt = computeMidPointExtent(topLeft, btmLeft, innerMidLeft, handleSize);
                     QPointF innerMidRightExt = computeMidPointExtent(btmRight, topRight, innerMidRight, handleSize);
@@ -1121,6 +1126,19 @@ TrackerGui::penDown(double time,
                 btmLeft.rx() = ptnBtmLeft->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
                 btmLeft.ry() = ptnBtmLeft->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
                 
+                QPointF midTop,midRight,midBtm,midLeft;
+                midTop.rx() = (topLeft.x() + topRight.x()) / 2.;
+                midTop.ry() = (topLeft.y() + topRight.y()) / 2.;
+                
+                midRight.rx() = (btmRight.x() + topRight.x()) / 2.;
+                midRight.ry() = (btmRight.y() + topRight.y()) / 2.;
+                
+                midBtm.rx() = (btmRight.x() + btmLeft.x()) / 2.;
+                midBtm.ry() = (btmRight.y() + btmLeft.y()) / 2.;
+                
+                midLeft.rx() = (topLeft.x() + btmLeft.x()) / 2.;
+                midLeft.ry() = (topLeft.y() + btmLeft.y()) / 2.;
+                
                 if (isSelected && isNearbyPoint(topLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->eventState = eMouseStateDraggingInnerTopLeft;
                     _imp->interactMarker = *it;
@@ -1135,6 +1153,22 @@ TrackerGui::penDown(double time,
                     didSomething = true;
                 } else if (isSelected && isNearbyPoint(btmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->eventState = eMouseStateDraggingInnerBtmLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(midTop, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerTopMid;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(midRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerMidRight;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(midLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerMidLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isSelected && isNearbyPoint(midBtm, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingInnerBtmMid;
                     _imp->interactMarker = *it;
                     didSomething = true;
                 }
@@ -1156,6 +1190,19 @@ TrackerGui::penDown(double time,
                 searchBtmRight.rx() = searchTopRight.x();
                 searchBtmRight.ry() = searchBtmLeft.y();
                 
+                QPointF searchTopMid,searchRightMid,searchLeftMid,searchBtmMid;
+                searchTopMid.rx() = (searchTopLeft.x() + searchTopRight.x()) / 2.;
+                searchTopMid.ry() = (searchTopLeft.y() + searchTopRight.y()) / 2.;
+                
+                searchRightMid.rx() = (searchBtmRight.x() + searchTopRight.x()) / 2.;
+                searchRightMid.ry() = (searchBtmRight.y() + searchTopRight.y()) / 2.;
+                
+                searchBtmMid.rx() = (searchBtmRight.x() + searchBtmLeft.x()) / 2.;
+                searchBtmMid.ry() = (searchBtmRight.y() + searchBtmLeft.y()) / 2.;
+                
+                searchLeftMid.rx() = (searchTopLeft.x() + searchBtmLeft.x()) / 2.;
+                searchLeftMid.ry() = (searchTopLeft.y() + searchBtmLeft.y()) / 2.;
+                
                 if (isNearbyPoint(searchTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->eventState = eMouseStateDraggingOuterTopLeft;
                     _imp->interactMarker = *it;
@@ -1170,6 +1217,22 @@ TrackerGui::penDown(double time,
                     didSomething = true;
                 } else if (isNearbyPoint(searchBtmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->eventState = eMouseStateDraggingOuterBtmLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchTopMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterTopMid;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchBtmMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterBtmMid;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchLeftMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterMidLeft;
+                    _imp->interactMarker = *it;
+                    didSomething = true;
+                } else if (isNearbyPoint(searchRightMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->eventState = eMouseStateDraggingOuterMidRight;
                     _imp->interactMarker = *it;
                     didSomething = true;
                 }
@@ -1215,6 +1278,260 @@ TrackerGui::penDoubleClicked(double /*time*/,
     bool didSomething = false;
 
     return didSomething;
+}
+
+void
+TrackerGuiPrivate::transformPattern(double time, TrackerMouseStateEnum state, const Natron::Point& delta)
+{
+    boost::shared_ptr<Double_Knob> searchWndTopRight,searchWndBtmLeft;
+    boost::shared_ptr<Double_Knob> patternCorners[4];
+    boost::shared_ptr<TrackerContext> context = panel->getContext();
+    boost::shared_ptr<Double_Knob> centerKnob = context->getCenterKnob();
+    boost::shared_ptr<Double_Knob> offsetKnob = context->getOffsetKnob();
+    
+    bool transformPatternCorners = state != eMouseStateDraggingOuterBtmLeft &&
+    state != eMouseStateDraggingOuterBtmRight &&
+    state != eMouseStateDraggingOuterTopLeft &&
+    state != eMouseStateDraggingOuterTopRight &&
+    state != eMouseStateDraggingOuterMidLeft &&
+    state != eMouseStateDraggingOuterMidRight &&
+    state != eMouseStateDraggingOuterTopMid &&
+    state != eMouseStateDraggingOuterBtmMid;
+    
+    if (transformPatternCorners) {
+        patternCorners[0] = context->getPatternTopLeftKnob();
+        patternCorners[1] = context->getPatternBtmLeftKnob();
+        patternCorners[2] = context->getPatternBtmRightKnob();
+        patternCorners[3] = context->getPatternTopRightKnob();
+    }
+    searchWndTopRight = context->getSearchWindowTopRightKnob();
+    searchWndBtmLeft = context->getSearchWindowBottomLeftKnob();
+    
+    QPointF centerPoint;
+    centerPoint.rx() = centerKnob->getValueAtTime(time, 0);
+    centerPoint.ry() = centerKnob->getValueAtTime(time, 1);
+    
+    QPointF offset;
+    offset.rx() = offsetKnob->getValueAtTime(time, 0);
+    offset.ry() = offsetKnob->getValueAtTime(time, 1);
+    
+    QPointF patternPoints[4];
+    QPointF searchPoints[4];
+    if (transformPatternCorners) {
+        for (int i = 0; i < 4; ++i) {
+            patternPoints[i].rx() = patternCorners[i]->getValueAtTime(time, 0) + centerPoint.x() + offset.x();
+            patternPoints[i].ry() = patternCorners[i]->getValueAtTime(time, 1) + centerPoint.y() + offset.y();
+        }
+    }
+    searchPoints[1].rx()= searchWndBtmLeft->getValueAtTime(time , 0) + centerPoint.x() + offset.x();
+    searchPoints[1].ry()= searchWndBtmLeft->getValueAtTime(time , 1) + centerPoint.y() + offset.y();
+    
+    searchPoints[3].rx()= searchWndTopRight->getValueAtTime(time , 0) + centerPoint.x() + offset.x();
+    searchPoints[3].ry()= searchWndTopRight->getValueAtTime(time , 1) + centerPoint.y() + offset.y();
+    
+    searchPoints[0].rx() = searchPoints[1].x();
+    searchPoints[0].ry() = searchPoints[3].y();
+    
+    searchPoints[2].rx() = searchPoints[3].x();
+    searchPoints[2].ry() = searchPoints[1].y();
+    
+    if (state == eMouseStateDraggingInnerBtmLeft ||
+        state == eMouseStateDraggingOuterBtmLeft) {
+        if (transformPatternCorners) {
+            patternPoints[1].rx() += delta.x;
+            patternPoints[1].ry() += delta.y;
+            
+            patternPoints[0].rx() += delta.x;
+            patternPoints[0].ry() -= delta.y;
+            
+            patternPoints[2].rx() -= delta.x;
+            patternPoints[2].ry() += delta.y;
+            
+            patternPoints[3].rx() -= delta.x;
+            patternPoints[3].ry() -= delta.y;
+        }
+        
+        searchPoints[1].rx() += delta.x;
+        searchPoints[1].ry() += delta.y;
+        
+        searchPoints[0].rx() += delta.x;
+        searchPoints[0].ry() -= delta.y;
+        
+        searchPoints[2].rx() -= delta.x;
+        searchPoints[2].ry() += delta.y;
+        
+        searchPoints[3].rx() -= delta.x;
+        searchPoints[3].ry() -= delta.y;
+    } else if (state == eMouseStateDraggingInnerBtmRight ||
+               state == eMouseStateDraggingOuterBtmRight) {
+        
+        if (transformPatternCorners) {
+            patternPoints[1].rx() -= delta.x;
+            patternPoints[1].ry() += delta.y;
+            
+            patternPoints[0].rx() -= delta.x;
+            patternPoints[0].ry() -= delta.y;
+            
+            patternPoints[2].rx() += delta.x;
+            patternPoints[2].ry() += delta.y;
+            
+            patternPoints[3].rx() += delta.x;
+            patternPoints[3].ry() -= delta.y;
+        }
+        
+        searchPoints[1].rx() -= delta.x;
+        searchPoints[1].ry() += delta.y;
+        
+        searchPoints[0].rx() -= delta.x;
+        searchPoints[0].ry() -= delta.y;
+        
+        searchPoints[2].rx() += delta.x;
+        searchPoints[2].ry() += delta.y;
+        
+        searchPoints[3].rx() += delta.x;
+        searchPoints[3].ry() -= delta.y;
+        
+    } else if (state == eMouseStateDraggingInnerTopRight ||
+               state == eMouseStateDraggingOuterTopRight) {
+        
+        if (transformPatternCorners) {
+            patternPoints[1].rx() -= delta.x;
+            patternPoints[1].ry() -= delta.y;
+            
+            patternPoints[0].rx() -= delta.x;
+            patternPoints[0].ry() += delta.y;
+            
+            patternPoints[2].rx() += delta.x;
+            patternPoints[2].ry() -= delta.y;
+            
+            patternPoints[3].rx() += delta.x;
+            patternPoints[3].ry() += delta.y;
+        }
+        
+        searchPoints[1].rx() -= delta.x;
+        searchPoints[1].ry() -= delta.y;
+        
+        searchPoints[0].rx() -= delta.x;
+        searchPoints[0].ry() += delta.y;
+        
+        searchPoints[2].rx() += delta.x;
+        searchPoints[2].ry() -= delta.y;
+        
+        searchPoints[3].rx() += delta.x;
+        searchPoints[3].ry() += delta.y;
+    } else if (state == eMouseStateDraggingInnerTopLeft ||
+               state == eMouseStateDraggingOuterTopLeft) {
+        
+        if (transformPatternCorners) {
+            patternPoints[1].rx() += delta.x;
+            patternPoints[1].ry() -= delta.y;
+            
+            patternPoints[0].rx() += delta.x;
+            patternPoints[0].ry() += delta.y;
+            
+            patternPoints[2].rx() -= delta.x;
+            patternPoints[2].ry() -= delta.y;
+            
+            patternPoints[3].rx() -= delta.x;
+            patternPoints[3].ry() += delta.y;
+        }
+        
+        searchPoints[1].rx() += delta.x;
+        searchPoints[1].ry() -= delta.y;
+        
+        searchPoints[0].rx() += delta.x;
+        searchPoints[0].ry() += delta.y;
+        
+        searchPoints[2].rx() -= delta.x;
+        searchPoints[2].ry() -= delta.y;
+        
+        searchPoints[3].rx() -= delta.x;
+        searchPoints[3].ry() += delta.y;
+    } else if (state == eMouseStateDraggingInnerBtmMid ||
+               state == eMouseStateDraggingOuterBtmMid) {
+        if (transformPatternCorners) {
+            patternPoints[1].ry() += delta.y;
+            patternPoints[2].ry() += delta.y;
+            patternPoints[0].ry() -= delta.y;
+            patternPoints[3].ry() -= delta.y;
+        }
+        searchPoints[1].ry() += delta.y;
+        searchPoints[2].ry() += delta.y;
+        searchPoints[0].ry() -= delta.y;
+        searchPoints[3].ry() -= delta.y;
+    } else if (state == eMouseStateDraggingInnerTopMid ||
+               state == eMouseStateDraggingOuterTopMid) {
+        if (transformPatternCorners) {
+            patternPoints[1].ry() -= delta.y;
+            patternPoints[2].ry() -= delta.y;
+            patternPoints[0].ry() += delta.y;
+            patternPoints[3].ry() += delta.y;
+        }
+        searchPoints[1].ry() -= delta.y;
+        searchPoints[2].ry() -= delta.y;
+        searchPoints[0].ry() += delta.y;
+        searchPoints[3].ry() += delta.y;
+    } else if (state == eMouseStateDraggingInnerMidLeft ||
+               state == eMouseStateDraggingOuterMidLeft) {
+        if (transformPatternCorners) {
+            patternPoints[1].rx() += delta.x;
+            patternPoints[2].rx() -= delta.x;
+            patternPoints[0].rx() += delta.x;
+            patternPoints[3].rx() -= delta.x;
+        }
+        searchPoints[1].rx() += delta.x;
+        searchPoints[2].rx() -= delta.x;
+        searchPoints[0].rx() += delta.x;
+        searchPoints[3].rx() -= delta.x;
+    } else if (state == eMouseStateDraggingInnerMidRight ||
+               state == eMouseStateDraggingOuterMidRight) {
+        if (transformPatternCorners) {
+            patternPoints[1].rx() -= delta.x;
+            patternPoints[2].rx() += delta.x;
+            patternPoints[0].rx() -= delta.x;
+            patternPoints[3].rx() += delta.x;
+        }
+        searchPoints[1].rx() -= delta.x;
+        searchPoints[2].rx() += delta.x;
+        searchPoints[0].rx() -= delta.x;
+        searchPoints[3].rx() += delta.x;
+    }
+
+    Natron::EffectInstance* effect = context->getNode()->getLiveInstance();
+    effect->beginChanges();
+    
+    if (transformPatternCorners) {
+        for (int i = 0; i < 4; ++i) {
+            
+            patternPoints[i].rx() -= (centerPoint.x() + offset.x());
+            patternPoints[i].ry() -= (centerPoint.y() + offset.y());
+            
+            
+            if (patternCorners[i]->hasAnimation()) {
+                patternCorners[i]->setValuesAtTime(time, patternPoints[i].x(), patternPoints[i].y(), Natron::eValueChangedReasonNatronInternalEdited);
+            } else {
+                patternCorners[i]->setValues(patternPoints[i].x(), patternPoints[i].y(), Natron::eValueChangedReasonNatronInternalEdited);
+            }
+        }
+    }
+    searchPoints[1].rx() -= (centerPoint.x() + offset.x());
+    searchPoints[1].ry() -= (centerPoint.y() + offset.y());
+    
+    searchPoints[3].rx() -= (centerPoint.x() + offset.x());
+    searchPoints[3].ry() -= (centerPoint.y() + offset.y());
+    
+    if (searchWndBtmLeft->hasAnimation()) {
+        searchWndBtmLeft->setValuesAtTime(time, searchPoints[1].x(), searchPoints[1].y(), Natron::eValueChangedReasonNatronInternalEdited);
+    } else {
+        searchWndBtmLeft->setValues(searchPoints[1].x(), searchPoints[1].y(), Natron::eValueChangedReasonNatronInternalEdited);
+    }
+    
+    if (searchWndTopRight->hasAnimation()) {
+        searchWndTopRight->setValuesAtTime(time, searchPoints[3].x(), searchPoints[3].y(), Natron::eValueChangedReasonNatronInternalEdited);
+    } else {
+        searchWndTopRight->setValues(searchPoints[3].x(), searchPoints[3].y(), Natron::eValueChangedReasonNatronInternalEdited);
+    }
+    effect->endChanges();
 }
 
 bool
@@ -1318,6 +1635,20 @@ TrackerGui::penMotion(double time,
                 btmLeft.rx() = ptnBtmLeft->getValueAtTime(time, 0) + offset.x() + centerPoint.x();
                 btmLeft.ry() = ptnBtmLeft->getValueAtTime(time, 1) + offset.y() + centerPoint.y();
                 
+                QPointF midTop,midRight,midBtm,midLeft;
+                midTop.rx() = (topLeft.x() + topRight.x()) / 2.;
+                midTop.ry() = (topLeft.y() + topRight.y()) / 2.;
+                
+                midRight.rx() = (btmRight.x() + topRight.x()) / 2.;
+                midRight.ry() = (btmRight.y() + topRight.y()) / 2.;
+                
+                midBtm.rx() = (btmRight.x() + btmLeft.x()) / 2.;
+                midBtm.ry() = (btmRight.y() + btmLeft.y()) / 2.;
+                
+                midLeft.rx() = (topLeft.x() + btmLeft.x()) / 2.;
+                midLeft.ry() = (topLeft.y() + btmLeft.y()) / 2.;
+
+                
                 if (isSelected && isNearbyPoint(topLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringInnerTopLeft;
                     _imp->hoverMarker = *it;
@@ -1332,6 +1663,22 @@ TrackerGui::penMotion(double time,
                     hoverProcess = true;
                 } else if (isSelected && isNearbyPoint(btmLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringInnerBtmLeft;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(midTop, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerTopMid;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(midRight, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerMidRight;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(midLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerMidLeft;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isSelected && isNearbyPoint(midBtm, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringInnerBtmMid;
                     _imp->hoverMarker = *it;
                     hoverProcess = true;
                 }
@@ -1353,6 +1700,19 @@ TrackerGui::penMotion(double time,
                 searchBtmRight.rx() = searchTopRight.x();
                 searchBtmRight.ry() = searchBtmLeft.y();
                 
+                QPointF searchTopMid,searchRightMid,searchLeftMid,searchBtmMid;
+                searchTopMid.rx() = (searchTopLeft.x() + searchTopRight.x()) / 2.;
+                searchTopMid.ry() = (searchTopLeft.y() + searchTopRight.y()) / 2.;
+                
+                searchRightMid.rx() = (searchBtmRight.x() + searchTopRight.x()) / 2.;
+                searchRightMid.ry() = (searchBtmRight.y() + searchTopRight.y()) / 2.;
+                
+                searchBtmMid.rx() = (searchBtmRight.x() + searchBtmLeft.x()) / 2.;
+                searchBtmMid.ry() = (searchBtmRight.y() + searchBtmLeft.y()) / 2.;
+                
+                searchLeftMid.rx() = (searchTopLeft.x() + searchBtmLeft.x()) / 2.;
+                searchLeftMid.ry() = (searchTopLeft.y() + searchBtmLeft.y()) / 2.;
+                
                 if (isNearbyPoint(searchTopLeft, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
                     _imp->hoverState = eDrawStateHoveringOuterTopLeft;
                     _imp->hoverMarker = *it;
@@ -1369,7 +1729,25 @@ TrackerGui::penMotion(double time,
                     _imp->hoverState = eDrawStateHoveringOuterBtmLeft;
                     _imp->hoverMarker = *it;
                     hoverProcess = true;
+                } else if (isNearbyPoint(searchTopMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterTopMid;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isNearbyPoint(searchBtmMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterBtmMid;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isNearbyPoint(searchLeftMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterMidLeft;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
+                } else if (isNearbyPoint(searchRightMid, viewer, viewportPos.x(), viewportPos.y(), POINT_TOLERANCE)) {
+                    _imp->hoverState = eDrawStateHoveringOuterMidRight;
+                    _imp->hoverMarker = *it;
+                    hoverProcess = true;
                 }
+
+
             }
             
             if (hoverProcess) {
@@ -1426,6 +1804,13 @@ TrackerGui::penMotion(double time,
             case eMouseStateDraggingInnerTopLeft:
             case eMouseStateDraggingInnerBtmRight:
             {
+                
+                if (_imp->controlDown == 0) {
+                    _imp->transformPattern(time, _imp->eventState, delta);
+                    didSomething = true;
+                    break;
+                }
+                
                 int index;
                 if (_imp->eventState == eMouseStateDraggingInnerBtmLeft) {
                     index = 1;
@@ -1512,7 +1897,11 @@ TrackerGui::penMotion(double time,
             }   break;
             case eMouseStateDraggingOuterBtmLeft:
             {
-                
+                if (_imp->controlDown == 0) {
+                    _imp->transformPattern(time, _imp->eventState, delta);
+                    didSomething = true;
+                    break;
+                }
                 Natron::Point center,offset;
                 center.x = centerKnob->getValueAtTime(time,0);
                 center.y = centerKnob->getValueAtTime(time,1);
@@ -1546,6 +1935,11 @@ TrackerGui::penMotion(double time,
             }   break;
             case eMouseStateDraggingOuterBtmRight:
             {
+                if (_imp->controlDown == 0) {
+                    _imp->transformPattern(time, _imp->eventState, delta);
+                    didSomething = true;
+                    break;
+                }
                 Natron::Point center,offset;
                 center.x = centerKnob->getValueAtTime(time,0);
                 center.y = centerKnob->getValueAtTime(time,1);
@@ -1583,6 +1977,11 @@ TrackerGui::penMotion(double time,
             }   break;
             case eMouseStateDraggingOuterTopRight:
             {
+                if (_imp->controlDown == 0) {
+                    _imp->transformPattern(time, _imp->eventState, delta);
+                    didSomething = true;
+                    break;
+                }
                 Natron::Point center,offset;
                 center.x = centerKnob->getValueAtTime(time,0);
                 center.y = centerKnob->getValueAtTime(time,1);
@@ -1616,6 +2015,11 @@ TrackerGui::penMotion(double time,
             }   break;
             case eMouseStateDraggingOuterTopLeft:
             {
+                if (_imp->controlDown == 0) {
+                    _imp->transformPattern(time, _imp->eventState, delta);
+                    didSomething = true;
+                    break;
+                }
                 Natron::Point center,offset;
                 center.x = centerKnob->getValueAtTime(time,0);
                 center.y = centerKnob->getValueAtTime(time,1);
@@ -1649,6 +2053,17 @@ TrackerGui::penMotion(double time,
                 } else {
                     searchWndTopRight->setValue(p.y,1);
                 }
+                didSomething = true;
+            }   break;
+            case eMouseStateDraggingInnerBtmMid:
+            case eMouseStateDraggingInnerTopMid:
+            case eMouseStateDraggingInnerMidLeft:
+            case eMouseStateDraggingInnerMidRight:
+            case eMouseStateDraggingOuterBtmMid:
+            case eMouseStateDraggingOuterTopMid:
+            case eMouseStateDraggingOuterMidLeft:
+            case eMouseStateDraggingOuterMidRight: {
+                _imp->transformPattern(time, _imp->eventState, delta);
                 didSomething = true;
             }   break;
             default:
