@@ -3119,6 +3119,10 @@ Gui::saveAndIncrVersion()
 {
     QString path = _imp->_appInstance->getProject()->getProjectPath();
     QString name = _imp->_appInstance->getProject()->getProjectName();
+    if (path.isEmpty() && name == NATRON_PROJECT_UNTITLED) {
+        saveProjectAs();
+        return;
+    }
     int currentVersion = 0;
     int positionToInsertVersion;
     bool mustAppendFileExtension = false;
