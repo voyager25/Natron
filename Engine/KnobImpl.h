@@ -905,7 +905,7 @@ Knob<T>::setValue(const T & v,
     
     ///If we cannot set value, queue it
     if (holder && !holder->isSetValueCurrentlyPossible()) {
-        
+
         if (getEvaluateOnChange()) {
             holder->abortAnyEvaluation();
         }

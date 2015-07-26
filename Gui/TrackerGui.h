@@ -15,7 +15,7 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
-#include "Global/Macros.h"
+#include "Global/GLobalDefines.h"
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QObject>
@@ -30,6 +30,7 @@ class QKeyEvent;
 class QPointF;
 class QMouseEvent;
 class QInputEvent;
+class TrackMarker;
 
 struct TrackerGuiPrivate;
 class TrackerGui
@@ -71,6 +72,8 @@ public:
 
 public Q_SLOTS:
 
+    void onTimelineTimeChanged(SequenceTime time, int reason);
+    
     void onAddTrackClicked(bool clicked);
 
     void onTrackBwClicked();
@@ -107,6 +110,21 @@ public Q_SLOTS:
     void onRemoveKeyframeButtonClicked();
     void onResetOffsetButtonClicked();
     void onResetTrackButtonClicked();
+    
+    void onContextSelectionChanged(int reason);
+    void onKeyframeSetOnTrack(boost::shared_ptr<TrackMarker> marker, int key);
+    void onKeyframeRemovedOnTrack(boost::shared_ptr<TrackMarker> marker, int key);
+    void onAllKeyframesRemovedOnTrack(boost::shared_ptr<TrackMarker> marker);
+    
+    void onCenterKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void onOffsetKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+
+    void onSearchBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void onSearchTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+
+    
+private Q_SLOTS:
+    void onTrackImageRenderingFinished();
     
 private:
     

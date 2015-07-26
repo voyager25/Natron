@@ -1274,8 +1274,10 @@ public:
     };
     
 protected:
-
-
+#ifdef DEBUG
+    //Sometimes debugger fail to break in templated .h
+    void debugBreakHelper();
+#endif
     /**
      * @brief Called when you must copy any extra data you maintain from the other knob.
      * The other knob is guaranteed to be of the same type.
@@ -1594,6 +1596,7 @@ public:
     
     virtual void dequeueValuesSet(bool disableEvaluation) OVERRIDE FINAL;
     
+    
     ///MT-safe
     void setMinimum(const T& mini, int dimension = 0);
     void setMaximum(const T& maxi, int dimension = 0);
@@ -1892,6 +1895,8 @@ public:
      * @brief Dequeues all values set in the queues for all knobs
      **/
     void dequeueValuesSet();
+    
+    bool isDequeueingValuesSet() const;
     
     void discardAppPointer();
     

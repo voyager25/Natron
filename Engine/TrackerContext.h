@@ -27,7 +27,9 @@
 
 namespace Natron {
     class Node;
+    class Image;
 }
+class RectI;
 class Double_Knob;
 class Bool_Knob;
 class Button_Knob;
@@ -105,6 +107,7 @@ public:
     
     void removeAllKeyframes();
     
+    std::pair<boost::shared_ptr<Natron::Image>,RectI> getMarkerImage(int time) const;
     
 public Q_SLOTS:
     
@@ -123,10 +126,10 @@ public Q_SLOTS:
     /*void onPatternTopLeftKnobValueChanged(int dimension,int reason);
     void onPatternTopRightKnobValueChanged(int dimension,int reason);
     void onPatternBtmRightKnobValueChanged(int dimension,int reason);
-    void onPatternBtmLeftKnobValueChanged(int dimension,int reason);
+    void onPatternBtmLeftKnobValueChanged(int dimension,int reason);*/
     
     void onSearchBtmLeftKnobValueChanged(int dimension,int reason);
-    void onSearchTopRightKnobValueChanged(int dimension,int reason);*/
+    void onSearchTopRightKnobValueChanged(int dimension,int reason);
     
 private:
     
@@ -343,10 +346,10 @@ public:
    /* void s_patternTopLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternTopLeftKnobValueChanged(marker,dimension,reason); }
     void s_patternTopRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternTopRightKnobValueChanged(marker,dimension, reason); }
     void s_patternBtmRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternBtmRightKnobValueChanged(marker,dimension, reason); }
-    void s_patternBtmLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternBtmLeftKnobValueChanged(marker,dimension, reason); }
+    void s_patternBtmLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT patternBtmLeftKnobValueChanged(marker,dimension, reason); }*/
     
     void s_searchBtmLeftKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT searchBtmLeftKnobValueChanged(marker,dimension,reason); }
-    void s_searchTopRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT searchTopRightKnobValueChanged(marker, dimension, reason); }*/
+    void s_searchTopRightKnobValueChanged(const boost::shared_ptr<TrackMarker>& marker,int dimension,int reason) { Q_EMIT searchTopRightKnobValueChanged(marker, dimension, reason); }
     
 public Q_SLOTS:
     
@@ -385,10 +388,10 @@ Q_SIGNALS:
     /*void patternTopLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
     void patternTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
     void patternBtmRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
-    void patternBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    void patternBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);*/
     
     void searchBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
-    void searchTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);*/
+    void searchTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
     
 private:
     

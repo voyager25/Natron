@@ -1411,6 +1411,14 @@ KnobHelper::isDescriptionVisible() const
     return _imp->descriptionVisible;
 }
 
+#ifdef DEBUG
+void
+KnobHelper::debugBreakHelper()
+{
+    assert(true);
+}
+#endif
+
 bool
 KnobHelper::hasAnimation() const
 {
@@ -2921,6 +2929,7 @@ struct KnobHolder::KnobHolderPrivate
     ///to just redraw it once when the recursion level is back to 0
     QMutex overlayRedrawStackMutex;
     int overlayRedrawStack;
+    bool isDequeingValuesSet;
 
     mutable QMutex paramsEditLevelMutex;
     KnobHolder::MultipleParamsEditEnum paramsEditLevel;
@@ -2952,6 +2961,7 @@ struct KnobHolder::KnobHolderPrivate
     , actionsRecursionLevel()
     , overlayRedrawStackMutex()
     , overlayRedrawStack(0)
+    , isDequeingValuesSet(false)
     , paramsEditLevel(eMultipleParamsEditOff)
     , paramsEditRecursionLevel(0)
     , evaluationBlockedMutex(QMutex::Recursive)
@@ -3945,14 +3955,32 @@ KnobHolder::areKnobsFrozen() const
     return _imp->knobsFrozen;
 }
 
+bool
+KnobHolder::isDequeueingValuesSet() const
+{
+    {
+        QMutexLocker k(&_imp->overlayRedrawStackMutex);
+        return _imp->isDequeingValuesSet;
+    }
+}
+
 void
 KnobHolder::dequeueValuesSet()
 {
     assert(QThread::currentThread() == qApp->thread());
-    
+    beginChanges();
+    {
+        QMutexLocker k(&_imp->overlayRedrawStackMutex);
+        _imp->isDequeingValuesSet = true;
+    }
     for (U32 i = 0; i < _imp->knobs.size(); ++i) {
         _imp->knobs[i]->dequeueValuesSet(false);
     }
+    {
+        QMutexLocker k(&_imp->overlayRedrawStackMutex);
+        _imp->isDequeingValuesSet = false;
+    }
+    endChanges();
 }
 
 double

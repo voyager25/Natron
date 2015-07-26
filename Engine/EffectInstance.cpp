@@ -6589,8 +6589,8 @@ EffectInstance::onKnobValueChanged_public(KnobI* k,
         //if (isOverlaySlaveParam(k)) {
         incrementRedrawNeededCounter();
         //}
-        
-        if (getRecursionLevel() == 0 && checkIfOverlayRedrawNeeded()) {
+
+        if (!isDequeueingValuesSet() && getRecursionLevel() == 0 && checkIfOverlayRedrawNeeded()) {
             redrawOverlayInteract();
         }
     }

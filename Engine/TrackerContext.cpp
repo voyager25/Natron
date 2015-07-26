@@ -317,12 +317,13 @@ TrackMarker::TrackMarker(const boost::shared_ptr<TrackerContext>& context)
     
     handler = _imp->patternBtmRight->getSignalSlotHandler();
     QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onPatternBtmRightKnobValueChanged(int, int)));
+    */
     
     handler = _imp->searchWindowBtmLeft->getSignalSlotHandler();
     QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onSearchBtmLeftKnobValueChanged(int, int)));
 
     handler = _imp->searchWindowTopRight->getSignalSlotHandler();
-    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onSearchTopRightKnobValueChanged(int, int)));*/
+    QObject::connect(handler.get(), SIGNAL(valueChanged(int,int)), this, SLOT(onSearchTopRightKnobValueChanged(int, int)));
 }
 
 
@@ -802,7 +803,7 @@ TrackMarker::onPatternBtmLeftKnobValueChanged(int dimension,int reason)
 {
     getContext()->s_patternBtmLeftKnobValueChanged(shared_from_this(), dimension, reason);
 }
-
+*/
 void
 TrackMarker::onSearchBtmLeftKnobValueChanged(int dimension,int reason)
 {
@@ -813,8 +814,70 @@ void
 TrackMarker::onSearchTopRightKnobValueChanged(int dimension,int reason)
 {
     getContext()->s_searchTopRightKnobValueChanged(shared_from_this(), dimension, reason);
-}*/
+}
 
+std::pair<boost::shared_ptr<Natron::Image>,RectI>
+TrackMarker::getMarkerImage(int time) const
+{
+    std::list<ImageComponents> components;
+    components.push_back(ImageComponents::getRGBComponents());
+    
+    const unsigned int mipmapLevel = 0;
+    
+    Natron::Point center,offset;
+    center.x = _imp->center->getValueAtTime(time, 0);
+    center.y = _imp->center->getValueAtTime(time, 1);
+    
+    offset.x = _imp->offset->getValueAtTime(time, 0);
+    offset.y = _imp->offset->getValueAtTime(time, 1);
+    
+    RectD roiCanonical;
+    roiCanonical.x1 = _imp->searchWindowBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
+    roiCanonical.y1 = _imp->searchWindowBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+    roiCanonical.x2 = _imp->searchWindowTopRight->getValueAtTime(time, 0) + center.x + offset.x;
+    roiCanonical.y2 = _imp->searchWindowTopRight->getValueAtTime(time, 1) + center.y + offset.y;
+    
+    RectI roi;
+    NodePtr node = getContext()->getNode();
+    NodePtr input = node->getInput(0);
+    roiCanonical.toPixelEnclosing(mipmapLevel, input ? input->getLiveInstance()->getPreferredAspectRatio() : 1., &roi);
+    if (!input) {
+        return std::make_pair(ImagePtr(),RectI());
+    }
+
+    
+    ParallelRenderArgsSetter frameRenderArgs(node->getApp()->getProject().get(),
+                                             time,
+                                             0, //<  view 0 (left)
+                                             true, //<isRenderUserInteraction
+                                             false, //isSequential
+                                             false, //can abort
+                                             0, //render Age
+                                             0, // viewer requester
+                                             0, //texture index
+                                             node->getApp()->getTimeLine().get(),
+                                             NodePtr(),
+                                             true);
+    
+    RenderScale scale;
+    scale.x = scale.y = 1.;
+    EffectInstance::RenderRoIArgs args(time,
+                                       scale,
+                                       mipmapLevel, //mipmaplevel
+                                       0,
+                                       false,
+                                       roi,
+                                       RectD(),
+                                       components,
+                                       Natron::eImageBitDepthFloat,
+                                       node->getLiveInstance());
+    ImageList planes;
+    EffectInstance::RenderRoIRetCode stat = input->getLiveInstance()->renderRoI(args, &planes);
+    if (stat != EffectInstance::eRenderRoIRetCodeOk || planes.empty()) {
+        return std::make_pair(ImagePtr(),RectI());
+    }
+    return std::make_pair(planes.front(),roi);;
+}
 
 struct TrackMarkerAndOptions
 {
@@ -1255,6 +1318,7 @@ struct TrackerContextPrivate
         enableTrackRedKnob->setDefaultValue(true);
         enableTrackRedKnob->setAnimationEnabled(false);
         enableTrackRedKnob->setAddNewLine(false);
+        enableTrackRedKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(enableTrackRedKnob);
         enableTrackRed = enableTrackRedKnob;
         knobs.push_back(enableTrackRedKnob);
@@ -1265,6 +1329,7 @@ struct TrackerContextPrivate
         enableTrackGreenKnob->setDefaultValue(true);
         enableTrackGreenKnob->setAnimationEnabled(false);
         enableTrackGreenKnob->setAddNewLine(false);
+        enableTrackGreenKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(enableTrackGreenKnob);
         enableTrackGreen = enableTrackGreenKnob;
         knobs.push_back(enableTrackGreenKnob);
@@ -1274,6 +1339,7 @@ struct TrackerContextPrivate
         enableTrackBlueKnob->setHintToolTip(kTrackerParamTrackBlueHint);
         enableTrackBlueKnob->setDefaultValue(true);
         enableTrackBlueKnob->setAnimationEnabled(false);
+        enableTrackBlueKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(enableTrackBlueKnob);
         enableTrackBlue = enableTrackBlueKnob;
         knobs.push_back(enableTrackBlueKnob);
@@ -1285,6 +1351,7 @@ struct TrackerContextPrivate
         minCorelKnob->setMinimum(0.);
         minCorelKnob->setMaximum(1.);
         minCorelKnob->setDefaultValue(0.75);
+        minCorelKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(minCorelKnob);
         minCorrelation = minCorelKnob;
         knobs.push_back(minCorelKnob);
@@ -1295,6 +1362,7 @@ struct TrackerContextPrivate
         maxItKnob->setAnimationEnabled(false);
         maxItKnob->setMinimum(0);
         maxItKnob->setMaximum(150);
+        maxItKnob->setEvaluateOnChange(false);
         maxItKnob->setDefaultValue(50);
         settingsPage->addKnob(maxItKnob);
         maxIterations = maxItKnob;
@@ -1305,6 +1373,7 @@ struct TrackerContextPrivate
         usePretTrackBF->setHintToolTip(kTrackerParamBruteForcePreTrackHint);
         usePretTrackBF->setDefaultValue(true);
         usePretTrackBF->setAnimationEnabled(false);
+        usePretTrackBF->setEvaluateOnChange(false);
         usePretTrackBF->setAddNewLine(false);
         settingsPage->addKnob(usePretTrackBF);
         bruteForcePreTrack = usePretTrackBF;
@@ -1315,6 +1384,7 @@ struct TrackerContextPrivate
         useNormalizedInt->setHintToolTip(kTrackerParamNormalizeIntensitiesHint);
         useNormalizedInt->setDefaultValue(false);
         useNormalizedInt->setAnimationEnabled(false);
+        useNormalizedInt->setEvaluateOnChange(false);
         settingsPage->addKnob(useNormalizedInt);
         useNormalizedIntensities = useNormalizedInt;
         knobs.push_back(useNormalizedInt);
@@ -1326,6 +1396,7 @@ struct TrackerContextPrivate
         preBlurSigmaKnob->setMinimum(0);
         preBlurSigmaKnob->setMaximum(10.);
         preBlurSigmaKnob->setDefaultValue(0.9);
+        preBlurSigmaKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(preBlurSigmaKnob);
         preBlurSigma = preBlurSigmaKnob;
         knobs.push_back(preBlurSigmaKnob);
@@ -1335,6 +1406,7 @@ struct TrackerContextPrivate
         referenceFrameKnob->setHintToolTip(kTrackerParamReferenceFrameHint);
         referenceFrameKnob->setAnimationEnabled(false);
         referenceFrameKnob->setDefaultValue(0.9);
+        referenceFrameKnob->setEvaluateOnChange(false);
         transformPage->addKnob(referenceFrameKnob);
         referenceFrame = referenceFrameKnob;
         knobs.push_back(referenceFrameKnob);
@@ -1357,6 +1429,7 @@ struct TrackerContextPrivate
         sWndBtmLeft->setDefaultValue(-25,0);
         sWndBtmLeft->setDefaultValue(-25,1);
         sWndBtmLeft->setMaximum(0, 1);
+        sWndBtmLeft->setEvaluateOnChange(false);
         sWndBtmLeft->setIsPersistant(false);
         searchWindowGroup->addKnob(sWndBtmLeft);
         
@@ -1371,6 +1444,7 @@ struct TrackerContextPrivate
         sWndTopRight->setDefaultValue(25,1);
         sWndTopRight->setMinimum(0, 0);
         sWndTopRight->setMinimum(0, 1);
+        sWndTopRight->setEvaluateOnChange(false);
         sWndTopRight->setIsPersistant(false);
         searchWindowGroup->addKnob(sWndTopRight);
         searchWindowTopRight = sWndTopRight;
@@ -1383,6 +1457,7 @@ struct TrackerContextPrivate
         ptnTopLeft->setDefaultValue(-15,0);
         ptnTopLeft->setDefaultValue(15,1);
         ptnTopLeft->setIsPersistant(false);
+        ptnTopLeft->setEvaluateOnChange(false);
         patternGroup->addKnob(ptnTopLeft);
         patternTopLeft = ptnTopLeft;
         knobs.push_back(ptnTopLeft);
@@ -1394,6 +1469,7 @@ struct TrackerContextPrivate
         ptnTopRight->setDefaultValue(15,0);
         ptnTopRight->setDefaultValue(15,1);
         ptnTopRight->setIsPersistant(false);
+        ptnTopRight->setEvaluateOnChange(false);
         patternGroup->addKnob(ptnTopRight);
         patternTopRight = ptnTopRight;
         knobs.push_back(ptnTopRight);
@@ -1405,6 +1481,7 @@ struct TrackerContextPrivate
         ptnBtmRight->setDefaultValue(15,0);
         ptnBtmRight->setDefaultValue(-15,1);
         ptnBtmRight->setIsPersistant(false);
+        ptnBtmRight->setEvaluateOnChange(false);
         patternGroup->addKnob(ptnBtmRight);
         patternBtmRight = ptnBtmRight;
         knobs.push_back(ptnBtmRight);
@@ -1416,6 +1493,7 @@ struct TrackerContextPrivate
         ptnBtmLeft->setHintToolTip(kTrackerParamPatternBtmLeftHint);
         ptnBtmLeft->setDefaultValue(-15,0);
         ptnBtmLeft->setDefaultValue(-15,1);
+        ptnBtmLeft->setEvaluateOnChange(false);
         patternGroup->addKnob(ptnBtmLeft);
         patternBtmLeft = ptnBtmLeft;
         knobs.push_back(ptnBtmLeft);
@@ -1425,6 +1503,7 @@ struct TrackerContextPrivate
         centerKnob->setName(kTrackerParamCenter);
         centerKnob->setHintToolTip(kTrackerParamCenterHint);
         centerKnob->setIsPersistant(false);
+        centerKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(centerKnob);
         center = centerKnob;
         knobs.push_back(centerKnob);
@@ -1434,6 +1513,7 @@ struct TrackerContextPrivate
         offsetKnob->setName(kTrackerParamOffset);
         offsetKnob->setHintToolTip(kTrackerParamOffsetHint);
         offsetKnob->setIsPersistant(false);
+        offsetKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(offsetKnob);
         offset = offsetKnob;
         knobs.push_back(offsetKnob);
@@ -1446,6 +1526,7 @@ struct TrackerContextPrivate
         weightKnob->setIsPersistant(false);
         weightKnob->setMinimum(0.);
         weightKnob->setMaximum(1.);
+        weightKnob->setEvaluateOnChange(false);
         weightKnob->setDefaultValue(1.);
         settingsPage->addKnob(weightKnob);
         weight = weightKnob;
@@ -1462,6 +1543,7 @@ struct TrackerContextPrivate
         correlationKnob->disableSlider();
         correlationKnob->setIsPersistant(false);
         correlationKnob->setAllDimensionsEnabled(false);
+        correlationKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(correlationKnob);
         correlation = correlationKnob;
         knobs.push_back(correlationKnob);
@@ -1480,6 +1562,7 @@ struct TrackerContextPrivate
         motionModelKnob->setMaximum(1.);
         motionModelKnob->setIsPersistant(false);
         motionModelKnob->setDefaultValue(4);
+        motionModelKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(motionModelKnob);
         motionModel = motionModelKnob;
         knobs.push_back(motionModelKnob);
