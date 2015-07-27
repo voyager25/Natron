@@ -908,7 +908,10 @@ ViewerInstance::getRenderViewerArgsAndCheckCache(SequenceTime time,
     assert(_imp->uiContext);
     boost::shared_ptr<Natron::FrameParams> cachedFrameParams;
     
-    if (!_imp->uiContext->isUserRegionOfInterestEnabled() && !autoContrast && !rotoPaintNode.get()) {
+    if (!_imp->uiContext->isUserRegionOfInterestEnabled() &&
+        !autoContrast &&
+        !rotoPaintNode &&
+        !isTracking()) {
         isCached = Natron::getTextureFromCache(*(outArgs->key), &outArgs->params->cachedFrame);
         
         ///if we want to force a refresh, we by-pass the cache
@@ -1101,6 +1104,10 @@ ViewerInstance::renderViewer_internal(int view,
         //if we are actively painting, re-use the last texture instead of re-drawing everything
         if (rotoPaintNode || currentlyTracking) {
             
+            if (currentlyTracking) {
+                QMutexLocker k(&_imp->viewerParamsMutex);
+                partialRectsToRender = _imp->partialUpdateRects;
+            }
             
             QMutexLocker k(&_imp->lastRenderParamsMutex);
             if (_imp->lastRenderParams[inArgs.params->textureIndex] &&
@@ -1112,9 +1119,6 @@ ViewerInstance::renderViewer_internal(int view,
                     RectD lastPaintBbox;
                     getNode()->getLastPaintStrokeRoD(&lastPaintBbox);
                     lastPaintBbox.toPixelEnclosing(inArgs.params->mipMapLevel, par, &lastPaintBboxPixel);
-                } else if (currentlyTracking) {
-                    QMutexLocker k(&_imp->viewerParamsMutex);
-                    partialRectsToRender = _imp->partialUpdateRects;
                 }
                 
                 assert(_imp->lastRenderParams[inArgs.params->textureIndex]->ramBuffer);
