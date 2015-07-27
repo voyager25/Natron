@@ -1023,7 +1023,11 @@ public Q_SLOTS:
 
     void onParentMultiInstanceInputChanged(int input);
 
+    void doComputeHashOnMainThread();
+    
 Q_SIGNALS:
+    
+    void mustComputeHashOnMainThread();
 
     void settingsPanelClosed(bool);
 

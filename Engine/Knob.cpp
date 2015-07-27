@@ -1945,7 +1945,7 @@ KnobHelper::expressionChanged(int dimension)
     if (_signalSlotHandler) {
         _signalSlotHandler->s_expressionChanged(dimension);
     }
-    
+    computeHasModifications();
 }
 
 PyObject*
