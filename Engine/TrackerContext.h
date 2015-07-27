@@ -12,6 +12,7 @@
 #include <Python.h>
 
 #include <set>
+#include <list>
 
 #include "Global/GlobalDefines.h"
 
@@ -25,6 +26,8 @@
 #include <QThread>
 #include <QMutex>
 
+#include "Engine/Rect.h"
+
 namespace Natron {
     class Node;
     class Image;
@@ -35,6 +38,7 @@ class Bool_Knob;
 class Button_Knob;
 class Choice_Knob;
 class KnobI;
+class ViewerInstance;
 class TimeLine;
 class TrackerContext;
 class TrackSerialization;
@@ -143,6 +147,7 @@ class TrackArgsV1
     int _start,_end;
     bool _forward;
     boost::shared_ptr<TimeLine> _timeline;
+    ViewerInstance* _viewer;
     std::vector<Button_Knob*> _buttonInstances;
     bool _isUpdateViewerEnabled;
     
@@ -154,6 +159,7 @@ public:
     , _end(0)
     , _forward(false)
     , _timeline()
+    , _viewer(0)
     , _buttonInstances()
     , _isUpdateViewerEnabled(false)
     {
@@ -169,12 +175,14 @@ public:
                 int end,
                 bool forward,
                 const boost::shared_ptr<TimeLine>& timeline,
+                ViewerInstance* viewer,
                 const std::vector<Button_Knob*>& instances,
                 bool updateViewer)
     : _start(start)
     , _end(end)
     , _forward(forward)
     , _timeline(timeline)
+    , _viewer(viewer)
     , _buttonInstances(instances)
     , _isUpdateViewerEnabled(updateViewer)
     {
@@ -189,6 +197,7 @@ public:
         _end = other._end;
         _forward = other._forward;
         _timeline = other._timeline;
+        _viewer = other._viewer;
         _buttonInstances = other._buttonInstances;
         _isUpdateViewerEnabled = other._isUpdateViewerEnabled;
     }
@@ -218,6 +227,11 @@ public:
         return _timeline;
     }
     
+    ViewerInstance* getViewer() const
+    {
+        return _viewer;
+    }
+    
     const std::vector<Button_Knob*>& getInstances() const
     {
         return _buttonInstances;
@@ -227,6 +241,8 @@ public:
     {
         return (int)_buttonInstances.size();
     }
+    
+    void getRedrawAreasNeeded(int time, std::list<RectD>* canonicalRects) const;
     
 };
 
@@ -279,7 +295,7 @@ public:
      * @brief Tracks the selected markers over the range defined by [start,end[ (end pointing to the frame
      * after the last one, a la STL).
      **/
-    void trackSelectedMarkers(int start, int end, bool forward, bool updateViewer);
+    void trackSelectedMarkers(int start, int end, bool forward, bool updateViewer, ViewerInstance* viewer);
     
     void beginEditSelection();
     
@@ -392,6 +408,12 @@ Q_SIGNALS:
     
     void searchBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
     void searchTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
+    
+    void mustRefreshSelectedMarkerTexture();
+
+    void trackingStarted();
+    void trackingFinished();
+    void trackingProgress(double);
     
 private:
     

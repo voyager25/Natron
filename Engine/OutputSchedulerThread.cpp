@@ -3091,6 +3091,7 @@ ViewerCurrentFrameRequestScheduler::renderCurrentFrame(bool canAbort)
     }
     
     NodePtr isUserRotopainting = _imp->viewer->getApp()->getIsUserPainting();
+    bool isTracking = _imp->viewer->isTracking();
     boost::shared_ptr<ViewerArgs> args[2];
     if (!isUserRotopainting) {
         for (int i = 0; i < 2; ++i) {
@@ -3118,8 +3119,6 @@ ViewerCurrentFrameRequestScheduler::renderCurrentFrame(bool canAbort)
             _imp->viewer->redrawViewer();
             return;
         }
-    } else {
-        
     }
     CurrentFrameFunctorArgs functorArgs;
     functorArgs.viewer = _imp->viewer;
@@ -3156,7 +3155,7 @@ ViewerCurrentFrameRequestScheduler::renderCurrentFrame(bool canAbort)
         int maxThreads = QThreadPool::globalInstance()->maxThreadCount();
         
         //When painting, limit the number of threads to 1 to be sure strokes are painted in the right order
-        if (_imp->viewer->getApp()->getIsUserPainting().get() != 0) {
+        if (isUserRotopainting || isTracking) {
             maxThreads = 1;
         }
         if (maxThreads == 1 || (QThreadPool::globalInstance()->activeThreadCount() >= maxThreads - 1)) {

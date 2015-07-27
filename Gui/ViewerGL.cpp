@@ -230,7 +230,7 @@ struct ViewerGL::Implementation
     , pressureOnRelease(1.)
     , wheelDeltaSeekFrame(0)
     , lastTextureRoi()
-    , isUpdatingTexture(false)
+    , showUpdateTextureLine(false)
     {
         infoViewer[0] = 0;
         infoViewer[1] = 0;
@@ -355,7 +355,7 @@ struct ViewerGL::Implementation
     int wheelDeltaSeekFrame; // accumulated wheel delta for frame seeking (crtl+wheel)
     
     RectD lastTextureRoi;
-    bool isUpdatingTexture;
+    bool showUpdateTextureLine;
 
 public:
     
@@ -1436,7 +1436,7 @@ ViewerGL::drawOverlay(unsigned int mipMapLevel)
             }
         }
         
-        if (_imp->isUpdatingTexture) {
+        if (_imp->showUpdateTextureLine) {
             glBegin(GL_LINES);
             glVertex2d(_imp->lastTextureRoi.x2, _imp->lastTextureRoi.y2);
             glVertex2d(_imp->lastTextureRoi.x2, _imp->lastTextureRoi.y1 - 1);
@@ -2480,7 +2480,9 @@ ViewerGL::transferBufferFromRAMtoGPU(const unsigned char* ramBuffer,
         }
     }
     
-    _imp->isUpdatingTexture = updateOnlyRoi;
+    //Don't show the update line while tracking
+    _imp->showUpdateTextureLine = updateOnlyRoi && !getInternalNode()->isTracking();
+    
     if (updateOnlyRoi) {
         roi.toCanonical_noClipping(mipMapLevel, 1., &_imp->lastTextureRoi);
     }

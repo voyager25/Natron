@@ -145,7 +145,10 @@ public Q_SLOTS:
     
     void onSearchBtmLeftKnobValueChanged(const boost::shared_ptr<TrackMarker> &marker,int,int);
     void onSearchTopRightKnobValueChanged(const boost::shared_ptr<TrackMarker> &marker,int,int);*/
-
+    
+    void onTrackingStarted();
+    void onTrackingFinished();
+    void onTrackingProgress(double p);
     
 private:
     

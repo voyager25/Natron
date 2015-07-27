@@ -91,6 +91,9 @@ public:
     void removeNodeKeyframesFromTimeline(Natron::Node* node);
 
     void getKeyframes(std::list<SequenceTime>* keys) const;
+    
+    void setViewersRefreshBlocked(bool blocked);
+    bool isViewersRefreshBlocked() const;
 
 public Q_SLOTS:
 
@@ -113,6 +116,7 @@ private:
     
     mutable QMutex _lock; // protects the following SequenceTime members
     SequenceTime _currentFrame;
+    bool _blockViewersRefresh;
     
     // not MT-safe
     std::list<SequenceTime> _keyframes;

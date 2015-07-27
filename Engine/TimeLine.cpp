@@ -25,11 +25,25 @@
 
 TimeLine::TimeLine(Natron::Project* project)
 : _currentFrame(1)
+, _blockViewersRefresh(false)
 , _keyframes()
 , _project(project)
 {
 }
 
+void
+TimeLine::setViewersRefreshBlocked(bool blocked)
+{
+    QMutexLocker k(&_lock);
+    _blockViewersRefresh = blocked;
+}
+
+bool
+TimeLine::isViewersRefreshBlocked() const
+{
+    QMutexLocker k(&_lock);
+    return  _blockViewersRefresh;
+}
 
 SequenceTime
 TimeLine::currentFrame() const

@@ -186,10 +186,12 @@ public:
     , lastRenderedHashValid(false)
     , gammaLookupMutex()
     , gammaLookup()
-    , lastRotoPaintTickParamsMutex()
-    , lastRotoPaintTickParams()
+    , lastRenderParamsMutex()
+    , lastRenderParams()
     , currentlyUpdatingOpenGLViewerMutex()
     , currentlyUpdatingOpenGLViewer(false)
+    , partialUpdateRects()
+    , isTracking(false)
     , renderAgeMutex()
     , renderAge()
     , displayAge()
@@ -445,11 +447,20 @@ public:
     std::vector<float> gammaLookup; // protected by gammaLookupMutex
     
     //When painting, this is the last texture we've drawn onto so that we can update only the specific portion needed
-    mutable QMutex lastRotoPaintTickParamsMutex;
-    boost::shared_ptr<UpdateViewerParams> lastRotoPaintTickParams[2];
+    mutable QMutex lastRenderParamsMutex;
+    boost::shared_ptr<UpdateViewerParams> lastRenderParams[2];
     
     mutable QMutex currentlyUpdatingOpenGLViewerMutex;
     bool currentlyUpdatingOpenGLViewer;
+    
+    /*
+     * @brief If this list is not empty, this is the list of canonical rectangles we should update on the viewer, completly
+     * disregarding the RoI. This is protected by viewerParamsMutex
+     */
+    std::list<RectD> partialUpdateRects;
+    
+    //True if during tracking
+    bool isTracking;
     
     struct OnGoingRenderInfo
     {

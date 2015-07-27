@@ -4219,13 +4219,17 @@ NodeGraph::onTimeChanged(SequenceTime time,
 
     ///Refresh all knobs at the current time
     for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
-        ViewerInstance* isViewer = dynamic_cast<ViewerInstance*>( (*it)->getNode()->getLiveInstance() );
+        NodePtr node = (*it)->getNode();
+   
+        ViewerInstance* isViewer = dynamic_cast<ViewerInstance*>(node->getLiveInstance());
         if (isViewer) {
             viewers.push_back(isViewer);
         }
         (*it)->refreshKnobsAfterTimeChange(time);
     }
-    
+    if (getGui()->getApp()->getTimeLine()->isViewersRefreshBlocked()) {
+        return;
+    }
     ViewerInstance* leadViewer = getGui()->getApp()->getLastViewerUsingTimeline();
 
     ///Syncrhronize viewers

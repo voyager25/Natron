@@ -32,9 +32,10 @@
 #include "Engine/Project.h"
 #include "Engine/Curve.h"
 #include "Engine/TrackerSerialization.h"
+#include "Engine/ViewerInstance.h"
 
 #define kTrackBaseName "track"
-
+#define TRACKER_MAX_TRACKS_FOR_PARTIAL_VIEWER_UPDATE 10
 
 /// Parameters definitions
 
@@ -894,6 +895,7 @@ class TrackArgsLibMV
     bool _isForward;
     boost::shared_ptr<TimeLine> _timeline;
     bool _isUpdateViewerEnabled;
+    ViewerInstance* _viewer;
     boost::shared_ptr<mv::AutoTrack> _libmvAutotrack;
     boost::shared_ptr<FrameAccessorImpl> _fa;
     std::vector<boost::shared_ptr<TrackMarkerAndOptions> > _tracks;
@@ -907,6 +909,7 @@ public:
     , _isForward(false)
     , _timeline()
     , _isUpdateViewerEnabled(false)
+    , _viewer(0)
     , _libmvAutotrack()
     , _fa()
     , _tracks()
@@ -919,6 +922,7 @@ public:
                    bool isForward,
                    const boost::shared_ptr<TimeLine>& timeline,
                    bool isUpdateViewerEnabled,
+                   ViewerInstance* viewer,
                    const boost::shared_ptr<mv::AutoTrack>& autoTrack,
                    const boost::shared_ptr<FrameAccessorImpl>& fa,
                    const std::vector<boost::shared_ptr<TrackMarkerAndOptions> >& tracks)
@@ -927,6 +931,7 @@ public:
     , _isForward(isForward)
     , _timeline(timeline)
     , _isUpdateViewerEnabled(isUpdateViewerEnabled)
+    , _viewer(viewer)
     , _libmvAutotrack(autoTrack)
     , _fa(fa)
     , _tracks(tracks)
@@ -946,6 +951,7 @@ public:
         _isForward = other._isForward;
         _timeline = other._timeline;
         _isUpdateViewerEnabled = other._isUpdateViewerEnabled;
+        _viewer = other._viewer;
         _libmvAutotrack = other._libmvAutotrack;
         _fa = other._fa;
         _tracks = other._tracks;
@@ -976,6 +982,11 @@ public:
         return _timeline;
     }
     
+    ViewerInstance* getViewer() const
+    {
+        return _viewer;
+    }
+    
     bool isUpdateViewerEnabled() const
     {
         return _isUpdateViewerEnabled;
@@ -995,8 +1006,71 @@ public:
     {
         return _libmvAutotrack;
     }
+    
+    void getRedrawAreasNeeded(int time, std::list<RectD>* canonicalRects) const
+    {
+        for (std::vector<boost::shared_ptr<TrackMarkerAndOptions> >::const_iterator it = _tracks.begin(); it!=_tracks.end(); ++it) {
+            boost::shared_ptr<Double_Knob> searchBtmLeft = (*it)->natronMarker->getSearchWindowBottomLeftKnob();
+            boost::shared_ptr<Double_Knob> searchTopRight = (*it)->natronMarker->getSearchWindowTopRightKnob();
+            boost::shared_ptr<Double_Knob> centerKnob = (*it)->natronMarker->getCenterKnob();
+            boost::shared_ptr<Double_Knob> offsetKnob = (*it)->natronMarker->getOffsetKnob();
+            
+            Natron::Point offset,center,btmLeft,topRight;
+            offset.x = offsetKnob->getValueAtTime(time, 0);
+            offset.y = offsetKnob->getValueAtTime(time, 1);
+            
+            center.x = centerKnob->getValueAtTime(time, 0);
+            center.y = centerKnob->getValueAtTime(time, 1);
+            
+            btmLeft.x = searchBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
+            btmLeft.y = searchBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+            
+            topRight.x = searchTopRight->getValueAtTime(time, 0) + center.x + offset.x;
+            topRight.y = searchTopRight->getValueAtTime(time, 1) + center.y + offset.y;
+            
+            RectD rect;
+            rect.x1 = btmLeft.x;
+            rect.y1 = btmLeft.y;
+            rect.x2 = topRight.x;
+            rect.y2 = topRight.y;
+            canonicalRects->push_back(rect);
+        }
+    }
 };
 
+void
+TrackArgsV1::getRedrawAreasNeeded(int time, std::list<RectD>* canonicalRects) const
+{
+    for (std::vector<Button_Knob*>::const_iterator it = _buttonInstances.begin(); it!=_buttonInstances.end(); ++it) {
+        EffectInstance* effect = dynamic_cast<EffectInstance*>((*it)->getHolder());
+        assert(effect);
+    
+        boost::shared_ptr<Double_Knob> searchBtmLeft = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("searchBoxBtmLeft"));
+        boost::shared_ptr<Double_Knob> searchTopRight = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("searchBoxTopRight"));
+        boost::shared_ptr<Double_Knob> centerKnob = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("center"));
+        boost::shared_ptr<Double_Knob> offsetKnob = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("offset"));
+        assert(searchBtmLeft  && searchTopRight && centerKnob && offsetKnob);
+        Natron::Point offset,center,btmLeft,topRight;
+        offset.x = offsetKnob->getValueAtTime(time, 0);
+        offset.y = offsetKnob->getValueAtTime(time, 1);
+        
+        center.x = centerKnob->getValueAtTime(time, 0);
+        center.y = centerKnob->getValueAtTime(time, 1);
+        
+        btmLeft.x = searchBtmLeft->getValueAtTime(time, 0) + center.x + offset.x;
+        btmLeft.y = searchBtmLeft->getValueAtTime(time, 1) + center.y + offset.y;
+        
+        topRight.x = searchTopRight->getValueAtTime(time, 0) + center.x + offset.x;
+        topRight.y = searchTopRight->getValueAtTime(time, 1) + center.y + offset.y;
+        
+        RectD rect;
+        rect.x1 = btmLeft.x;
+        rect.y1 = btmLeft.y;
+        rect.x2 = topRight.x;
+        rect.y2 = topRight.y;
+        canonicalRects->push_back(rect);
+    }
+}
 
 static void updateBbox(const Natron::Point& p, RectD* bbox)
 {
@@ -1251,6 +1325,7 @@ TrackerContext::trackStepV1(int trackIndex, const TrackArgsV1& args, int time)
 struct TrackerContextPrivate
 {
     
+    TrackerContext* _publicInterface;
     boost::weak_ptr<Natron::Node> node;
     
     std::list<boost::weak_ptr<KnobI> > knobs,perTrackKnobs;
@@ -1274,8 +1349,9 @@ struct TrackerContextPrivate
     
     TrackScheduler<TrackArgsLibMV> scheduler;
     
-    TrackerContextPrivate(const boost::shared_ptr<Natron::Node> &node)
-    : node(node)
+    TrackerContextPrivate(TrackerContext* publicInterface, const boost::shared_ptr<Natron::Node> &node)
+    : _publicInterface(publicInterface)
+    , node(node)
     , knobs()
     , perTrackKnobs()
     , enableTrackRed()
@@ -1308,6 +1384,9 @@ struct TrackerContextPrivate
     , scheduler(trackStepLibMV)
     {
         Natron::EffectInstance* effect = node->getLiveInstance();
+        QObject::connect(&scheduler, SIGNAL(trackingStarted()), _publicInterface, SIGNAL(trackingStarted()));
+        QObject::connect(&scheduler, SIGNAL(trackingFinished()), _publicInterface, SIGNAL(trackingFinished()));
+        QObject::connect(&scheduler, SIGNAL(progressUpdate(double)), _publicInterface, SIGNAL(trackingProgress(double)));
         
         boost::shared_ptr<Page_Knob> settingsPage = Natron::createKnob<Page_Knob>(effect, "Controls", 1 , false);
         boost::shared_ptr<Page_Knob> transformPage = Natron::createKnob<Page_Knob>(effect, "Transform", 1 , false);
@@ -1431,6 +1510,8 @@ struct TrackerContextPrivate
         sWndBtmLeft->setMaximum(0, 1);
         sWndBtmLeft->setEvaluateOnChange(false);
         sWndBtmLeft->setIsPersistant(false);
+        QObject::connect(sWndBtmLeft->getSignalSlotHandler().get(), SIGNAL(valueChanged(int,int)),
+                         _publicInterface, SIGNAL(mustRefreshSelectedMarkerTexture()));
         searchWindowGroup->addKnob(sWndBtmLeft);
         
         searchWindowBtmLeft = sWndBtmLeft;
@@ -1446,6 +1527,8 @@ struct TrackerContextPrivate
         sWndTopRight->setMinimum(0, 1);
         sWndTopRight->setEvaluateOnChange(false);
         sWndTopRight->setIsPersistant(false);
+        QObject::connect(sWndTopRight->getSignalSlotHandler().get(), SIGNAL(valueChanged(int,int)),
+                         _publicInterface, SIGNAL(mustRefreshSelectedMarkerTexture()));
         searchWindowGroup->addKnob(sWndTopRight);
         searchWindowTopRight = sWndTopRight;
         knobs.push_back(sWndTopRight);
@@ -1505,6 +1588,9 @@ struct TrackerContextPrivate
         centerKnob->setIsPersistant(false);
         centerKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(centerKnob);
+        QObject::connect(centerKnob->getSignalSlotHandler().get(), SIGNAL(valueChanged(int,int)),
+                         _publicInterface, SIGNAL(mustRefreshSelectedMarkerTexture()));
+       
         center = centerKnob;
         knobs.push_back(centerKnob);
         perTrackKnobs.push_back(centerKnob);
@@ -1515,6 +1601,8 @@ struct TrackerContextPrivate
         offsetKnob->setIsPersistant(false);
         offsetKnob->setEvaluateOnChange(false);
         settingsPage->addKnob(offsetKnob);
+        QObject::connect(offsetKnob->getSignalSlotHandler().get(), SIGNAL(valueChanged(int,int)),
+                         _publicInterface, SIGNAL(mustRefreshSelectedMarkerTexture()));
         offset = offsetKnob;
         knobs.push_back(offsetKnob);
         perTrackKnobs.push_back(offsetKnob);
@@ -1616,7 +1704,7 @@ struct TrackerContextPrivate
 
 TrackerContext::TrackerContext(const boost::shared_ptr<Natron::Node> &node)
 : boost::enable_shared_from_this<TrackerContext>()
-, _imp(new TrackerContextPrivate(node))
+, _imp(new TrackerContextPrivate(this, node))
 {
     
 }
@@ -2348,7 +2436,7 @@ FrameAccessorImpl::NumFrames(int /*clip*/)
 }
 
 void
-TrackerContext::trackSelectedMarkers(int start, int end, bool forward, bool updateViewer)
+TrackerContext::trackSelectedMarkers(int start, int end, bool forward, bool updateViewer, ViewerInstance* viewer)
 {
     std::list<boost::shared_ptr<TrackMarker> > markers;
     {
@@ -2429,7 +2517,7 @@ TrackerContext::trackSelectedMarkers(int start, int end, bool forward, bool upda
     
     
     
-    TrackArgsLibMV args(start, end, forward, getNode()->getApp()->getTimeLine(), updateViewer, trackContext, accessor, trackAndOptions);
+    TrackArgsLibMV args(start, end, forward, getNode()->getApp()->getTimeLine(), updateViewer, viewer, trackContext, accessor, trackAndOptions);
     _imp->scheduler.track(args);
 }
 
@@ -2852,6 +2940,11 @@ TrackScheduler<TrackArgsType>::run()
         }
         
         boost::shared_ptr<TimeLine> timeline = curArgs.getTimeLine();
+        ViewerInstance* viewer =  curArgs.getViewer();
+        timeline->setViewersRefreshBlocked(true);
+        if (viewer) {
+            viewer->setIsTracking(true);
+        }
         
         int end = curArgs.getEnd();
         int start = curArgs.getStart();
@@ -2899,8 +2992,16 @@ TrackScheduler<TrackArgsType>::run()
             }
             
             ///Ok all tracks are finished now for this frame, refresh viewer if needed
-            if (isUpdateViewerOnTrackingEnabled) {
+            if (isUpdateViewerOnTrackingEnabled && viewer) {
+                //This will not refresh the viewer since we blocked it explicitly
                 timeline->seekFrame(cur, true, 0, Natron::eTimelineChangeReasonUserSeek);
+                
+                if (numTracks < TRACKER_MAX_TRACKS_FOR_PARTIAL_VIEWER_UPDATE) {
+                    std::list<RectD> updateRects;
+                    curArgs.getRedrawAreasNeeded(cur, &updateRects);
+                    viewer->setPartialUpdateRects(updateRects);
+                }
+                viewer->renderCurrentFrame(true);
             }
             
             if (reportProgress) {
@@ -2918,10 +3019,19 @@ TrackScheduler<TrackArgsType>::run()
                 }
             }
             
-        }
+        } // while (cur != end) {
         
         if (reportProgress) {
             emit_trackingFinished();
+        }
+        timeline->setViewersRefreshBlocked(false);
+        if (viewer) {
+            viewer->clearPartialUpdateRects();
+            viewer->setIsTracking(false);
+        }
+        if (isUpdateViewerOnTrackingEnabled) {
+            //Refresh all viewers to the current frame
+            timeline->seekFrame(cur, true, 0, Natron::eTimelineChangeReasonUserSeek);
         }
         
         ///Flag that we're no longer working
@@ -2939,7 +3049,7 @@ TrackScheduler<TrackArgsType>::run()
             }
         }
         
-        ///Sleep or restart if we've requests in the queue
+        ///Sleep or restart if we've got requests in the queue
         {
             QMutexLocker k(&_imp->startRequesstMutex);
             while (_imp->startRequests <= 0) {
@@ -2948,7 +3058,7 @@ TrackScheduler<TrackArgsType>::run()
             _imp->startRequests = 0;
         }
         
-    }
+    } // for (;;) {
 }
 
 template <class TrackArgsType>

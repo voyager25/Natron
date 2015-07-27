@@ -112,16 +112,11 @@ public Q_SLOTS:
     void onResetTrackButtonClicked();
     
     void onContextSelectionChanged(int reason);
-    void onKeyframeSetOnTrack(boost::shared_ptr<TrackMarker> marker, int key);
-    void onKeyframeRemovedOnTrack(boost::shared_ptr<TrackMarker> marker, int key);
-    void onAllKeyframesRemovedOnTrack(boost::shared_ptr<TrackMarker> marker);
-    
-    void onCenterKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
-    void onOffsetKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
-
-    void onSearchBtmLeftKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
-    void onSearchTopRightKnobValueChanged(boost::shared_ptr<TrackMarker> marker,int,int);
-
+    void onKeyframeSetOnTrack(const boost::shared_ptr<TrackMarker> &marker, int key);
+    void onKeyframeRemovedOnTrack(const boost::shared_ptr<TrackMarker> &marker, int key);
+    void onAllKeyframesRemovedOnTrack(const boost::shared_ptr<TrackMarker>& marker);
+ 
+    void updateSelectedMarkerTexture();
     
 private Q_SLOTS:
     void onTrackImageRenderingFinished();

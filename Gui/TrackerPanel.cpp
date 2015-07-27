@@ -358,6 +358,10 @@ TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
     QObject::connect(context.get(), SIGNAL(motionModelKnobValueChanged(boost::shared_ptr<TrackMarker>,int,int)), this,
                      SLOT(onMotionModelKnobValueChanged(boost::shared_ptr<TrackMarker>, int, int)));
     
+    QObject::connect(context.get(), SIGNAL(trackingStarted()), this, SLOT(onTrackingStarted()));
+    QObject::connect(context.get(), SIGNAL(trackingFinished()), this, SLOT(onTrackingFinished()));
+    QObject::connect(context.get(), SIGNAL(trackingProgress(double)), this, SLOT(onTrackingProgress(double)));
+    
     _imp->mainLayout = new QVBoxLayout(this);
     
     QWidget* trackContainer = new QWidget(this);
@@ -1965,4 +1969,23 @@ TrackerPanelPrivate::updateTrackKeysInfoBar(int time)
             currentKeyframe->setAnimation(1);
         }
     }
+}
+
+void
+TrackerPanel::onTrackingStarted()
+{
+    
+}
+
+
+void
+TrackerPanel::onTrackingFinished()
+{
+    
+}
+
+void
+TrackerPanel::onTrackingProgress(double p)
+{
+    
 }

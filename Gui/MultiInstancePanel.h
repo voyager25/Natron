@@ -29,6 +29,7 @@ class NodeGui;
 class QVBoxLayout;
 class QHBoxLayout;
 class QItemSelection;
+class ViewerInstance;
 class TableItem;
 class Button_Knob;
 class Gui;
@@ -163,10 +164,10 @@ public:
     virtual ~TrackerPanelV1();
 
     ///Each function below returns true if there is a selection, false otherwise
-    bool trackBackward();
-    bool trackForward();
-    bool trackPrevious();
-    bool trackNext();
+    bool trackBackward(ViewerInstance* viewer);
+    bool trackForward(ViewerInstance* viewer);
+    bool trackPrevious(ViewerInstance* viewer);
+    bool trackNext(ViewerInstance* viewer);
     void stopTracking();
 
     void clearAllAnimationForSelection();

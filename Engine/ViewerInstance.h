@@ -223,6 +223,12 @@ public:
     
     float interpolateGammaLut(float value);
     
+    void setPartialUpdateRects(const std::list<RectD>& rois);
+    void clearPartialUpdateRects();
+    
+    void setIsTracking(bool tracking);
+    bool isTracking() const;
+    
 public Q_SLOTS:
     
     void s_viewerRenderingStarted() { Q_EMIT viewerRenderingStarted(); }
