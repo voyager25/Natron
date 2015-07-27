@@ -427,7 +427,8 @@ NodeGui::ensurePanelCreated()
         if (getNode()->isRotoPaintingNode()) {
             _graph->getGui()->setRotoInterface(this);
         }
-        if (getNode()->isTrackerNodePlugin()) {
+        if ((getNode()->isTrackerNodePlugin() && !getNode()->getParentMultiInstance()) ||
+            getNode()->getLiveInstance()->isBuiltinTrackerNode()) {
             _graph->getGui()->createNewTrackerInterface(this);
         }
     }
@@ -499,7 +500,7 @@ NodeGui::createPanel(QVBoxLayout* container,
             ///This is valid only if the node is a multi-instance and this is the main instance.
             ///The "real" panel showed on the gui will be the _settingsPanel, but we still need to create
             ///another panel for the main-instance (hidden) knobs to function properly (and also be showed in the CurveEditor)
-
+            
             _mainInstancePanel = new NodeSettingsPanel( boost::shared_ptr<MultiInstancePanel>(),_graph->getGui(),
                                                         thisAsShared,container,container->parentWidget() );
             _mainInstancePanel->blockSignals(true);

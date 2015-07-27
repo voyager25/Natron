@@ -6579,19 +6579,22 @@ EffectInstance::onKnobValueChanged_public(KnobI* k,
         EffectPointerThreadProperty_RAII propHolder_raii(this);
         knobChanged(k, reason, /*view*/ 0, time, originatedFromMainThread);
         
-       
+        
     }
     
-    
-    if (hasOverlay() && getNode()->shouldDrawOverlay() && !getNode()->hasDefaultOverlayForParam(k)) {
-        // Some plugins (e.g. by digital film tools) forget to set kOfxInteractPropSlaveToParam.
-        // Most hosts trigger a redraw if the plugin has an active overlay.
-        //if (isOverlaySlaveParam(k)) {
-        incrementRedrawNeededCounter();
-        //}
-
-        if (!isDequeueingValuesSet() && getRecursionLevel() == 0 && checkIfOverlayRedrawNeeded()) {
-            redrawOverlayInteract();
+    if (QThread::currentThread() == qApp->thread() &&
+        originatedFromMainThread) { //< change didnt occur in main-thread in the first, palce don't attempt to draw the overlay
+        
+        if (hasOverlay() && getNode()->shouldDrawOverlay() && !getNode()->hasDefaultOverlayForParam(k)) {
+            // Some plugins (e.g. by digital film tools) forget to set kOfxInteractPropSlaveToParam.
+            // Most hosts trigger a redraw if the plugin has an active overlay.
+            //if (isOverlaySlaveParam(k)) {
+            incrementRedrawNeededCounter();
+            //}
+            
+            if (!isDequeueingValuesSet() && getRecursionLevel() == 0 && checkIfOverlayRedrawNeeded()) {
+                redrawOverlayInteract();
+            }
         }
     }
     

@@ -3130,3 +3130,7 @@ TrackScheduler<TrackArgsType>::quitThread()
     wait();
     
 }
+
+///Explicit template instantiation for TrackScheduler
+template class TrackScheduler<TrackArgsV1>;
+template class TrackScheduler<TrackArgsLibMV>;

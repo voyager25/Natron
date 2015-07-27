@@ -255,7 +255,9 @@ public:
         if (p->panel) {
             e = p->panel->getNode()->getNode()->getLiveInstance();
         }
-        e->setDoingInteractAction(true);
+        if (e) {
+            e->setDoingInteractAction(true);
+        }
     }
     ~DuringOverlayFlag_RAII()
     {

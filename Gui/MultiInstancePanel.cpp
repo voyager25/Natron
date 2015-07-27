@@ -1705,7 +1705,7 @@ struct TrackerPanelPrivateV1
           , exportButton(0)
           , transformPage()
           , referenceFrame()
-          , scheduler(TrackerContext::trackStepV1)
+          , scheduler(&TrackerContext::trackStepV1)
     {
     }
 
