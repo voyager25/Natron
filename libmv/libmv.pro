@@ -48,7 +48,7 @@ c++11 {
     DEFINES += CERES_STD_UNORDERED_MAP
 } else {
     DEFINES += CERES_NO_UNORDERED_MAP
-    gcc* {
+    *g++* {
         DEFINES += CERES_TR1_MEMORY_HEADER CERES_TR1_SHARED_PTR
     }
 }
