@@ -1543,7 +1543,7 @@ ViewerInstance::ViewerInstancePrivate::reportProgress(const boost::shared_ptr<Up
         }
         std::size_t dstRowSize = params->roi.width() * pixelSize;
         params->bytesCount = params->roi.height() * dstRowSize;
-        
+        std::size_t srcRowSize = params->textureRect.w * pixelSize;
         
         ///Allocate a temporary buffer in which we copy the texture for the RoI
         unsigned char* tmpBuffer = (unsigned char*)malloc(params->bytesCount);
@@ -1551,7 +1551,7 @@ ViewerInstance::ViewerInstancePrivate::reportProgress(const boost::shared_ptr<Up
         
         unsigned char* dstPixels = tmpBuffer;
         for (int y = it->y1; y < it->y2; ++y, dstPixels += dstRowSize) {
-            const unsigned char* srcPixels = params->cachedFrame->pixelAt(it->x1, y);
+            const unsigned char* srcPixels = params->ramBuffer + (y - params->textureRect.y1) * srcRowSize + (it->x1 - params->textureRect.x1) * pixelSize;
             memcpy(dstPixels, srcPixels, dstRowSize);
         }
         

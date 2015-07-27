@@ -2890,6 +2890,12 @@ struct TrackSchedulerPrivate
     
 };
 
+TrackSchedulerBase::TrackSchedulerBase()
+: QThread()
+{
+    QObject::connect(this, SIGNAL(renderCurrentFrameForViewer(ViewerInstance*)), this, SLOT(doRenderCurrentFrameForViewer(ViewerInstance*)));
+}
+
 template <class TrackArgsType>
 TrackScheduler<TrackArgsType>::TrackScheduler(TrackStepFunctor functor)
 : TrackSchedulerBase()
@@ -3001,7 +3007,7 @@ TrackScheduler<TrackArgsType>::run()
                     curArgs.getRedrawAreasNeeded(cur, &updateRects);
                     viewer->setPartialUpdateRects(updateRects);
                 }
-                viewer->renderCurrentFrame(true);
+                Q_EMIT renderCurrentFrameForViewer(viewer);
             }
             
             if (reportProgress) {
@@ -3059,6 +3065,13 @@ TrackScheduler<TrackArgsType>::run()
         }
         
     } // for (;;) {
+}
+
+void
+TrackSchedulerBase::doRenderCurrentFrameForViewer(ViewerInstance* viewer)
+{
+    assert(QThread::currentThread() == qApp->thread());
+    viewer->renderCurrentFrame(true);
 }
 
 template <class TrackArgsType>

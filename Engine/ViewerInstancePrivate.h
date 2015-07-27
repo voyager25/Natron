@@ -118,7 +118,7 @@ public:
     }
     
     virtual ~UpdateViewerParams() {
-        if (mustFreeRamBuffer) {
+        if (mustFreeRamBuffer && !cachedFrame) {
             free(ramBuffer);
         }
     }

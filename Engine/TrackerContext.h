@@ -428,9 +428,13 @@ class TrackSchedulerBase : public QThread
     
 public:
     
-    TrackSchedulerBase() : QThread() {}
+    TrackSchedulerBase();
     
     virtual ~TrackSchedulerBase() {}
+    
+private Q_SLOTS:
+
+    void doRenderCurrentFrameForViewer(ViewerInstance* viewer);
     
 protected:
     
@@ -457,7 +461,7 @@ Q_SIGNALS:
     
     void progressUpdate(double progress);
     
-    
+    void renderCurrentFrameForViewer(ViewerInstance* viewer);
 };
 
 
