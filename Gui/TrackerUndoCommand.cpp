@@ -13,6 +13,8 @@
 #include "TrackerUndoCommand.h"
 
 #include "Engine/TrackerContext.h"
+#include "Engine/Node.h"
+#include "Engine/AppInstance.h"
 #include "Gui/TrackerPanel.h"
 
 
@@ -38,6 +40,7 @@ AddTrackCommand::undo()
         context->removeMarker(*it);
     }
     context->endEditSelection(TrackerContext::eTrackSelectionInternal);
+    context->getNode()->getApp()->triggerAutoSave();
 }
 
 void
@@ -54,6 +57,7 @@ AddTrackCommand::redo()
         context->addTrackToSelection(*it, TrackerContext::eTrackSelectionInternal);
     }
     context->endEditSelection(TrackerContext::eTrackSelectionInternal);
+    context->getNode()->getApp()->triggerAutoSave();
 }
 
 RemoveTracksCommand::RemoveTracksCommand(const std::list<boost::shared_ptr<TrackMarker> > &markers, const boost::shared_ptr<TrackerContext>& context)
@@ -94,6 +98,7 @@ RemoveTracksCommand::undo()
         context->addTrackToSelection(it->track, TrackerContext::eTrackSelectionInternal);
     }
     context->endEditSelection(TrackerContext::eTrackSelectionInternal);
+    context->getNode()->getApp()->triggerAutoSave();
 }
 
 void
@@ -114,4 +119,5 @@ RemoveTracksCommand::redo()
         context->addTrackToSelection(nextMarker, TrackerContext::eTrackSelectionInternal);
     }
     context->endEditSelection(TrackerContext::eTrackSelectionInternal);
+    context->getNode()->getApp()->triggerAutoSave();
 }

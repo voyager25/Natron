@@ -31,6 +31,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/Curve.h"
 #include "Engine/Image.h"
 #include "Engine/Lut.h"
+#include "Engine/Transform.h"
 
 #include "Gui/Gui.h"
 #include "Gui/GuiAppInstance.h"
@@ -47,6 +48,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/TrackerPanel.h"
 #include "Gui/NodeGraph.h"
 #include "Gui/Texture.h"
+#include "Gui/TrackerUndoCommand.h"
 
 #define POINT_SIZE 5
 #define CROSS_SIZE 6
@@ -88,6 +90,7 @@ enum TrackerMouseStateEnum
     
     eMouseStateDraggingSelectedMarkerResizeAnchor,
     eMouseStateScalingSelectedMarker,
+    eMouseStateDraggingSelectedMarker,
 };
 
 enum TrackerDrawStateEnum
@@ -1226,7 +1229,9 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
                                              const Natron::Point& selectedSearchWndBtmLeft,
                                              const Natron::Point& selectedSearchWndTopRight)
 {
-    assert(selectedMarkerTexture);
+    if (!selectedMarkerTexture) {
+        return;
+    }
     
     RectD textureRectCanonical;
     computeSelectedMarkerCanonicalRect(&textureRectCanonical);
@@ -1241,18 +1246,41 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
     assert(texRect.y2 <=  selectedMarkerTextureRoI.y2);
     texCoords.y2 = (texRect.y2 - selectedMarkerTextureRoI.y1) / (double)selectedMarkerTextureRoI.height();
     
+    Natron::Point centerPoint, innerTopLeft,innerTopRight,innerBtmLeft,innerBtmRight;
+    
+    //Remove any offset to the center to see the marker in the magnification window
+    double xCenterPercent = (ptnCenter.x - selectedSearchWndBtmLeft.x + offset.x) / (selectedSearchWndTopRight.x - selectedSearchWndBtmLeft.x);
+    double yCenterPercent = (ptnCenter.y - selectedSearchWndBtmLeft.y + offset.y) / (selectedSearchWndTopRight.y - selectedSearchWndBtmLeft.y);
+    centerPoint.y = textureRectCanonical.y1 + yCenterPercent * (textureRectCanonical.y2 - textureRectCanonical.y1);
+    centerPoint.x = textureRectCanonical.x1 + xCenterPercent * (textureRectCanonical.x2 - textureRectCanonical.x1);
+    
+    
+    innerTopLeft = toMagWindowPoint(ptnTopLeft, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
+    innerTopRight = toMagWindowPoint(ptnTopRight, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
+    innerBtmLeft = toMagWindowPoint(ptnBtmLeft, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
+    innerBtmRight = toMagWindowPoint(ptnBtmRight, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
+    
+    Transform::Point3D btmLeftTex,topLeftTex,topRightTex,btmRightTex;
+    btmLeftTex.z = topLeftTex.z = topRightTex.z = btmRightTex.z = 1.;
+    btmLeftTex.x = texCoords.x1; btmLeftTex.y = texCoords.y1;
+    topLeftTex.x = texCoords.x1; topLeftTex.y = texCoords.y2;
+    topRightTex.x = texCoords.x2; topRightTex.y = texCoords.y2;
+    btmRightTex.x = texCoords.x2; btmRightTex.y = texCoords.y1;
+    Transform::Matrix3x3 m = Transform::matTransformCanonical(0, 0, selectedMarkerScale.x, selectedMarkerScale.y, 0, 0, false, 0, xCenterPercent, yCenterPercent);
+    btmLeftTex = Transform::matApply(m, btmLeftTex);
+    topLeftTex = Transform::matApply(m, topLeftTex);
+    btmRightTex = Transform::matApply(m, btmRightTex);
+    topRightTex = Transform::matApply(m, topRightTex);
     
     glColor4f(1., 1., 1., 1.);
-    glScalef(selectedMarkerScale.x, selectedMarkerScale.y, 1.);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, selectedMarkerTexture->getTexID());
     glBegin(GL_POLYGON);
-    glTexCoord2d(texCoords.x1, texCoords.y1); glVertex2d(textureRectCanonical.x1, textureRectCanonical.y1);
-    glTexCoord2d(texCoords.x1, texCoords.y2); glVertex2d(textureRectCanonical.x1, textureRectCanonical.y2);
-    glTexCoord2d(texCoords.x2, texCoords.y2); glVertex2d(textureRectCanonical.x2, textureRectCanonical.y2);
-    glTexCoord2d(texCoords.x2, texCoords.y1); glVertex2d(textureRectCanonical.x2, textureRectCanonical.y1);
+    glTexCoord2d(btmLeftTex.x, btmRightTex.y); glVertex2d(textureRectCanonical.x1, textureRectCanonical.y1);
+    glTexCoord2d(topLeftTex.x, topLeftTex.y); glVertex2d(textureRectCanonical.x1, textureRectCanonical.y2);
+    glTexCoord2d(topRightTex.x, topRightTex.y); glVertex2d(textureRectCanonical.x2, textureRectCanonical.y2);
+    glTexCoord2d(btmRightTex.x, btmRightTex.y); glVertex2d(textureRectCanonical.x2, textureRectCanonical.y1);
     glEnd();
-    glScalef(1./selectedMarkerScale.x, 1./selectedMarkerScale.y, 1.);
     
     glBindTexture(GL_TEXTURE_2D, 0);
     
@@ -1277,20 +1305,7 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
     glEnd();
     glCheckError();
     
-    Natron::Point centerPoint, innerTopLeft,innerTopRight,innerBtmLeft,innerBtmRight;
-    {
-        //Remove any offset to the center to see the marker in the magnification window
-        double xCenterPercent = (ptnCenter.x - selectedSearchWndBtmLeft.x + offset.x) / (selectedSearchWndTopRight.x - selectedSearchWndBtmLeft.x);
-        double yCenterPercent = (ptnCenter.y - selectedSearchWndBtmLeft.y + offset.y) / (selectedSearchWndTopRight.y - selectedSearchWndBtmLeft.y);
-        centerPoint.y = textureRectCanonical.y1 + yCenterPercent * (textureRectCanonical.y2 - textureRectCanonical.y1);
-        centerPoint.x = textureRectCanonical.x1 + xCenterPercent * (textureRectCanonical.x2 - textureRectCanonical.x1);
-    }
-   
-    innerTopLeft = toMagWindowPoint(ptnTopLeft, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
-    innerTopRight = toMagWindowPoint(ptnTopRight, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
-    innerBtmLeft = toMagWindowPoint(ptnBtmLeft, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
-    innerBtmRight = toMagWindowPoint(ptnBtmRight, selectedSearchWndBtmLeft, selectedSearchWndTopRight, textureRectCanonical);
-    
+
     for (int l = 0; l < 2; ++l) {
         // shadow (uses GL_PROJECTION)
         glMatrixMode(GL_PROJECTION);
@@ -1637,6 +1652,7 @@ TrackerGui::penDown(double time,
             boost::shared_ptr<TrackMarker> marker = context->createMarker();
             boost::shared_ptr<Double_Knob> centerKnob = marker->getCenterKnob();
             centerKnob->setValuesAtTime(time, pos.x(), pos.y(), Natron::eValueChangedReasonNatronInternalEdited);
+            _imp->panel->pushUndoCommand(new AddTrackCommand(marker,context));
             didSomething = true;
         }
         
@@ -1645,13 +1661,16 @@ TrackerGui::penDown(double time,
             didSomething = true;
         }
         
-        if (!didSomething && !_imp->shiftDown) {
+        if (!didSomething) {
             if (!_imp->showMarkerTexture || !_imp->isInsideSelectedMarkerTextureResizeAnchor(pos)) {
                 context->clearSelection(TrackerContext::eTrackSelectionViewer);
             } else {
                 if (_imp->shiftDown) {
                     _imp->eventState = eMouseStateScalingSelectedMarker;
+                } else {
+                    _imp->eventState = eMouseStateDraggingSelectedMarker;
                 }
+                _imp->interactMarker = _imp->selectedMarker.lock();
             }
             didSomething = true;
         }
@@ -2154,6 +2173,9 @@ TrackerGui::penMotion(double time,
         if (_imp->showMarkerTexture && _imp->isNearbySelectedMarkerTextureResizeAnchor(pos)) {
             _imp->viewer->getViewer()->setCursor(Qt::SizeFDiagCursor);
             hoverProcess = true;
+        } else if (_imp->showMarkerTexture && _imp->isInsideSelectedMarkerTextureResizeAnchor(pos)) {
+            _imp->viewer->getViewer()->setCursor(Qt::SizeAllCursor);
+            hoverProcess = true;
         } else {
             _imp->viewer->getViewer()->unsetCursor();
         }
@@ -2508,23 +2530,33 @@ TrackerGui::penMotion(double time,
                 topRight.x = searchTopRight->getValueAtTime(time , 0) + center.x + offset.x;
                 topRight.y = searchTopRight->getValueAtTime(time , 1) + center.y + offset.y;
                 Natron::Point centerPoint;
-                {
-                    //Remove any offset to the center to see the marker in the magnification window
-                    double xCenterPercent = (center.x - btmLeft.x + offset.x) / (topRight.x - btmLeft.x);
-                    double yCenterPercent = (center.y - btmLeft.y + offset.y) / (topRight.y - btmLeft.x);
-                    centerPoint.y = markerMagRect.y1 + yCenterPercent * (markerMagRect.y2 - markerMagRect.y1);
-                    centerPoint.x = markerMagRect.x1 + xCenterPercent * (markerMagRect.x2 - markerMagRect.x1);
-                }
-                double prevDist = ( _imp->lastMousePos.x() - centerPoint.x ) * ( _imp->lastMousePos.x() - centerPoint.x) +
-                ( _imp->lastMousePos.y() - center.y) * ( _imp->lastMousePos.y() - center.y);
+                
+                //Remove any offset to the center to see the marker in the magnification window
+                double xCenterPercent = (center.x - btmLeft.x + offset.x) / (topRight.x - btmLeft.x);
+                double yCenterPercent = (center.y - btmLeft.y + offset.y) / (topRight.y - btmLeft.y);
+                centerPoint.y = markerMagRect.y1 + yCenterPercent * (markerMagRect.y2 - markerMagRect.y1);
+                centerPoint.x = markerMagRect.x1 + xCenterPercent * (markerMagRect.x2 - markerMagRect.x1);
+                
+                double prevDist = std::sqrt((_imp->lastMousePos.x() - centerPoint.x ) * ( _imp->lastMousePos.x() - centerPoint.x) + ( _imp->lastMousePos.y() - centerPoint.y) * ( _imp->lastMousePos.y() - centerPoint.y));
                 if (prevDist != 0) {
-                    double dist = ( pos.x() - center.x) * ( pos.x() - center.x) + ( pos.y() - center.y) * ( pos.y() - center.y);
-                    double ratio = std::sqrt(dist / prevDist);
+                    double dist = std::sqrt(( pos.x() - centerPoint.x) * ( pos.x() - centerPoint.x) + ( pos.y() - centerPoint.y) * ( pos.y() - centerPoint.y));
+                    double ratio = dist / prevDist;
                     _imp->selectedMarkerScale.x *= ratio;
                     _imp->selectedMarkerScale.x = std::max(0.05,std::min(1., _imp->selectedMarkerScale.x));
-                    _imp->selectedMarkerScale.y *= ratio;
+                    _imp->selectedMarkerScale.y = _imp->selectedMarkerScale.x;
                     didSomething = true;
                 }
+            }   break;
+            case eMouseStateDraggingSelectedMarker:
+            {
+                
+                centerKnob->setValues(centerKnob->getValueAtTime(time,0) - delta.x *  _imp->selectedMarkerScale.x,
+                                      centerKnob->getValueAtTime(time,1) - delta.y *  _imp->selectedMarkerScale.y,
+                                      Natron::eValueChangedReasonPluginEdited);
+            
+                updateSelectedMarkerTexture();
+                didSomething = true;
+
             }   break;
             default:
                 break;
@@ -2538,7 +2570,7 @@ TrackerGui::penMotion(double time,
     _imp->lastMousePos = pos;
 
     return didSomething;
-}
+} //penMotion
 
 bool
 TrackerGui::penUp(double time,
@@ -2698,6 +2730,10 @@ TrackerGui::keyUp(double time,
     } else if (e->key() == Qt::Key_Shift) {
         if (_imp->shiftDown > 0) {
             --_imp->shiftDown;
+        }
+        if (_imp->eventState == eMouseStateScalingSelectedMarker) {
+            _imp->eventState = eMouseStateIdle;
+            didSomething = true;
         }
     }
     
@@ -2984,7 +3020,9 @@ TrackerGui::onContextSelectionChanged(int reason)
             //Don't update in this case, the refresh of the texture will do it for us
             return;
         } else {
-            _imp->showMarkerTexture = true;
+            if (selection.front()) {
+                _imp->showMarkerTexture = true;
+            }
         }
     }
     if ((TrackerContext::TrackSelectionReason)reason == TrackerContext::eTrackSelectionViewer) {
@@ -3039,6 +3077,9 @@ TrackerGui::onTrackImageRenderingFinished()
         bounds = ret.second;
         roi = bounds;
         _imp->selectedMarkerTextureRoI = roi;
+    }
+    if (roi.isNull()) {
+        return;
     }
     
     std::size_t bytesCount = 4 * sizeof(unsigned char) * roi.area();

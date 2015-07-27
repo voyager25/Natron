@@ -420,6 +420,9 @@ NodeGui::ensurePanelCreated()
     assert(propsLayout);
     boost::shared_ptr<NodeGui> thisShared = shared_from_this();
     _settingsPanel = createPanel(propsLayout,thisShared);
+    
+    initializeKnobs();
+    beginEditKnobs();
     if (_settingsPanel) {
         QObject::connect( _settingsPanel,SIGNAL( nameChanged(QString) ),this,SLOT( setName(QString) ) );
         QObject::connect( _settingsPanel,SIGNAL( closeChanged(bool) ), this, SLOT( onSettingsPanelClosed(bool) ) );
@@ -432,8 +435,6 @@ NodeGui::ensurePanelCreated()
             _graph->getGui()->createNewTrackerInterface(this);
         }
     }
-    initializeKnobs();
-    beginEditKnobs();
     gui->addNodeGuiToCurveEditor(thisShared);
     gui->addNodeGuiToDopeSheetEditor(thisShared);
     

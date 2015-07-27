@@ -576,7 +576,13 @@ TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
     _imp->buttonsLayout->addStretch();
     
     _imp->mainLayout->addWidget(_imp->buttonsContainer);
-    
+ 
+    ///Restore the table if needed
+    std::vector<boost::shared_ptr<TrackMarker> > existingMarkers;
+    context->getAllMarkers(&existingMarkers);
+    for (std::size_t i = 0; i < existingMarkers.size(); ++i) {
+        addTableRow(existingMarkers[i]);
+    }
 }
 
 void

@@ -843,7 +843,7 @@ TrackMarker::getMarkerImage(int time) const
     NodePtr input = node->getInput(0);
     roiCanonical.toPixelEnclosing(mipmapLevel, input ? input->getLiveInstance()->getPreferredAspectRatio() : 1., &roi);
     if (!input) {
-        return std::make_pair(ImagePtr(),RectI());
+        return std::make_pair(ImagePtr(),roi);
     }
 
     

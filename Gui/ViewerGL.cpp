@@ -2870,7 +2870,7 @@ ViewerGL::mousePressEvent(QMouseEvent* e)
     (void)overlaysCaught;
 
     if (mustRedraw) {
-        updateGL();
+        update(); // Does not need to be instantaneous, can wait event loop
     }
 } // mousePressEvent
 
