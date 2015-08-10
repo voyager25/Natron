@@ -412,6 +412,7 @@ public:
     void populateChoices( const std::vector<std::string> &entries, const std::vector<std::string> &entriesHelp = std::vector<std::string>() );
     
     std::vector<std::string> getEntries_mt_safe() const;
+    const std::string& getEntry(int v) const;
     std::vector<std::string> getEntriesHelp_mt_safe() const;
     std::string getActiveEntryText_mt_safe() const;
     
@@ -446,7 +447,14 @@ public:
     {
         return _isCascading;
     }
-    
+
+    /// set the Choice_Knob value from the label
+    ValueChangedReturnCodeEnum setValueFromLabel(const std::string & value,
+                                                 int dimension,
+                                                 bool turnOffAutoKeying = false);
+    /// set the Choice_Knob default value from the label
+    void setDefaultValueFromLabel(const std::string & value,int dimension = 0);
+
 Q_SIGNALS:
 
     void populated();
@@ -773,7 +781,7 @@ class Parametric_Knob
     Q_OBJECT
 
     mutable QMutex _curvesMutex;
-    std::vector< boost::shared_ptr<Curve> > _curves;
+    std::vector< boost::shared_ptr<Curve> > _curves, _defaultCurves;
     std::vector<RGBAColourF> _curvesColor;
 
 public:
@@ -796,9 +804,12 @@ public:
     void getCurveColor(int dimension,double* r,double* g,double* b);
 
     void setParametricRange(double min,double max);
+    
+    void setDefaultCurvesFromCurves();
 
     std::pair<double,double> getParametricRange() const WARN_UNUSED_RETURN;
     boost::shared_ptr<Curve> getParametricCurve(int dimension) const;
+    boost::shared_ptr<Curve> getDefaultParametricCurve(int dimension) const;
     Natron::StatusEnum addControlPoint(int dimension,double key,double value) WARN_UNUSED_RETURN;
     Natron::StatusEnum addHorizontalControlPoint(int dimension,double key,double value) WARN_UNUSED_RETURN;
     Natron::StatusEnum getValue(int dimension,double parametricPosition,double *returnValue) const WARN_UNUSED_RETURN;
@@ -846,11 +857,7 @@ public Q_SLOTS:
         Q_EMIT mustInitializeOverlayInteract(widget);
     }
 
-    virtual void resetToDefault(const QVector<int> & dimensions)
-    {
-        Q_EMIT mustResetToDefault(dimensions);
-    }
-
+    
 Q_SIGNALS:
 
     //emitted by drawCustomBackground()
@@ -862,13 +869,11 @@ Q_SIGNALS:
     ///emitted when the state of a curve changed at the indicated dimension
     void curveChanged(int);
 
-    void mustResetToDefault(QVector<int>);
-
     void curveColorChanged(int);
 private:
 
     virtual void resetExtraToDefaultValue(int dimension) OVERRIDE FINAL;
-
+    virtual bool hasModificationsVirtual(int dimension) const OVERRIDE FINAL;
     virtual bool canAnimate() const OVERRIDE FINAL;
     virtual const std::string & typeName() const OVERRIDE FINAL;
     virtual void cloneExtraData(KnobI* other,int dimension = -1) OVERRIDE FINAL;

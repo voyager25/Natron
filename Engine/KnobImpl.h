@@ -982,7 +982,8 @@ Knob<T>::setValue(const T & v,
     }
 
     ///Add automatically a new keyframe
-    if ( (getAnimationLevel(dimension) != Natron::eAnimationLevelNone) && //< if the knob is animated
+    if (isAnimationEnabled() &&
+        getAnimationLevel(dimension) != Natron::eAnimationLevelNone && //< if the knob is animated
          holder && //< the knob is part of a KnobHolder
          holder->getApp() && //< the app pointer is not NULL
          !holder->getApp()->getProject()->isLoadingProject() && //< we're not loading the project
@@ -1928,6 +1929,8 @@ Knob<T>::resetToDefaultValue(int dimension)
         QMutexLocker l(&_valueMutex);
         defaultV = _defaultValues[dimension];
     }
+    clearExpression(dimension,true);
+    resetExtraToDefaultValue(dimension);
     ignore_result(setValue(defaultV, dimension,Natron::eValueChangedReasonRestoreDefault,NULL));
     if (_signalSlotHandler) {
         _signalSlotHandler->s_valueChanged(dimension,Natron::eValueChangedReasonRestoreDefault);
@@ -2580,6 +2583,12 @@ void Knob<T>::computeHasModifications()
                 hasModif = true;
             }
         }
+        
+        
+        if (!hasModif) {
+            hasModif |= hasModificationsVirtual(i);
+        }
+        
         oneChanged |= setHasModifications(i, hasModif, true);
     }
     if (oneChanged && _signalSlotHandler) {

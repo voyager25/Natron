@@ -153,6 +153,7 @@ Natron::Node *DopeSheetPrivate::getNearestTimeFromOutputs_recursive(Natron::Node
 {
     const std::list<Natron::Node *> &outputs = node->getOutputs();
 
+#pragma message WARN("BUG: this look never does more that one iteration!!!!")
     for (std::list<Natron::Node *>::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
         Natron::Node *output = (*it);
 
@@ -963,7 +964,8 @@ class DopeSheetSelectionModelPrivate
 {
 public:
     DopeSheetSelectionModelPrivate()
-    : selectedKeyframes()
+    : dopeSheet(0)
+    , selectedKeyframes()
     , selectedRangeNodes()
     {
 
@@ -1282,7 +1284,14 @@ void DSNodePrivate::initGroupNode()
     if (!node) {
         return;
     }
-    NodeList subNodes = dynamic_cast<NodeGroup *>(node->getNode()->getLiveInstance())->getNodes();
+    boost::shared_ptr<Natron::Node> natronnode = node->getNode();
+    assert(natronnode);
+    NodeGroup* nodegroup = dynamic_cast<NodeGroup *>(natronnode->getLiveInstance());
+    assert(nodegroup);
+    if (!nodegroup) {
+        return;
+    }
+    NodeList subNodes = nodegroup->getNodes();
 
     for (NodeList::const_iterator it = subNodes.begin(); it != subNodes.end(); ++it) {
         NodePtr subNode = (*it);

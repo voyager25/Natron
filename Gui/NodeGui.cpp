@@ -229,6 +229,7 @@ NodeGui::NodeGui(QGraphicsItem *parent)
 , _mtSafeHeight(0)
 , _defaultOverlay()
 , _undoStack(new QUndoStack())
+, _overlayLocked(false)
 {
 }
 
@@ -1225,6 +1226,12 @@ NodeGui::getOverlayColor(double* r, double* g, double* b) const
 {
     if (!getSettingPanel()) {
         return false;
+    }
+    if (_overlayLocked) {
+        *r = 0.5;
+        *g = 0.5;
+        *b = 0.5;
+        return true;
     }
     if (!getSettingPanel()->hasOverlayColor()) {
         return false;
@@ -3653,4 +3660,11 @@ NodeGui::setPluginDescription(const std::string& description)
     if (getSettingPanel()) {
         getSettingPanel()->setPluginDescription(description);
     }
+}
+
+void
+NodeGui::setOverlayLocked(bool locked)
+{
+    assert(QThread::currentThread() == qApp->thread());
+    _overlayLocked = locked;
 }

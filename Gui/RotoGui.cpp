@@ -94,7 +94,6 @@ enum EventStateEnum
     eEventStateDraggingSelectedControlPoints,
     eEventStateBuildingBezierControlPointTangent,
     eEventStateBuildingEllipse,
-    eEventStateBuildingEllipseCenter,
     eEventStateBuildingRectangle,
     eEventStateDraggingLeftTangent,
     eEventStateDraggingRightTangent,
@@ -155,6 +154,7 @@ struct RotoGuiSharedData
     bool displayFeather;
     boost::shared_ptr<RotoStrokeItem> strokeBeingPaint;
     std::pair<double,double> cloneOffset;
+    QPointF click; // used for drawing ellipses and rectangles, to handle center/constrain. May also be used for the selection bbox.
 
     RotoGuiSharedData()
     : selectedItems()
@@ -171,6 +171,7 @@ struct RotoGuiSharedData
     , displayFeather(true)
     , strokeBeingPaint()
     , cloneOffset()
+    , click()
     {
         cloneOffset.first = cloneOffset.second = 0.;
     }
@@ -662,7 +663,8 @@ RotoGui::RotoGui(NodeGui* node,
     _imp->removeKeyframeButton->setToolTip(Natron::convertFromPlainText(tr("Remove a keyframe at the current time for the selected shape(s), if any."), Qt::WhiteSpaceNormal));
     _imp->selectionButtonsBarLayout->addWidget(_imp->removeKeyframeButton);
     _imp->selectionButtonsBarLayout->addStretch();
-    
+    _imp->selectionButtonsBar->setVisible(false);
+    //////
     
     _imp->brushButtonsBar = new QWidget(parent);
     _imp->brushButtonsBarLayout = new QHBoxLayout(_imp->brushButtonsBar);
@@ -861,6 +863,7 @@ RotoGui::RotoGui(NodeGui* node,
     _imp->resetCloneOffset->setVisible(false);
     
     _imp->brushButtonsBarLayout->addStretch();
+    _imp->brushButtonsBar->setVisible(false);
     
     ////////////////////////////////////// CREATING VIEWER LEFT TOOLBAR //////////////////////////////////////
     
@@ -2626,18 +2629,15 @@ RotoGui::penDown(double time,
             
             break;
         case eRotoToolDrawEllipse: {
-            bool fromCenter = modCASIsControl(e);
-            pushUndoCommand( new MakeEllipseUndoCommand(this,true,fromCenter,pos.x(),pos.y(),time) );
-            if (fromCenter) {
-                _imp->state = eEventStateBuildingEllipseCenter;
-            } else {
-                _imp->state = eEventStateBuildingEllipse;
-            }
+            _imp->rotoData->click = pos;
+            pushUndoCommand( new MakeEllipseUndoCommand(this, true, false, false, pos.x(), pos.y(), pos.x(), pos.y(), time) );
+            _imp->state = eEventStateBuildingEllipse;
             didSomething = true;
             break;
         }
         case eRotoToolDrawRectangle: {
-            pushUndoCommand( new MakeRectangleUndoCommand(this,true,pos.x(),pos.y(),time) );
+            _imp->rotoData->click = pos;
+            pushUndoCommand( new MakeRectangleUndoCommand(this, true, false, false, pos.x(), pos.y(), pos.x(), pos.y(), time) );
             _imp->evaluateOnPenUp = true;
             _imp->state = eEventStateBuildingRectangle;
             didSomething = true;
@@ -2793,7 +2793,7 @@ RotoGui::penMotion(double time,
             didSomething = true;
         }
     }
-    if (_imp->hoverState == eHoverStateNothing) {
+    if (_imp->state == eEventStateNone && _imp->hoverState == eHoverStateNothing) {
         if ( (_imp->state != eEventStateDraggingControlPoint) && (_imp->state != eEventStateDraggingSelectedControlPoints) ) {
             for (SelectedItems::const_iterator it = _imp->rotoData->selectedItems.begin(); it != _imp->rotoData->selectedItems.end(); ++it) {
                 int index = -1;
@@ -2914,20 +2914,18 @@ RotoGui::penMotion(double time,
         break;
     }
     case eEventStateBuildingEllipse: {
-        pushUndoCommand( new MakeEllipseUndoCommand(this,false,false,dx,dy,time) );
+        bool fromCenter = modifierHasControl(e);
+        bool constrained = modifierHasShift(e);
+        pushUndoCommand( new MakeEllipseUndoCommand(this, false, fromCenter, constrained, _imp->rotoData->click.x(), _imp->rotoData->click.y(), pos.x(), pos.y(), time) );
 
         didSomething = true;
         _imp->evaluateOnPenUp = true;
         break;
     }
-    case eEventStateBuildingEllipseCenter: {
-        pushUndoCommand( new MakeEllipseUndoCommand(this,false,true,dx,dy,time) );
-        _imp->evaluateOnPenUp = true;
-        didSomething = true;
-        break;
-    }
     case eEventStateBuildingRectangle: {
-        pushUndoCommand( new MakeRectangleUndoCommand(this,false,dx,dy,time) );
+        bool fromCenter = modifierHasControl(e);
+        bool constrained = modifierHasShift(e);
+        pushUndoCommand( new MakeRectangleUndoCommand(this, false, fromCenter, constrained, _imp->rotoData->click.x(), _imp->rotoData->click.y(), pos.x(), pos.y(), time) );
         didSomething = true;
         _imp->evaluateOnPenUp = true;
         break;
@@ -3278,7 +3276,7 @@ RotoGui::RotoGuiPrivate::makeStroke(bool prepareForLater, const RotoPoint& p)
     boost::shared_ptr<Double_Knob> translateKnob = rotoData->strokeBeingPaint->getBrushCloneTranslateKnob();
     
     const QColor& color = colorPickerLabel->getCurrentColor();
-    int compOp = compositingOperatorButton->activeIndex();
+    MergingFunctionEnum compOp = (MergingFunctionEnum)compositingOperatorButton->activeIndex();
     double opacity = opacitySpinbox->value();
     double size = sizeSpinbox->value();
     double hardness = hardnessSpinBox->value();
@@ -3296,7 +3294,7 @@ RotoGui::RotoGuiPrivate::makeStroke(bool prepareForLater, const RotoPoint& p)
     double b = Natron::Color::from_func_srgb(color.blueF());
 
     colorKnob->setValues(r,g,b, Natron::eValueChangedReasonNatronGuiEdited);
-    operatorKnob->setValue(compOp,0);
+    operatorKnob->setValueFromLabel(getNatronOperationString(compOp),0);
     opacityKnob->setValue(opacity, 0);
     sizeKnob->setValue(size, 0);
     hardnessKnob->setValue(hardness, 0);
@@ -3852,7 +3850,8 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(double time,
         
         Bezier* isBezier = dynamic_cast<Bezier*>(it->get());
         RotoStrokeItem* isStroke = dynamic_cast<RotoStrokeItem*>(it->get());
-        if (isStroke || (isBezier && isBezier->isOpenBezier())) {
+        assert(isStroke || isBezier);
+        if (isStroke || !isBezier || (isBezier && isBezier->isOpenBezier())) {
             continue;
         }
         

@@ -1611,37 +1611,92 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionLuminance, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 0) {
-            _imp->viewerChannels->setCurrentIndex(1);
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, true);
         } else {
-            _imp->viewerChannels->setCurrentIndex(0);
+            _imp->viewerChannels->setCurrentIndex_no_emit(0);
+            setDisplayChannels(0, true);
         }
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionRed, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 2) {
-            _imp->viewerChannels->setCurrentIndex(1);
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, true);
         } else {
-            _imp->viewerChannels->setCurrentIndex(2);
+            _imp->viewerChannels->setCurrentIndex_no_emit(2);
+            setDisplayChannels(2, true);
         }
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionGreen, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 3) {
-            _imp->viewerChannels->setCurrentIndex(1);
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, true);
         } else {
-            _imp->viewerChannels->setCurrentIndex(3);
+            _imp->viewerChannels->setCurrentIndex_no_emit(3);
+            setDisplayChannels(3, true);
         }
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionBlue, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 4) {
-            _imp->viewerChannels->setCurrentIndex(1);
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, true);
         } else {
-            _imp->viewerChannels->setCurrentIndex(4);
+            _imp->viewerChannels->setCurrentIndex_no_emit(4);
+            setDisplayChannels(4, true);
         }
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionAlpha, modifiers, key) ) {
         int currentIndex = _imp->viewerChannels->activeIndex();
         if (currentIndex == 5) {
-            _imp->viewerChannels->setCurrentIndex(1);
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, true);
         } else {
-            _imp->viewerChannels->setCurrentIndex(5);
+            _imp->viewerChannels->setCurrentIndex_no_emit(5);
+            setDisplayChannels(5, true);
+        }
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionLuminanceA, modifiers, key) ) {
+        int currentIndex = _imp->viewerChannels->activeIndex();
+        if (currentIndex == 0) {
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, false);
+        } else {
+            _imp->viewerChannels->setCurrentIndex_no_emit(0);
+            setDisplayChannels(0, false);
+        }
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionRedA, modifiers, key) ) {
+        int currentIndex = _imp->viewerChannels->activeIndex();
+        if (currentIndex == 2) {
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, false);
+        } else {
+            _imp->viewerChannels->setCurrentIndex_no_emit(2);
+            setDisplayChannels(2, false);
+        }
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionGreenA, modifiers, key) ) {
+        int currentIndex = _imp->viewerChannels->activeIndex();
+        if (currentIndex == 3) {
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, false);
+        } else {
+            _imp->viewerChannels->setCurrentIndex_no_emit(3);
+            setDisplayChannels(3, false);
+        }
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionBlueA, modifiers, key) ) {
+        int currentIndex = _imp->viewerChannels->activeIndex();
+        if (currentIndex == 4) {
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, false);
+        } else {
+            _imp->viewerChannels->setCurrentIndex_no_emit(4);
+            setDisplayChannels(4, false);
+        }
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionAlphaA, modifiers, key) ) {
+        int currentIndex = _imp->viewerChannels->activeIndex();
+        if (currentIndex == 5) {
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, false);
+        } else {
+            _imp->viewerChannels->setCurrentIndex_no_emit(5);
+            setDisplayChannels(5, false);
         }
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevious, modifiers, key) ) {
         previousFrame();
@@ -1699,37 +1754,41 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
     }
 } // keyPressEvent
 
-
+void
+ViewerTab::setDisplayChannels(int i, bool setBothInputs)
+{
+    Natron::DisplayChannelsEnum channels;
+    
+    switch (i) {
+        case 0:
+            channels = Natron::eDisplayChannelsY;
+            break;
+        case 1:
+            channels = Natron::eDisplayChannelsRGB;
+            break;
+        case 2:
+            channels = Natron::eDisplayChannelsR;
+            break;
+        case 3:
+            channels = Natron::eDisplayChannelsG;
+            break;
+        case 4:
+            channels = Natron::eDisplayChannelsB;
+            break;
+        case 5:
+            channels = Natron::eDisplayChannelsA;
+            break;
+        default:
+            channels = Natron::eDisplayChannelsRGB;
+            break;
+    }
+    _imp->viewerNode->setDisplayChannels(channels, setBothInputs);
+}
 
 void
 ViewerTab::onViewerChannelsChanged(int i)
 {
-    Natron::DisplayChannelsEnum channels;
-
-    switch (i) {
-    case 0:
-        channels = Natron::eDisplayChannelsY;
-        break;
-    case 1:
-        channels = Natron::eDisplayChannelsRGB;
-        break;
-    case 2:
-        channels = Natron::eDisplayChannelsR;
-        break;
-    case 3:
-        channels = Natron::eDisplayChannelsG;
-        break;
-    case 4:
-        channels = Natron::eDisplayChannelsB;
-        break;
-    case 5:
-        channels = Natron::eDisplayChannelsA;
-        break;
-    default:
-        channels = Natron::eDisplayChannelsRGB;
-        break;
-    }
-    _imp->viewerNode->setDisplayChannels(channels);
+    setDisplayChannels(i, false);
 }
 
 bool
@@ -1824,9 +1883,21 @@ ViewerTab::drawOverlays(double scaleX,
 #ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
         double transformedTime;
         bool ok = _imp->getTimeTransform(time, view, *it, getInternalNode(), &transformedTime);
+        
+        boost::shared_ptr<NodeGui> nodeUi = boost::dynamic_pointer_cast<NodeGui>((*it)->getNodeGui());
+        if (!nodeUi) {
+            continue;
+        }
+        bool overlayDeemed = false;
         if (ok) {
+            if (time != transformedTime) {
+                //when retimed, modify the overlay color so it looks deemed to indicate that the user
+                //cannot modify it
+                overlayDeemed = true;
+            }
             time = transformedTime;
         }
+        nodeUi->setOverlayLocked(overlayDeemed);
         
         Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
         ok = _imp->getOverlayTransform(time, view, *it, getInternalNode(), &mat);
@@ -1891,9 +1962,17 @@ ViewerTab::notifyOverlaysPenDown_internal(const boost::shared_ptr<Natron::Node>&
     double transformedTime;
     bool ok = _imp->getTimeTransform(time, view, node, getInternalNode(), &transformedTime);
     if (ok) {
+        
+        /*
+         * Do not allow interaction with retimed interacts otherwise the user may end up modifying keyframes at unexpected 
+         * (or invalid for floating point) frames, which may be confusing. Rather we indicate with the overlay color hint
+         * that interact is not editable when it is retimed.
+         */
+        if (time != transformedTime) {
+            return false;
+        }
         time = transformedTime;
     }
-    
     
     Transform::Matrix3x3 mat(1,0,0,0,1,0,0,0,1);
     ok = _imp->getOverlayTransform(time, view, node, getInternalNode(), &mat);
@@ -2110,6 +2189,14 @@ ViewerTab::notifyOverlaysPenMotion_internal(const boost::shared_ptr<Natron::Node
     double transformedTime;
     bool ok = _imp->getTimeTransform(time, view, node, getInternalNode(), &transformedTime);
     if (ok) {
+        /*
+         * Do not allow interaction with retimed interacts otherwise the user may end up modifying keyframes at unexpected
+         * (or invalid for floating point) frames, which may be confusing. Rather we indicate with the overlay color hint
+         * that interact is not editable when it is retimed.
+         */
+        if (time != transformedTime) {
+            return false;
+        }
         time = transformedTime;
     }
     
@@ -2261,6 +2348,14 @@ ViewerTab::notifyOverlaysPenUp(double scaleX,
         double transformedTime;
         bool ok = _imp->getTimeTransform(time, view, *it, getInternalNode(), &transformedTime);
         if (ok) {
+            /*
+             * Do not allow interaction with retimed interacts otherwise the user may end up modifying keyframes at unexpected
+             * (or invalid for floating point) frames, which may be confusing. Rather we indicate with the overlay color hint
+             * that interact is not editable when it is retimed.
+             */
+            if (time != transformedTime) {
+                return false;
+            }
             time = transformedTime;
         }
         
@@ -2340,6 +2435,14 @@ ViewerTab::notifyOverlaysKeyDown_internal(const boost::shared_ptr<Natron::Node>&
     double transformedTime;
     bool ok = _imp->getTimeTransform(time, 0, node, getInternalNode(), &transformedTime);
     if (ok) {
+        /*
+         * Do not allow interaction with retimed interacts otherwise the user may end up modifying keyframes at unexpected
+         * (or invalid for floating point) frames, which may be confusing. Rather we indicate with the overlay color hint
+         * that interact is not editable when it is retimed.
+         */
+        if (time != transformedTime) {
+            return false;
+        }
         time = transformedTime;
     }
 #endif
@@ -2453,6 +2556,14 @@ ViewerTab::notifyOverlaysKeyUp(double scaleX,
         double transformedTime;
         bool ok = _imp->getTimeTransform(time, 0, *it, getInternalNode(), &transformedTime);
         if (ok) {
+            /*
+             * Do not allow interaction with retimed interacts otherwise the user may end up modifying keyframes at unexpected
+             * (or invalid for floating point) frames, which may be confusing. Rather we indicate with the overlay color hint
+             * that interact is not editable when it is retimed.
+             */
+            if (time != transformedTime) {
+                return false;
+            }
             time = transformedTime;
         }
 #endif
@@ -2494,6 +2605,14 @@ ViewerTab::notifyOverlaysKeyRepeat_internal(const boost::shared_ptr<Natron::Node
     double transformedTime;
     bool ok = _imp->getTimeTransform(time, 0, node, getInternalNode(), &transformedTime);
     if (ok) {
+        /*
+         * Do not allow interaction with retimed interacts otherwise the user may end up modifying keyframes at unexpected
+         * (or invalid for floating point) frames, which may be confusing. Rather we indicate with the overlay color hint
+         * that interact is not editable when it is retimed.
+         */
+        if (time != transformedTime) {
+            return false;
+        }
         time = transformedTime;
     }
 #endif
@@ -2830,7 +2949,7 @@ ViewerTab::getZoomOrPannedSinceLastFit() const
 Natron::DisplayChannelsEnum
 ViewerTab::getChannels() const
 {
-    return _imp->viewerNode->getChannels();
+    return _imp->viewerNode->getChannels(0);
 }
 
 std::string
@@ -2865,7 +2984,7 @@ ViewerTab::getChannelsString(Natron::DisplayChannelsEnum c)
 std::string
 ViewerTab::getChannelsString() const
 {
-    Natron::DisplayChannelsEnum c = _imp->viewerNode->getChannels();
+    Natron::DisplayChannelsEnum c = _imp->viewerNode->getChannels(0);
     return getChannelsString(c);
 }
 
@@ -2875,7 +2994,8 @@ ViewerTab::setChannels(const std::string & channelsStr)
     int index = _imp->viewerChannels->itemIndex( channelsStr.c_str() );
 
     if (index != -1) {
-        _imp->viewerChannels->setCurrentIndex(index);
+        _imp->viewerChannels->setCurrentIndex_no_emit(index);
+        setDisplayChannels(index, true);
     }
 }
 

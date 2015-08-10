@@ -60,6 +60,11 @@ TimeLine::seekFrame(SequenceTime frame,
                     Natron::OutputEffectInstance* caller,
                     Natron::TimelineChangeReasonEnum reason)
 {
+    if (reason == Natron::eTimelineChangeReasonUserSeek ||
+        reason == Natron::eTimelineChangeReasonCurveEditorSeek ||
+        reason == Natron::eTimelineChangeReasonDopeSheetEditorSeek) {
+        Q_EMIT frameAboutToChange();
+    }
     bool changed = false;
     {
         QMutexLocker l(&_lock);
@@ -106,6 +111,9 @@ TimeLine::decrementCurrentFrame()
 void
 TimeLine::onFrameChanged(SequenceTime frame)
 {
+   
+    Q_EMIT frameAboutToChange();
+    
     bool changed = false;
     {
         QMutexLocker l(&_lock);

@@ -46,6 +46,7 @@ struct ViewerArgs
     boost::shared_ptr<Natron::FrameKey> key;
     boost::shared_ptr<UpdateViewerParams> params;
     boost::shared_ptr<RenderingFlagSetter> isRenderingFlag;
+    bool draftModeEnabled;
 };
 
 class ViewerInstance
@@ -150,7 +151,7 @@ public:
 
     int getMipMapLevelFromZoomFactor() const WARN_UNUSED_RETURN;
 
-    Natron::DisplayChannelsEnum getChannels() const WARN_UNUSED_RETURN;
+    Natron::DisplayChannelsEnum getChannels(int texIndex) const WARN_UNUSED_RETURN;
 
     /**
      * @brief This is a short-cut, this is primarily used when the user switch the
@@ -167,7 +168,7 @@ public:
     bool isRenderAbortable(int textureIndex, U64 renderAge) const;
 
 
-    void setDisplayChannels(Natron::DisplayChannelsEnum channels);
+    void setDisplayChannels(Natron::DisplayChannelsEnum channels, bool bothInputs);
     
     void setActiveLayer(const Natron::ImageComponents& layer, bool doRender);
     

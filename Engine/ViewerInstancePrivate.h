@@ -174,7 +174,7 @@ public:
     , viewerParamsGamma(1.)
     , viewerParamsLut(Natron::eViewerColorSpaceSRGB)
     , viewerParamsAutoContrast(false)
-    , viewerParamsChannels(Natron::eDisplayChannelsRGB)
+    , viewerParamsChannels()
     , viewerParamsLayer(Natron::ImageComponents::getRGBAComponents())
     , viewerParamsAlphaLayer(Natron::ImageComponents::getRGBAComponents())
     , viewerParamsAlphaChannelName("a")
@@ -201,6 +201,7 @@ public:
             activeInputs[i] = -1;
             renderAge[i] = 1;
             displayAge[i] = 0;
+            viewerParamsChannels[i] = Natron::eDisplayChannelsRGB;
         }
         
     }
@@ -426,7 +427,7 @@ public:
     Natron::ViewerColorSpaceEnum viewerParamsLut; /*!< a value coding the current color-space used to render.
                                                  0 = sRGB ,  1 = linear , 2 = Rec 709*/
     bool viewerParamsAutoContrast;
-    Natron::DisplayChannelsEnum viewerParamsChannels;
+    Natron::DisplayChannelsEnum viewerParamsChannels[2];
     Natron::ImageComponents viewerParamsLayer;
     Natron::ImageComponents viewerParamsAlphaLayer;
     std::string viewerParamsAlphaChannelName;

@@ -50,6 +50,10 @@
 #define NATRON_CUSTOM_HTML_TAG_START "<" NATRON_APPLICATION_NAME ">"
 #define NATRON_CUSTOM_HTML_TAG_END "</" NATRON_APPLICATION_NAME ">"
 
+
+#define NATRON_FILE_DIALOG_PREVIEW_READER_NAME "Natron_File_Dialog_Preview_Provider_Reader"
+#define NATRON_FILE_DIALOG_PREVIEW_VIEWER_NAME "Natron_File_Dialog_Preview_Provider_Viewer"
+
 //////////////////////////////////////////Natron version/////////////////////////////////////////////
 #define NATRON_VERSION_MAJOR 2
 #define NATRON_VERSION_MINOR 0
@@ -61,12 +65,24 @@
 #define NATRON_LAST_VERSION_URL "https://raw.githubusercontent.com/MrKepzie/Natron/master/LATEST_VERSION.txt"
 #define NATRON_LAST_VERSION_FILE_VERSION 1
 
+// homemade builds should always show "Devel"
+#define NATRON_DEVELOPMENT_DEVEL "Devel"
+// the following are reserved for actual releases (binary and tarballs)
 #define NATRON_DEVELOPMENT_ALPHA "Alpha"
 #define NATRON_DEVELOPMENT_BETA "Beta"
 #define NATRON_DEVELOPMENT_RELEASE_CANDIDATE "RC"
 #define NATRON_DEVELOPMENT_RELEASE_STABLE "Release"
 
-#define NATRON_DEVELOPMENT_STATUS NATRON_DEVELOPMENT_RELEASE_STABLE
+// The snapshot build scripts should add '-DNATRON_SNAPSHOT' to the compile
+// options.
+#define NATRON_DEVELOPMENT_SNAPSHOT "Snapshot"
+#ifdef NATRON_SNAPSHOT
+#define NATRON_DEVELOPMENT_STATUS NATRON_DEVELOPMENT_SNAPSHOT
+#else
+// Only modify the following line for actual releases, and revert it to its original state afterwards
+//#define NATRON_DEVELOPMENT_STATUS NATRON_DEVELOPMENT_DEVEL
+#define NATRON_DEVELOPMENT_STATUS NATRON_DEVELOPMENT_DEVEL
+#endif
 
 ///If set the version of Natron will no longer be displayed in the splashscreen but the name of the user
 #define NATRON_CUSTOM_BUILD_USER_NAME ""

@@ -921,7 +921,8 @@ EffectInstance::setParallelRenderArgsTLS(int time,
                                          bool isDuringPaintStrokeCreation,
                                          const std::list<boost::shared_ptr<Natron::Node> >& rotoPaintNodes,
                                          Natron::RenderSafetyEnum currentThreadSafety,
-                                         bool doNanHandling)
+                                         bool doNanHandling,
+                                         bool draftMode)
 {
     ParallelRenderArgs& args = _imp->frameRenderArgs.localData();
     args.time = time;
@@ -941,6 +942,7 @@ EffectInstance::setParallelRenderArgsTLS(int time,
     args.currentThreadSafety = currentThreadSafety;
     args.rotoPaintNodes = rotoPaintNodes;
     args.doNansHandling = doNanHandling;
+    args.draftMode = draftMode;
     ++args.validArgs;
     
 }
@@ -1656,7 +1658,8 @@ EffectInstance::getRegionOfDefinition(U64 hash,double time,
         }
     }
 
-    return eStatusReplyDefault;
+    // if rod was not set, return default, else return OK
+    return firstInput ? eStatusReplyDefault : eStatusOK;
 }
 
 bool
@@ -2450,27 +2453,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     
     ViewInvarianceLevel viewInvariance = isViewInvariant();
     
-    // eRenderSafetyInstanceSafe means that there is at most one render per instance
-    // NOTE: the per-instance lock should probably be shared between
-    // all clones of the same instance, because an InstanceSafe plugin may assume it is the sole owner of the output image,
-    // and read-write on it.
-    // It is probably safer to assume that several clones may write to the same output image only in the eRenderSafetyFullySafe case.
-    
-    // eRenderSafetyFullySafe means that there is only one render per FRAME : the lock is by image and handled in Node.cpp
-    ///locks belongs to an instance)
-    
-    boost::shared_ptr<QMutexLocker> locker;
-    Natron::RenderSafetyEnum safety = getCurrentThreadSafetyThreadLocal();
-    if (safety == eRenderSafetyInstanceSafe) {
-        locker.reset(new QMutexLocker( &getNode()->getRenderInstancesSharedMutex()));
-    } else if (safety == eRenderSafetyUnsafe) {
-        const Natron::Plugin* p = getNode()->getPlugin();
-        assert(p);
-        locker.reset(new QMutexLocker(p->getPluginLock()));
-    }
-    ///For eRenderSafetyFullySafe, don't take any lock, the image already has a lock on itself so we're sure it can't be written to by 2 different threads.
 
-    
  
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////// Get the RoD ///////////////////////////////////////////////////////////////
@@ -2829,7 +2812,7 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
     bool isFrameVaryingOrAnimated = isFrameVaryingOrAnimated_Recursive();
     bool createInCache = shouldCacheOutput(isFrameVaryingOrAnimated);
 
-    Natron::ImageKey key = Natron::Image::makeKey(nodeHash, isFrameVaryingOrAnimated, args.time, args.view);
+    Natron::ImageKey key = Natron::Image::makeKey(nodeHash, isFrameVaryingOrAnimated, args.time, args.view, frameRenderArgs.draftMode);
 
     bool useDiskCacheNode = dynamic_cast<DiskCacheNode*>(this) != NULL;
 
@@ -3499,6 +3482,29 @@ EffectInstance::RenderRoIRetCode EffectInstance::renderRoI(const RenderRoIArgs &
                 }
             }
             
+            
+            // eRenderSafetyInstanceSafe means that there is at most one render per instance
+            // NOTE: the per-instance lock should probably be shared between
+            // all clones of the same instance, because an InstanceSafe plugin may assume it is the sole owner of the output image,
+            // and read-write on it.
+            // It is probably safer to assume that several clones may write to the same output image only in the eRenderSafetyFullySafe case.
+            
+            // eRenderSafetyFullySafe means that there is only one render per FRAME : the lock is by image and handled in Node.cpp
+            ///locks belongs to an instance)
+            
+            boost::shared_ptr<QMutexLocker> locker;
+            Natron::RenderSafetyEnum safety = getCurrentThreadSafetyThreadLocal();
+            if (safety == eRenderSafetyInstanceSafe) {
+                locker.reset(new QMutexLocker( &getNode()->getRenderInstancesSharedMutex()));
+            } else if (safety == eRenderSafetyUnsafe) {
+                const Natron::Plugin* p = getNode()->getPlugin();
+                assert(p);
+                locker.reset(new QMutexLocker(p->getPluginLock()));
+            }
+            ///For eRenderSafetyFullySafe, don't take any lock, the image already has a lock on itself so we're sure it can't be written to by 2 different threads.
+            
+            
+            
 # ifdef DEBUG
 
             /*{
@@ -3811,7 +3817,11 @@ EffectInstance::renderInputImagesForRoI(double time,
             
             ///Convert to pixel coords the RoI
             if ( foundInputRoI->second.isInfinite() ) {
-                throw std::runtime_error(std::string("Plugin ") + this->getPluginLabel() + " asked for an infinite region of interest!");
+                std::stringstream ss;
+                ss << getNode()->getScriptName_mt_safe();
+                ss << tr(" asked for an infinite region of interest upstream").toStdString();
+                setPersistentMessage(Natron::eMessageTypeError, ss.str());
+                return eRenderRoIRetCodeFailed;
             }
             
             const double inputPar = inputEffect->getPreferredAspectRatio();
@@ -4347,17 +4357,17 @@ EffectInstance::tiledRenderingFunctor(const QThread* callingThread,
     if (isHostMaskingEnabled()) {
         foundMaskInput = rectToRender.imgs.find(getMaxInputCount() - 1);
     }
-    
+    if (foundPrefInput != rectToRender.imgs.end() && !foundPrefInput->second.empty()) {
+        originalInputImage = foundPrefInput->second.front();
+    }
     std::map<int,Natron::ImagePremultiplicationEnum>::const_iterator foundPrefPremult = planes.inputPremult.find(preferredInput);
-    if (foundPrefPremult != planes.inputPremult.end()) {
+    if (foundPrefPremult != planes.inputPremult.end() && originalInputImage) {
         originalImagePremultiplication = foundPrefPremult->second;
     } else {
         originalImagePremultiplication = Natron::eImagePremultiplicationOpaque;
     }
     
-    if (foundPrefInput != rectToRender.imgs.end() && !foundPrefInput->second.empty()) {
-        originalInputImage = foundPrefInput->second.front();
-    }
+   
     if (foundMaskInput != rectToRender.imgs.end() && !foundMaskInput->second.empty()) {
         maskImage = foundMaskInput->second.front();
     }
@@ -4516,6 +4526,7 @@ EffectInstance::renderHandler(RenderArgs & args,
     assert( !( (supportsRenderScaleMaybe() == eSupportsNo) && !(actionArgs.mappedScale.x == 1. && actionArgs.mappedScale.y == 1.) ) );
     actionArgs.originalScale.x = firstPlane.downscaleImage->getScale();
     actionArgs.originalScale.y = actionArgs.originalScale.x;
+    actionArgs.draftMode = frameArgs.draftMode;
     
     std::list<std::pair<ImageComponents,ImagePtr> > tmpPlanes;
     bool multiPlanar = isMultiPlanar();
@@ -4524,7 +4535,6 @@ EffectInstance::renderHandler(RenderArgs & args,
     
     assert(!outputClipPrefsComps.empty());
     
-    bool identityProcessed = false;
     if (identity) {
         
         std::list<Natron::ImageComponents> comps;
@@ -4543,7 +4553,6 @@ EffectInstance::renderHandler(RenderArgs & args,
                                  comps,
                                  outputClipPrefDepth,
                                  this);
-        identityProcessed = true;
         if (!identityInput) {
             for (std::map<Natron::ImageComponents, PlaneToRender>::iterator it = planes.planes.begin(); it != planes.planes.end(); ++it) {
                 if (outputUseImage) {
@@ -4631,10 +4640,10 @@ EffectInstance::renderHandler(RenderArgs & args,
                     
                 }
                 return eRenderingFunctorRetOK;
-            }
-        }
+            } // if (renderOk == eRenderRoIRetCodeAborted) {
+        }  //  if (!identityInput) {
         
-    }
+    } // if (identity) {
     
     args._outputPlanes = planes.planes;
     for (std::map<Natron::ImageComponents, PlaneToRender>::iterator it = args._outputPlanes.begin(); it != args._outputPlanes.end(); ++it) {
@@ -4651,7 +4660,7 @@ EffectInstance::renderHandler(RenderArgs & args,
             
         }
         
-        if (!identityProcessed && (it->second.renderMappedImage->usesBitMap() || prefComp != it->second.renderMappedImage->getComponents() ||
+        if ((it->second.renderMappedImage->usesBitMap() || prefComp != it->second.renderMappedImage->getComponents() ||
             outputClipPrefDepth != it->second.renderMappedImage->getBitDepth()) && !isPaintingOverItselfEnabled()) {
             it->second.tmpImage.reset(new Image(prefComp,
                                                 it->second.renderMappedImage->getRoD(),
@@ -4669,7 +4678,7 @@ EffectInstance::renderHandler(RenderArgs & args,
     
     
 #if NATRON_ENABLE_TRIMAP
-    if (!identityProcessed && !frameArgs.canAbort && frameArgs.isRenderResponseToUserInteraction) {
+    if (!frameArgs.canAbort && frameArgs.isRenderResponseToUserInteraction) {
         for (std::map<Natron::ImageComponents,PlaneToRender>::iterator it = args._outputPlanes.begin(); it != args._outputPlanes.end(); ++it) {
             if (outputUseImage) {
                 it->second.fullscaleImage->markForRendering(downscaledRectToRender);
@@ -4711,10 +4720,7 @@ EffectInstance::renderHandler(RenderArgs & args,
         }
         actionArgs.outputPlanes = *it;
         
-        Natron::StatusEnum st = eStatusOK;
-        if (!identityProcessed) {
-            st = render_public(actionArgs);
-        }
+        Natron::StatusEnum st = render_public(actionArgs);
         
         renderAborted = aborted();
         
@@ -4729,7 +4735,7 @@ EffectInstance::renderHandler(RenderArgs & args,
         
         if (st != eStatusOK || renderAborted) {
 #if NATRON_ENABLE_TRIMAP
-            if (!identityProcessed && !frameArgs.canAbort && frameArgs.isRenderResponseToUserInteraction) {
+            if (!frameArgs.canAbort && frameArgs.isRenderResponseToUserInteraction) {
                 
                 /*
                  At this point, another thread might have already gotten this image from the cache and could end-up
@@ -6578,7 +6584,8 @@ EffectInstance::onKnobValueChanged_public(KnobI* k,
                                                  0, //texture index
                                                  getApp()->getTimeLine().get(),
                                                  NodePtr(),
-                                                 true);
+                                                 true,
+                                                 false);
 
         RECURSIVE_ACTION();
         EffectPointerThreadProperty_RAII propHolder_raii(this);
@@ -7020,6 +7027,12 @@ OutputEffectInstance::renderCurrentFrame(bool canAbort)
     _engine->renderCurrentFrame(canAbort);
 }
 
+void
+OutputEffectInstance::renderFromCurrentFrameUsingCurrentDirection()
+{
+    _engine->renderFromCurrentFrameUsingCurrentDirection();
+}
+
 bool
 OutputEffectInstance::ifInfiniteclipRectToProjectDefault(RectD* rod) const
 {
@@ -7234,8 +7247,8 @@ OutputEffectInstance::updateRenderTimeInfos(double lastTimeSpent, double *averag
     for (std::list<double>::iterator it = _timeSpentPerFrameRendered.begin(); it!= _timeSpentPerFrameRendered.end(); ++it) {
         *totalTimeSpent += *it;
     }
-    assert(_timeSpentPerFrameRendered.size() != 0);
-    *averageTimePerFrame = *totalTimeSpent / _timeSpentPerFrameRendered.size();
+    size_t c = _timeSpentPerFrameRendered.size();
+    *averageTimePerFrame = (c == 0 ? 0 : *totalTimeSpent / c);
 }
 
 void

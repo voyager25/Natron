@@ -79,20 +79,19 @@ void moveGroupNode(DopeSheetEditor* model, const NodePtr& node, double dt)
         }
         
         // Move keyframes
-        const KnobsAndGuis &knobs = nodeGui->getKnobs();
+        const std::vector<boost::shared_ptr<KnobI> > &knobs = (*it)->getKnobs();
         
-        for (KnobsAndGuis::const_iterator knobIt = knobs.begin(); knobIt != knobs.end(); ++knobIt) {
-            KnobGui *knobGui = (*knobIt).second;
-            boost::shared_ptr<KnobI> knob = knobGui->getKnob();
+        for (std::vector<boost::shared_ptr<KnobI> >::const_iterator knobIt = knobs.begin(); knobIt != knobs.end(); ++knobIt) {
+            const boost::shared_ptr<KnobI>& knob = *knobIt;
             if (!knob->hasAnimation()) {
                 continue;
             }
         
-            for (int dim = 0; dim < knobGui->getKnob()->getDimension(); ++dim) {
+            for (int dim = 0; dim < knob->getDimension(); ++dim) {
                 if (!knob->isAnimated(dim)) {
                     continue;
                 }
-                KeyFrameSet keyframes = knobGui->getCurve(dim)->getKeyFrames_mt_safe();
+                KeyFrameSet keyframes = knob->getCurve(dim)->getKeyFrames_mt_safe();
                 
                 for (KeyFrameSet::iterator kfIt = keyframes.begin(); kfIt != keyframes.end(); ++kfIt) {
                     KeyFrame kf = (*kfIt);
@@ -240,8 +239,8 @@ int DSMoveKeysAndNodesCommand::id() const
 bool DSMoveKeysAndNodesCommand::mergeWith(const QUndoCommand *other)
 {
     const DSMoveKeysAndNodesCommand *cmd = dynamic_cast<const DSMoveKeysAndNodesCommand *>(other);
-
-    if (cmd->id() != id()) {
+    assert(cmd);
+    if (!cmd || cmd->id() != id()) {
         return false;
     }
 
@@ -412,8 +411,8 @@ bool
 DSTransformKeysCommand::mergeWith(const QUndoCommand *other)
 {
     const DSTransformKeysCommand *cmd = dynamic_cast<const DSTransformKeysCommand *>(other);
-    
-    if (cmd->id() != id()) {
+    assert(cmd);
+    if (!cmd || cmd->id() != id()) {
         return false;
     }
     
@@ -477,10 +476,15 @@ void DSLeftTrimReaderCommand::trimLeft(double firstFrame)
 
     Knob<int> *firstFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameFirstFrame).get());
     assert(firstFrameKnob);
-
+    if (!firstFrameKnob) {
+        return;
+    }
     KnobHolder *holder = firstFrameKnob->getHolder();
     Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
-
+    assert(effectInstance);
+    if (!effectInstance) {
+        return;
+    }
     effectInstance->beginChanges();
     KnobHelper::ValueChangedReturnCodeEnum r = firstFrameKnob->setValue(firstFrame, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
     effectInstance->endChanges();
@@ -496,8 +500,8 @@ int DSLeftTrimReaderCommand::id() const
 bool DSLeftTrimReaderCommand::mergeWith(const QUndoCommand *other)
 {
     const DSLeftTrimReaderCommand *cmd = dynamic_cast<const DSLeftTrimReaderCommand *>(other);
-
-    if (cmd->id() != id()) {
+    assert(cmd);
+    if (!cmd || cmd->id() != id()) {
         return false;
     }
 
@@ -552,10 +556,15 @@ void DSRightTrimReaderCommand::trimRight(double lastFrame)
 
     Knob<int> *lastFrameKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameLastFrame).get());
     assert(lastFrameKnob);
-
+    if (!lastFrameKnob) {
+        return;
+    }
     KnobHolder *holder = lastFrameKnob->getHolder();
     Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
-
+    assert(effectInstance);
+    if (!effectInstance) {
+        return;
+    }
     effectInstance->beginChanges();
     KnobHelper::ValueChangedReturnCodeEnum r = lastFrameKnob->setValue(lastFrame, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
     effectInstance->endChanges();
@@ -571,8 +580,8 @@ int DSRightTrimReaderCommand::id() const
 bool DSRightTrimReaderCommand::mergeWith(const QUndoCommand *other)
 {
     const DSRightTrimReaderCommand *cmd = dynamic_cast<const DSRightTrimReaderCommand *>(other);
-
-    if (cmd->id() != id()) {
+    assert(cmd);
+    if (!cmd || cmd->id() != id()) {
         return false;
     }
 
@@ -624,8 +633,8 @@ int DSSlipReaderCommand::id() const
 bool DSSlipReaderCommand::mergeWith(const QUndoCommand *other)
 {
     const DSSlipReaderCommand *cmd = dynamic_cast<const DSSlipReaderCommand *>(other);
-
-    if (cmd->id() != id()) {
+    assert(cmd);
+    if (!cmd || cmd->id() != id()) {
         return false;
     }
 
@@ -661,6 +670,9 @@ void DSSlipReaderCommand::slipReader(double dt)
     assert(timeOffsetKnob);
     Knob<int> *startingTimeKnob = dynamic_cast<Knob<int> *>(node->getKnobByName(kReaderParamNameStartingTime).get());
     assert(startingTimeKnob);
+    if (!firstFrameKnob || !lastFrameKnob || !timeOffsetKnob || !startingTimeKnob) {
+        return;
+    }
 
 
     /*
@@ -678,17 +690,20 @@ void DSSlipReaderCommand::slipReader(double dt)
     
     KnobHolder *holder = lastFrameKnob->getHolder();
     Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
-
+    assert(effectInstance);
+    if (!effectInstance) {
+        return;
+    }
     effectInstance->beginChanges();
     {
         KnobHelper::ValueChangedReturnCodeEnum r;
 
         r = firstFrameKnob->setValue(firstFrameKnob->getGuiValue() - dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
-        r = lastFrameKnob->setValue(lastFrameKnob->getGuiValue() - dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
-        r = timeOffsetKnob->setValue(timeOffsetKnob->getGuiValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
-
         Q_UNUSED(r);
-
+        r = lastFrameKnob->setValue(lastFrameKnob->getGuiValue() - dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
+        Q_UNUSED(r);
+        r = timeOffsetKnob->setValue(timeOffsetKnob->getGuiValue() + dt, 0, Natron::eValueChangedReasonNatronGuiEdited, 0);
+        Q_UNUSED(r);
     }
     effectInstance->endChanges();
     

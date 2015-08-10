@@ -1052,7 +1052,7 @@ void DopeSheetViewPrivate::drawRange(const boost::shared_ptr<DSNode> &dsNode) co
 
         
         // If necessary, draw the original frame range line
-        float clipRectCenterY;
+        float clipRectCenterY = 0.;
         if (isSelected && dsNode->getItemType() == DopeSheet::ItemTypeReader) {
             NodePtr node = dsNode->getInternalNode();
 
@@ -1230,8 +1230,9 @@ void DopeSheetViewPrivate::drawKeyframes(const boost::shared_ptr<DSNode> &dsNode
 
                 // Fill the knob times map
                 if (boost::shared_ptr<DSKnob> rootDSKnob = model->mapNameItemToDSKnob(knobTreeItem->parent())) {
-                    bool knobTimeExists = (knobsKeytimes.find(rootDSKnob.get())->second.find(keyTime)
-                                           != knobsKeytimes.find(rootDSKnob.get())->second.end());
+                    assert(rootDSKnob && knobsKeytimes.find(rootDSKnob.get()) != knobsKeytimes.end());
+                    const std::map<double, bool>& map = knobsKeytimes.find(rootDSKnob.get())->second;
+                    bool knobTimeExists = (map.find(keyTime) != map.end());
 
                     if (!knobTimeExists) {
                         knobsKeytimes[rootDSKnob.get()][keyTime] = kfSelected;
@@ -1871,11 +1872,20 @@ void DopeSheetViewPrivate::computeFRRange(DSNode *frameRange)
 void DopeSheetViewPrivate::computeGroupRange(DSNode *group)
 {
     NodePtr node = group->getInternalNode();
+    assert(node);
+    if (!node) {
+        throw std::logic_error("DopeSheetViewPrivate::computeGroupRange: node is NULL");
+    }
 
     FrameRange range;
     std::set<double> times;
 
-    NodeList nodes = dynamic_cast<NodeGroup *>(node->getLiveInstance())->getNodes();
+    NodeGroup* nodegroup = dynamic_cast<NodeGroup *>(node->getLiveInstance());
+    assert(nodegroup);
+    if (!nodegroup) {
+        throw std::logic_error("DopeSheetViewPrivate::computeGroupRange: node is not a group");
+    }
+    NodeList nodes = nodegroup->getNodes();
 
     for (NodeList::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
         NodePtr node = (*it);
@@ -2114,7 +2124,7 @@ void DopeSheetViewPrivate::moveCurrentFrameIndicator(double dt)
 
     double toTime = timeline->currentFrame() + dt;
     
-    gui->setUserScrubbingSlider(true);
+    gui->setDraftRenderEnabled(true);
     timeline->seekFrame(SequenceTime(toTime), false, 0,
                         Natron::eTimelineChangeReasonDopeSheetEditorSeek);
 }
@@ -2776,7 +2786,10 @@ void DopeSheetView::onRangeNodeChanged(int /*dimension*/, int /*reason*/)
     if (KnobSignalSlotHandler *knobHandler = qobject_cast<KnobSignalSlotHandler *>(signalSender)) {
         KnobHolder *holder = knobHandler->getKnob()->getHolder();
         Natron::EffectInstance *effectInstance = dynamic_cast<Natron::EffectInstance *>(holder);
-
+        assert(effectInstance);
+        if (!effectInstance) {
+            return;
+        }
         dsNode = _imp->model->findDSNode(effectInstance->getNode().get());
     }
 
@@ -2941,7 +2954,7 @@ void DopeSheetView::mousePressEvent(QMouseEvent *e)
         _imp->contextMenu->exec(mapToGlobal(e->pos()));
 
         e->accept();
-        didSomething = true;
+        //didSomething = true;
         return;
     }
 
@@ -3106,7 +3119,7 @@ void DopeSheetView::mousePressEvent(QMouseEvent *e)
             } // if (treeItem) {
             
         } // if (!didSomething)
-        
+        Q_UNUSED(didSomething);
         
 
         // So the user left clicked on background
@@ -3209,8 +3222,8 @@ void DopeSheetView::mouseReleaseEvent(QMouseEvent *e)
 
         mustRedraw = true;
     } else if (_imp->eventState == DopeSheetView::esMoveCurrentFrameIndicator) {
-        if (_imp->gui->isUserScrubbingSlider()) {
-            _imp->gui->setUserScrubbingSlider(false);
+        if (_imp->gui->isDraftRenderEnabled()) {
+            _imp->gui->setDraftRenderEnabled(false);
             bool autoProxyEnabled = appPTR->getCurrentSettings()->isAutoProxyEnabled();
             if (autoProxyEnabled) {
                 _imp->gui->renderAllViewers();

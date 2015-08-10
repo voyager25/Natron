@@ -203,8 +203,8 @@ private:
 struct GuiPrivate
 {
     Gui* _gui; //< ptr to the public interface
-    mutable QMutex _isUserScrubbingSliderMutex;
-    bool _isUserScrubbingSlider; //< true if the user is actively moving the cursor on the timeline or a slider. False on mouse release.
+    mutable QMutex _isInDraftModeMutex;
+    bool _isInDraftMode; //< true if the user is actively moving the cursor on the timeline or a slider. False on mouse release.
     GuiAppInstance* _appInstance; //< ptr to the appInstance
 
     ///Dialogs handling members
@@ -389,8 +389,8 @@ struct GuiPrivate
     GuiPrivate(GuiAppInstance* app,
                Gui* gui)
         : _gui(gui)
-        , _isUserScrubbingSliderMutex()
-        , _isUserScrubbingSlider(false)
+        , _isInDraftModeMutex()
+        , _isInDraftMode(false)
         , _appInstance(app)
         , _uiUsingMainThreadCond()
         , _uiUsingMainThread(false)
@@ -464,6 +464,7 @@ struct GuiPrivate
         , _lastFocusedGraph(0)
         , _groups()
         , _curveEditor(0)
+        , _dopesheetEditor(0)
         , _toolBox(0)
         , _propertiesBin(0)
         , _propertiesScrollArea(0)
@@ -675,23 +676,13 @@ Gui::closeInstance()
 void
 Gui::closeProject()
 {
-    if ( getApp()->getProject()->hasNodes() ) {
-        int ret = saveWarning();
-        if (ret == 0) {
-            if ( !saveProject() ) {
-                return;
-            }
-        } else if (ret == 2) {
-            return;
-        }
-    }
+    closeInstance();
+
     ///When closing a project we can remove the ViewerCache from memory and put it on disk
     ///since we're not sure it will be used right away
     appPTR->clearPlaybackCache();
-    abortProject(false);
-
-    _imp->_appInstance->getProject()->createViewer();
-    _imp->_appInstance->execOnProjectCreatedCallback();
+    //_imp->_appInstance->getProject()->createViewer();
+    //_imp->_appInstance->execOnProjectCreatedCallback();
 }
 
 void
@@ -4502,17 +4493,17 @@ Gui::getAvailablePaneName(const QString & baseName) const
 }
 
 void
-Gui::setUserScrubbingSlider(bool b)
+Gui::setDraftRenderEnabled(bool b)
 {
-    QMutexLocker k(&_imp->_isUserScrubbingSliderMutex);
-    _imp->_isUserScrubbingSlider = b;
+    QMutexLocker k(&_imp->_isInDraftModeMutex);
+    _imp->_isInDraftMode = b;
 }
 
 bool
-Gui::isUserScrubbingSlider() const
+Gui::isDraftRenderEnabled() const
 {
-    QMutexLocker k(&_imp->_isUserScrubbingSliderMutex);
-    return _imp->_isUserScrubbingSlider;
+    QMutexLocker k(&_imp->_isInDraftModeMutex);
+    return _imp->_isInDraftMode;
 }
 
 bool

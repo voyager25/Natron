@@ -546,6 +546,12 @@ getNatronOperationString(Natron::MergingFunctionEnum operation)
         case Natron::eMergeGeometric:
             
             return "geometric";
+        case Natron::eMergeGrainExtract:
+            
+            return "grain-extract";
+        case Natron::eMergeGrainMerge:
+            
+            return "grain-merge";
         case Natron::eMergeHardLight:
             
             return "hard-light";
@@ -666,6 +672,12 @@ getNatronOperationHelpString(Natron::MergingFunctionEnum operation)
         case Natron::eMergeGeometric:
             
             return "2AB/(A+B)";
+        case Natron::eMergeGrainMerge:
+            
+            return "B + A - 0.5";
+        case Natron::eMergeGrainExtract:
+            
+            return "B - A + 0.5";
         case Natron::eMergeHardLight:
             
             return "multiply if A < 0.5, screen if A > 0.5";
@@ -1451,6 +1463,9 @@ struct RotoContextPrivate
     boost::shared_ptr<RotoItem> lastInsertedItem;
     boost::shared_ptr<RotoItem> lastLockedItem;
     boost::shared_ptr<RotoStrokeItem> strokeBeingPainted;
+    
+    //Used to prevent 2 threads from writing the same image in the rotocontext
+    mutable QMutex cacheAccessMutex;
 
     RotoContextPrivate(const boost::shared_ptr<Natron::Node>& n )
     : rotoContextMutex()

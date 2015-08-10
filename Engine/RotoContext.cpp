@@ -1854,7 +1854,7 @@ RotoDrawableItem::RotoDrawableItem(const boost::shared_ptr<RotoContext>& context
     getNatronCompositingOperators(&operators, &tooltips);
     
     _imp->compOperator->populateChoices(operators,tooltips);
-    _imp->compOperator->setDefaultValue( (int)eMergeCopy);
+    _imp->compOperator->setDefaultValueFromLabel(getNatronOperationString(eMergeCopy));
     
 }
 
@@ -2044,17 +2044,18 @@ RotoDrawableItem::createNodes(bool connectNodes)
     assert(mergeOp);
     
     boost::shared_ptr<Choice_Knob> compOp = getOperatorKnob();
+
+    MergingFunctionEnum op;
     if (type == eRotoStrokeTypeDodge || type == eRotoStrokeTypeBurn) {
-        mergeOp->setValue(type == eRotoStrokeTypeDodge ? (int)eMergeColorDodge : (int)eMergeColorBurn, 0);
-        compOp->setValue(type == eRotoStrokeTypeDodge ? (int)eMergeColorDodge : (int)eMergeColorBurn, 0);
+        op = (type == eRotoStrokeTypeDodge ?eMergeColorDodge : eMergeColorBurn);
     } else if (type == eRotoStrokeTypeSolid) {
-        mergeOp->setValue((int)eMergeOver, 0);
-        compOp->setValue((int)eMergeOver, 0);
+        op = eMergeOver;
     } else {
-        mergeOp->setValue((int)eMergeCopy, 0);
-        compOp->setValue((int)eMergeCopy, 0);
+        op = eMergeCopy;
     }
-    
+    mergeOp->setValueFromLabel(getNatronOperationString(op), 0);
+    compOp->setValueFromLabel(getNatronOperationString(op), 0);
+
     if (isStroke) {
         if (type == eRotoStrokeTypeBlur) {
             double strength = isStroke->getBrushEffectKnob()->getValue();
@@ -2315,11 +2316,10 @@ RotoDrawableItem::rotoKnobChanged(const boost::shared_ptr<KnobI>& knob)
     }
 
     if (knob == compKnob) {
-        boost::shared_ptr<KnobI> opKnob = _imp->mergeNode->getKnobByName(kMergeOFXParamOperation);
-        Choice_Knob* operation = dynamic_cast<Choice_Knob*>(opKnob.get());
-        if (operation) {
-            int op_i = compKnob->getValue();
-            operation->setValue(op_i, 0);
+        boost::shared_ptr<KnobI> mergeOperatorKnob = _imp->mergeNode->getKnobByName(kMergeOFXParamOperation);
+        Choice_Knob* mergeOp = dynamic_cast<Choice_Knob*>(mergeOperatorKnob.get());
+        if (mergeOp) {
+            mergeOp->setValueFromLabel(compKnob->getEntry(compKnob->getValue()), 0);
         }
     } else if (knob == _imp->sourceColor) {
         refreshNodesConnections();
@@ -2773,15 +2773,13 @@ RotoDrawableItem::load(const RotoItemSerialization &obj)
         type = eRotoStrokeTypeSolid;
     }
 
-    
-    boost::shared_ptr<KnobI> opKnob = _imp->mergeNode->getKnobByName(kMergeOFXParamOperation);
-    Choice_Knob* operation = dynamic_cast<Choice_Knob*>(opKnob.get());
-    if (operation) {
-        int op_i = getOperatorKnob()->getValue();
-        operation->setValue(op_i, 0);
+    boost::shared_ptr<Choice_Knob> compKnob = getOperatorKnob();
+    boost::shared_ptr<KnobI> mergeOperatorKnob = _imp->mergeNode->getKnobByName(kMergeOFXParamOperation);
+    Choice_Knob* mergeOp = dynamic_cast<Choice_Knob*>(mergeOperatorKnob.get());
+    if (mergeOp) {
+        mergeOp->setValueFromLabel(compKnob->getEntry(compKnob->getValue()), 0);
     }
-    
-    
+
     if (type == eRotoStrokeTypeClone || type == eRotoStrokeTypeReveal) {
         boost::shared_ptr<KnobI> translateKnob = _imp->effectNode->getKnobByName(kTransformParamTranslate);
         Double_Knob* translate = dynamic_cast<Double_Knob*>(translateKnob.get());
@@ -3182,8 +3180,8 @@ RotoDrawableItem::setTransform(double time, double tx, double ty, double sx, dou
         _imp->scale->setValueAtTime(time, sx, 0);
         _imp->scale->setValueAtTime(time, sy, 1);
         
-        _imp->center->setValueAtTime(time, centerX, 0);
-        _imp->center->setValueAtTime(time, centerY, 1);
+        _imp->center->setValue(centerX, 0);
+        _imp->center->setValue(centerY, 1);
         
         _imp->rotate->setValueAtTime(time, rot, 0);
         
@@ -4203,6 +4201,47 @@ Bezier::movePointByIndexInternal(int index,
 } // movePointByIndexInternal
 
 void
+Bezier::setPointByIndexInternal(int index,
+                                double time,
+                                double x,
+                                double y)
+{
+    ///only called on the main-thread
+    assert( QThread::currentThread() == qApp->thread() );
+
+    Transform::Matrix3x3 trans,invTrans;
+    getTransformAtTime(time, &trans);
+    invTrans = Transform::matInverse(trans);
+
+    double dx, dy;
+
+    {
+        QMutexLocker l(&itemMutex);
+        Transform::Point3D p,left,right;
+        p.z = left.z = right.z = 1;
+
+        boost::shared_ptr<BezierCP> cp;
+        bool isOnKeyframe = false;
+
+        BezierCPs::const_iterator it = _imp->atIndex(index);
+        assert(it != _imp->points.end());
+        cp = *it;
+        cp->getPositionAtTime(time, &p.x, &p.y,true);
+        isOnKeyframe |= cp->getLeftBezierPointAtTime(time, &left.x, &left.y,true);
+        cp->getRightBezierPointAtTime(time, &right.x, &right.y,true);
+
+        p = Transform::matApply(trans, p);
+        left = Transform::matApply(trans, left);
+        right = Transform::matApply(trans, right);
+
+        dx = x - p.x;
+        dy = y - p.y;
+    }
+
+    movePointByIndex(index, time, dx, dy);
+} // setPointByIndexInternal
+
+void
 Bezier::movePointByIndex(int index,
                          double time,
                          double dx,
@@ -4210,6 +4249,15 @@ Bezier::movePointByIndex(int index,
 {
     movePointByIndexInternal(index, time, dx, dy, false);
 } // movePointByIndex
+
+void
+Bezier::setPointByIndex(int index,
+                         double time,
+                         double x,
+                         double y)
+{
+    setPointByIndexInternal(index, time, x, y);
+} // setPointByIndex
 
 void
 Bezier::moveFeatherByIndex(int index,
@@ -8674,10 +8722,12 @@ RotoContext::renderMaskFromStroke(const boost::shared_ptr<RotoDrawableItem>& str
     hash.append(rotoAge);
     hash.computeHash();
     
-    Natron::ImageKey key = Natron::Image::makeKey(hash.value(), true ,time, view);
+    Natron::ImageKey key = Natron::Image::makeKey(hash.value(), true ,time, view, false);
     
-    node->getLiveInstance()->getImageFromCacheAndConvertIfNeeded(true, false, key, mipmapLevel, NULL, NULL, depth, components, depth, components, EffectInstance::InputImagesMap(), &image);
-    
+    {
+        QMutexLocker k(&_imp->cacheAccessMutex);
+        node->getLiveInstance()->getImageFromCacheAndConvertIfNeeded(true, false, key, mipmapLevel, NULL, NULL, depth, components, depth, components, EffectInstance::InputImagesMap(), &image);
+    }
     if (image) {
         return image;
     }
@@ -8716,6 +8766,14 @@ RotoContext::renderMaskFromStroke(const boost::shared_ptr<RotoDrawableItem>& str
                                                                               components,
                                                                               depth,
                                                                               std::map<int,std::map<int, std::vector<RangeD> > >() );
+    /*
+     At this point we take the cacheAccessMutex so that no other thread can retrieve this image from the cache while it has not been 
+     finished rendering. You might wonder why we do this differently here than in EffectInstance::renderRoI, this is because we do not use
+     the trimap and notification system here in the rotocontext, which would be to much just for this small object, rather we just lock
+     it once, which is fine.
+     */
+    QMutexLocker k(&_imp->cacheAccessMutex);
+    
     Natron::getImageFromCacheOrCreate(key, params, &image);
     if (!image) {
         std::stringstream ss;
@@ -8800,7 +8858,8 @@ RotoContext::renderMaskInternal(const boost::shared_ptr<RotoDrawableItem>& strok
 
     double opacity = stroke->getOpacity(time);
 
-    if (isStroke || (isBezier && isBezier->isOpenBezier())) {
+    assert(isStroke || isBezier);
+    if (isStroke || !isBezier || (isBezier && isBezier->isOpenBezier())) {
         std::vector<cairo_pattern_t*> dotPatterns(ROTO_PRESSURE_LEVELS);
         for (std::size_t i = 0; i < dotPatterns.size(); ++i) {
             dotPatterns[i] = (cairo_pattern_t*)0;

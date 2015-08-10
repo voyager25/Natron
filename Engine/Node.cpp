@@ -304,6 +304,11 @@ struct Node::Implementation
     
     void runOnNodeDeleteCB();
     
+    void runOnNodeCreatedCBInternal(const std::string& cb,bool userEdited);
+    
+    void runOnNodeDeleteCBInternal(const std::string& cb);
+
+    
     void appendChild(const boost::shared_ptr<Natron::Node>& child);
     
     void runInputChangedCallback(int index,const std::string& script);
@@ -386,6 +391,8 @@ struct Node::Implementation
     boost::weak_ptr<Bool_Knob> disableNodeKnob;
     boost::weak_ptr<String_Knob> knobChangedCallback;
     boost::weak_ptr<String_Knob> inputChangedCallback;
+    boost::weak_ptr<String_Knob> nodeCreatedCallback;
+    boost::weak_ptr<String_Knob> nodeRemovalCallback;
     
     boost::weak_ptr<Page_Knob> infoPage;
     boost::weak_ptr<String_Knob> infoDisclaimer;
@@ -590,7 +597,7 @@ Node::load(const std::string & parentMultiInstanceName,
     if (binary) {
         func = binary->findFunction<EffectBuilder>("BuildEffect");
     }
-    bool isFileDialogPreviewReader = fixedName.contains("Natron_File_Dialog_Preview_Provider_Reader");
+    bool isFileDialogPreviewReader = fixedName.contains(NATRON_FILE_DIALOG_PREVIEW_READER_NAME);
     
     bool nameSet = false;
     if (!serialization.isNull() && !dontLoadName && !nameSet && fixedName.isEmpty()) {
@@ -2531,6 +2538,37 @@ Node::initializeKnobs(int renderScaleSupportPref)
             _imp->nodeSettingsPage.lock()->addKnob(inputChangedCallback);
             _imp->inputChangedCallback = inputChangedCallback;
             
+            if (isGroup) {
+                boost::shared_ptr<String_Knob> onNodeCreated = Natron::createKnob<String_Knob>(_imp->liveInstance.get(), "After Node Created");
+                onNodeCreated->setName("afterNodeCreated");
+                onNodeCreated->setHintToolTip("Add here the name of a Python-defined function that will be called each time a node "
+                                              "is created in the group. This will be called in addition to the After Node Created "
+                                              " callback of the project for the group node and all nodes within it (not recursively).\n"
+                                              "The boolean variable userEdited will be set to True if the node was created "
+                                              "by the user or False otherwise (such as when loading a project, or pasting a node).\n"
+                                              "The signature of the callback is: callback(thisNode, app, userEdited) where:\n"
+                                              "- thisNode: the node which has just been created\n"
+                                              "- userEdited: a boolean indicating whether the node was created by user interaction or from "
+                                              "a script/project load/copy-paste\n"
+                                              "- app: points to the current application instance\n");
+                onNodeCreated->setAnimationEnabled(false);
+                _imp->nodeCreatedCallback = onNodeCreated;
+                _imp->nodeSettingsPage.lock()->addKnob(onNodeCreated);
+                
+                boost::shared_ptr<String_Knob> onNodeDeleted = Natron::createKnob<String_Knob>(_imp->liveInstance.get(), "Before Node Removal");
+                onNodeDeleted->setName("beforeNodeRemoval");
+                onNodeDeleted->setHintToolTip("Add here the name of a Python-defined function that will be called each time a node "
+                                              "is about to be deleted. This will be called in addition to the Before Node Removal "
+                                              " callback of the project for the group node and all nodes within it (not recursively).\n"
+                                              "This function will not be called when the project is closing.\n"
+                                              "The signature of the callback is: callback(thisNode, app) where:\n"
+                                              "- thisNode: the node about to be deleted\n"
+                                              "- app: points to the current application instance\n");
+                onNodeDeleted->setAnimationEnabled(false);
+                _imp->nodeRemovalCallback = onNodeDeleted;
+                _imp->nodeSettingsPage.lock()->addKnob(onNodeDeleted);
+            }
+            
             
             boost::shared_ptr<Page_Knob> infoPage = Natron::createKnob<Page_Knob>(_imp->liveInstance.get(), tr("Info").toStdString(), 1, false);
             infoPage->setName(NATRON_PARAMETER_PAGE_NAME_INFO);
@@ -4041,9 +4079,7 @@ Node::makePreviewImage(SequenceTime time,
                        unsigned int* buf)
 {
     assert(_imp->knobsInitialized);
-    if (!_imp->liveInstance) {
-        return false;
-    }
+    
     
     if (_imp->checkForExitPreview()) {
         return false;
@@ -4057,7 +4093,20 @@ Node::makePreviewImage(SequenceTime time,
     RenderScale scale;
     scale.x = scale.y = 1.;
     U64 nodeHash = getHashValue();
-    Natron::StatusEnum stat = _imp->liveInstance->getRegionOfDefinition_public(nodeHash,time, scale, 0, &rod, &isProjectFormat);
+    
+    Natron::EffectInstance* effect = 0;
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(_imp->liveInstance.get());
+    if (isGroup) {
+        effect = isGroup->getOutputNode()->getLiveInstance();
+    } else {
+        effect = _imp->liveInstance.get();
+    }
+    
+    if (!_imp->liveInstance) {
+        return false;
+    }
+    
+    Natron::StatusEnum stat = effect->getRegionOfDefinition_public(nodeHash,time, scale, 0, &rod, &isProjectFormat);
     if ( (stat == eStatusFailed) || rod.isNull() ) {
         return false;
     }
@@ -4072,7 +4121,7 @@ Node::makePreviewImage(SequenceTime time,
     scale.x = Natron::Image::getScaleFromMipMapLevel(mipMapLevel);
     scale.y = scale.x;
     
-    const double par = _imp->liveInstance->getPreferredAspectRatio();
+    const double par = effect->getPreferredAspectRatio();
     
     RectI renderWindow;
     rod.toPixelEnclosing(mipMapLevel, par, &renderWindow);
@@ -4088,7 +4137,8 @@ Node::makePreviewImage(SequenceTime time,
                                              0, //texture index
                                              getApp()->getTimeLine().get(),
                                              NodePtr(),
-                                             false);
+                                             false,
+                                             true);
     
     std::list<ImageComponents> requestedComps;
     requestedComps.push_back(ImageComponents::getRGBComponents());
@@ -4099,15 +4149,15 @@ Node::makePreviewImage(SequenceTime time,
     ImageList planes;
     try {
         Natron::EffectInstance::RenderRoIRetCode retCode =
-        _imp->liveInstance->renderRoI( EffectInstance::RenderRoIArgs( time,
-                                                                     scale,
-                                                                     mipMapLevel,
-                                                                     0, //< preview only renders view 0 (left)
-                                                                     false,
-                                                                     renderWindow,
-                                                                     rod,
-                                                                     requestedComps, //< preview is always rgb...
-                                                                     getBitDepth(), _imp->liveInstance.get()) ,&planes);
+        effect->renderRoI( EffectInstance::RenderRoIArgs( time,
+                                                         scale,
+                                                         mipMapLevel,
+                                                         0, //< preview only renders view 0 (left)
+                                                         false,
+                                                         renderWindow,
+                                                         rod,
+                                                         requestedComps, //< preview is always rgb...
+                                                         getBitDepth(), effect) ,&planes);
         if (retCode != Natron::EffectInstance::eRenderRoIRetCodeOk) {
             return false;
         }
@@ -5272,7 +5322,10 @@ Node::onEffectKnobValueChanged(KnobI* what,
             _imp->liveInstance->getFrameRange_public(getHashValue(), &leftBound, &rightBound, true);
     
             if (leftBound != INT_MIN && rightBound != INT_MAX) {
-                getApp()->getProject()->unionFrameRangeWith(leftBound, rightBound);
+                bool isFileDialogPreviewReader = getScriptName().find(NATRON_FILE_DIALOG_PREVIEW_READER_NAME) != std::string::npos;
+                if (!isFileDialogPreviewReader) {
+                    getApp()->getProject()->unionFrameRangeWith(leftBound, rightBound);
+                }
             }
         }
         
@@ -6137,11 +6190,30 @@ Node::restoreClipPreferencesRecursive(std::list<Natron::Node*>& markedNodes)
      * Always call getClipPreferences on the inputs first since the preference of this node may 
      * depend on the inputs.
      */
-    
+    boost::shared_ptr<RotoContext> roto = getRotoContext();
+    NodePtr rotoNode;
+    if (roto) {
+        rotoNode = roto->getNode();
+    }
+    boost::shared_ptr<RotoDrawableItem> rotoItem = getAttachedRotoItem();
+
     for (int i = 0; i < getMaxInputCount(); ++i) {
         NodePtr input = getInput(i);
         if (input) {
+            if (rotoItem) {
+                if (rotoItem->getContext()->getNode() == input) {
+                    continue;
+                }
+            }
             input->restoreClipPreferencesRecursive(markedNodes);
+        }
+    }
+    
+    if (roto) {
+        NodeList nodes;
+        roto->getRotoPaintTreeNodes(&nodes);
+        for (NodeList::iterator it = nodes.begin(); it!=nodes.end(); ++it) {
+            (*it)->restoreClipPreferencesRecursive(markedNodes);
         }
     }
     
@@ -6398,14 +6470,8 @@ Node::getInputChangedCallback() const
 }
 
 void
-Node::Implementation::runOnNodeCreatedCB(bool userEdited)
+Node::Implementation::runOnNodeCreatedCBInternal(const std::string& cb,bool userEdited)
 {
-    std::string cb = _publicInterface->getApp()->getProject()->getOnNodeCreatedCB();
-    if (cb.empty() || !_publicInterface->getGroup()) {
-        return;
-    }
-    
-    
     std::vector<std::string> args;
     std::string error;
     Natron::getFunctionArguments(cb, &error, &args);
@@ -6426,7 +6492,7 @@ Node::Implementation::runOnNodeCreatedCB(bool userEdited)
         _publicInterface->getApp()->appendToScriptEditor("Failed to run onNodeCreated callback: " + signatureError);
         return;
     }
-
+    
     std::string appID = _publicInterface->getApp()->getAppIDString();
     std::stringstream ss;
     ss << cb << "(" << appID << "." << _publicInterface->getFullyQualifiedName() << "," << appID << ",";
@@ -6443,15 +6509,12 @@ Node::Implementation::runOnNodeCreatedCB(bool userEdited)
     } else if (!output.empty()) {
         _publicInterface->getApp()->appendToScriptEditor(output);
     }
+
 }
 
 void
-Node::Implementation::runOnNodeDeleteCB()
+Node::Implementation::runOnNodeDeleteCBInternal(const std::string& cb)
 {
-    std::string cb = _publicInterface->getApp()->getProject()->getOnNodeDeleteCB();
-    if (cb.empty()) {
-        return;
-    }
     std::vector<std::string> args;
     std::string error;
     Natron::getFunctionArguments(cb, &error, &args);
@@ -6479,10 +6542,60 @@ Node::Implementation::runOnNodeDeleteCB()
     
     std::string err;
     std::string output;
-    if (!Natron::interpretPythonScript(cb, &err, &output)) {
+    if (!Natron::interpretPythonScript(ss.str(), &err, &output)) {
         _publicInterface->getApp()->appendToScriptEditor("Failed to run onNodeDeletion callback: " + err);
     } else if (!output.empty()) {
         _publicInterface->getApp()->appendToScriptEditor(output);
+    }
+
+}
+
+void
+Node::Implementation::runOnNodeCreatedCB(bool userEdited)
+{
+    std::string cb = _publicInterface->getApp()->getProject()->getOnNodeCreatedCB();
+    boost::shared_ptr<NodeCollection> group = _publicInterface->getGroup();
+    if (!group) {
+        return;
+    }
+    if (!cb.empty()) {
+        runOnNodeCreatedCBInternal(cb, userEdited);
+    }
+    
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(group.get());
+    boost::shared_ptr<String_Knob> nodeCreatedCbKnob = nodeCreatedCallback.lock();
+    if (!nodeCreatedCbKnob && isGroup) {
+        cb = isGroup->getNode()->getAfterNodeCreatedCallback();
+    } else  if (nodeCreatedCbKnob) {
+        cb = nodeCreatedCbKnob->getValue();
+    }
+    if (!cb.empty()) {
+        runOnNodeCreatedCBInternal(cb, userEdited);
+    }
+}
+
+void
+Node::Implementation::runOnNodeDeleteCB()
+{
+    std::string cb = _publicInterface->getApp()->getProject()->getOnNodeDeleteCB();
+    boost::shared_ptr<NodeCollection> group = _publicInterface->getGroup();
+    if (!group) {
+        return;
+    }
+    if (!cb.empty()) {
+        runOnNodeDeleteCBInternal(cb);
+    }
+
+    
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(group.get());
+    boost::shared_ptr<String_Knob> nodeDeletedKnob = nodeRemovalCallback.lock();
+    if (!nodeDeletedKnob && isGroup) {
+        cb = isGroup->getNode()->getBeforeNodeRemovalCallback();
+    } else  if (nodeDeletedKnob) {
+        cb = nodeDeletedKnob->getValue();
+    }
+    if (!cb.empty()) {
+        runOnNodeDeleteCBInternal(cb);
     }
 }
 
@@ -6511,6 +6624,20 @@ std::string
 Node::getAfterFrameRenderCallback() const
 {
     boost::shared_ptr<String_Knob> s = _imp->afterFrameRender.lock();
+    return s ? s->getValue() : std::string();
+}
+
+std::string
+Node::getAfterNodeCreatedCallback() const
+{
+    boost::shared_ptr<String_Knob> s = _imp->nodeCreatedCallback.lock();
+    return s ? s->getValue() : std::string();
+}
+
+std::string
+Node::getBeforeNodeRemovalCallback() const
+{
+    boost::shared_ptr<String_Knob> s = _imp->nodeRemovalCallback.lock();
     return s ? s->getValue() : std::string();
 }
 

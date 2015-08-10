@@ -79,7 +79,7 @@ Int_Knob::setIncrement(int incr,
     }
     
     if ( index >= (int)_increments.size() ) {
-        throw "Int_Knob::setIncrement , dimension out of range";
+        throw std::runtime_error("Int_Knob::setIncrement , dimension out of range");
     }
     _increments[index] = incr;
     Q_EMIT incrementChanged(_increments[index], index);
@@ -263,7 +263,7 @@ Double_Knob::setIncrement(double incr,
         return;
     }
     if ( index >= (int)_increments.size() ) {
-        throw "Double_Knob::setIncrement , dimension out of range";
+        throw std::runtime_error("Double_Knob::setIncrement , dimension out of range");
     }
     
     _increments[index] = incr;
@@ -275,7 +275,7 @@ Double_Knob::setDecimals(int decis,
                          int index)
 {
     if ( index >= (int)_decimals.size() ) {
-        throw "Double_Knob::setDecimals , dimension out of range";
+        throw std::runtime_error("Double_Knob::setDecimals , dimension out of range");
     }
     
     _decimals[index] = decis;
@@ -641,6 +641,15 @@ Choice_Knob::getEntries_mt_safe() const
     return _entries;
 }
 
+const std::string&
+Choice_Knob::getEntry(int v) const
+{
+    if (v < 0 || (int)_entries.size() <= v) {
+        throw std::runtime_error(std::string("Choice_Knob::getEntry: index out of range"));
+    }
+    return _entries[v];
+}
+
 int
 Choice_Knob::getNumEntries() const
 {
@@ -741,6 +750,32 @@ static bool caseInsensitiveCompare(const std::string& a,const std::string& b)
         }
     }
     return true;
+}
+
+KnobHelper::ValueChangedReturnCodeEnum
+Choice_Knob::setValueFromLabel(const std::string & value,
+                               int dimension,
+                               bool turnOffAutoKeying)
+{
+    for (std::size_t i = 0; i < _entries.size(); ++i) {
+        if (caseInsensitiveCompare(_entries[i], value)) {
+            return setValue(i, dimension, turnOffAutoKeying);
+        }
+    }
+    return KnobHelper::eValueChangedReturnCodeNothingChanged;
+    //throw std::runtime_error(std::string("Choice_Knob::setValueFromLabel: unknown label ") + value);
+}
+
+void
+Choice_Knob::setDefaultValueFromLabel(const std::string & value,
+                                      int dimension)
+{
+    for (std::size_t i = 0; i < _entries.size(); ++i) {
+        if (caseInsensitiveCompare(_entries[i], value)) {
+            return setDefaultValue(i, dimension);
+        }
+    }
+    //throw std::runtime_error(std::string("Choice_Knob::setDefaultValueFromLabel: unknown label ") + value);
 }
 
 void
@@ -1253,6 +1288,7 @@ Parametric_Knob::Parametric_Knob(KnobHolder* holder,
 : Knob<double>(holder,description,dimension,declaredByPlugin)
 , _curvesMutex()
 , _curves(dimension)
+, _defaultCurves(dimension)
 , _curvesColor(dimension)
 {
     for (int i = 0; i < dimension; ++i) {
@@ -1260,6 +1296,7 @@ Parametric_Knob::Parametric_Knob(KnobHolder* holder,
         color.r = color.g = color.b = color.a = 1.;
         _curvesColor[i] = color;
         _curves[i] = boost::shared_ptr<Curve>( new Curve(this,i) );
+        _defaultCurves[i] = boost::shared_ptr<Curve>( new Curve(this,i) );
     }
 }
 
@@ -1336,6 +1373,20 @@ std::pair<double,double> Parametric_Knob::getParametricRange() const
     return _curves.front()->getXRange();
 }
 
+boost::shared_ptr<Curve>
+Parametric_Knob::getDefaultParametricCurve(int dimension) const
+{
+    assert(dimension >= 0 && dimension < (int)_curves.size());
+    std::pair<int,boost::shared_ptr<KnobI> >  master = getMaster(dimension);
+    if (master.second) {
+        Parametric_Knob* m = dynamic_cast<Parametric_Knob*>(master.second.get());
+        assert(m);
+        return m->getDefaultParametricCurve(dimension);
+    } else {
+        return _defaultCurves[dimension];
+    }
+
+}
 
 boost::shared_ptr<Curve> Parametric_Knob::getParametricCurve(int dimension) const
 {
@@ -1618,8 +1669,35 @@ Parametric_Knob::loadParametricCurves(const std::list< Curve > & curves)
 void
 Parametric_Knob::resetExtraToDefaultValue(int dimension)
 {
-    QVector<int> dimensions(1);
-    dimensions[0] = dimension;
-    Q_EMIT mustResetToDefault(dimensions);
+    (void)deleteAllControlPoints(dimension);
+    _curves[dimension]->clone(*_defaultCurves[dimension]);
+    Q_EMIT curveChanged(dimension);
+
 }
 
+void
+Parametric_Knob::setDefaultCurvesFromCurves()
+{
+    assert(_curves.size() == _defaultCurves.size());
+    for (std::size_t i = 0; i < _curves.size(); ++i) {
+        _defaultCurves[i]->clone(*_curves[i]);
+    }
+}
+
+bool
+Parametric_Knob::hasModificationsVirtual(int dimension) const
+{
+    assert(dimension >= 0 && dimension < (int)_curves.size());
+    KeyFrameSet defKeys = _defaultCurves[dimension]->getKeyFrames_mt_safe();
+    KeyFrameSet keys = _curves[dimension]->getKeyFrames_mt_safe();
+    if (defKeys.size() != keys.size()) {
+        return true;
+    }
+    KeyFrameSet::iterator itO = defKeys.begin();
+    for (KeyFrameSet::iterator it = keys.begin(); it!=keys.end(); ++it,++itO) {
+        if (*it != *itO) {
+            return true;
+        }
+    }
+    return false;
+}

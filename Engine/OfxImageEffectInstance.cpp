@@ -307,7 +307,7 @@ OfxImageEffectInstance::getViewCount(int *nViews) const
 }
 
 OfxStatus
-OfxImageEffectInstance::getViewName(int viewIndex,char** name) const
+OfxImageEffectInstance::getViewName(int viewIndex, const char** name) const
 {
 #pragma message WARN("TODO")
     return kOfxStatFailed;
@@ -514,10 +514,13 @@ OfxImageEffectInstance::newParam(const std::string &paramName,
     } else if (descriptor.getType() == kOfxParamTypeParametric) {
         OfxParametricInstance* ret = new OfxParametricInstance(getOfxEffectInstance(), descriptor);
         OfxStatus stat = ret->defaultInitializeAllCurves(descriptor);
+        
         if (stat == kOfxStatFailed) {
             throw std::runtime_error("The parameter failed to create curves from their default\n"
                                      "initialized by the plugin.");
         }
+        ret->onCurvesDefaultInitialized();
+
         knob = ret->getKnob();
         instance = ret;
     }
@@ -1086,11 +1089,13 @@ OfxImageEffectInstance::getInputsHoldingTransform(std::list<int>* inputs) const
     return !inputs->empty();
 }
 
+#ifdef kOfxImageEffectPropInAnalysis // removed in OFX 1.4
 bool
 OfxImageEffectInstance::isInAnalysis() const
 {
     return _properties.getIntProperty(kOfxImageEffectPropInAnalysis) == 1;
 }
+#endif
 
 OfxImageEffectDescriptor::OfxImageEffectDescriptor(OFX::Host::Plugin *plug)
 : OFX::Host::ImageEffect::Descriptor(plug)

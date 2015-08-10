@@ -286,6 +286,7 @@ struct NodeGraphPrivate
     bool _hasMovedOnce;
     
     ViewerTab* lastSelectedViewer;
+    bool wasLaskUserSeekDuringPlayback;
     
     NodeGraphPrivate(Gui* gui,
                      NodeGraph* p,
@@ -333,6 +334,7 @@ struct NodeGraphPrivate
     , _deltaSinceMousePress(0,0)
     , _hasMovedOnce(false)
     , lastSelectedViewer(0)
+    , wasLaskUserSeekDuringPlayback(false)
     {
     }
 
@@ -501,8 +503,9 @@ NodeGraph::NodeGraph(Gui* gui,
     _imp->_menu = new Natron::Menu(this);
     //_imp->_menu->setFont( QFont(appFont,appFontSize) );
 
-    QObject::connect( _imp->_gui->getApp()->getTimeLine().get(),SIGNAL( frameChanged(SequenceTime,int) ),
-                      this,SLOT( onTimeChanged(SequenceTime,int) ) );
+    boost::shared_ptr<TimeLine> timeline = _imp->_gui->getApp()->getTimeLine();
+    QObject::connect( timeline.get(),SIGNAL( frameChanged(SequenceTime,int) ), this,SLOT( onTimeChanged(SequenceTime,int) ) );
+    QObject::connect( timeline.get(),SIGNAL( frameAboutToChange() ), this,SLOT( onTimelineTimeAboutToChange() ) );
 }
 
 NodeGraph::~NodeGraph()
@@ -1003,9 +1006,9 @@ NodeGraph::moveNodesForIdealPosition(boost::shared_ptr<NodeGui> node,bool autoCo
                      it != outputsConnectedToSelectedNode.end(); ++it) {
                     if (it->first->getParentMultiInstanceName().empty()) {
                         bool ok = proj->disconnectNodes(selectedNodeInternal.get(), it->first);
-                        assert(ok);
-                        
-                        ignore_result(proj->connectNodes(it->second, createdNodeInternal, it->first));
+                        if (ok) {
+                            ignore_result(proj->connectNodes(it->second, createdNodeInternal, it->first));
+                        }
                         //assert(ok); Might not be ok if the disconnectNodes() action above was queued
                     }
                 }
@@ -1832,9 +1835,10 @@ NodeGraph::mouseMoveEvent(QMouseEvent* e)
                 newNodesCenter.ry() += newNodePos.y();
                 
             }
-            if (!nodesToMove.empty()) {
-                newNodesCenter.rx() /= nodesToMove.size();
-                newNodesCenter.ry() /= nodesToMove.size();
+            size_t c = nodesToMove.size();
+            if (c) {
+                newNodesCenter.rx() /= c;
+                newNodesCenter.ry() /= c;
             }
             
             scrollViewIfNeeded(newNodesCenter);
@@ -2189,6 +2193,42 @@ NodeGraph::mouseDoubleClickEvent(QMouseEvent* e)
             node->setVisibleSettingsPanel(true);
             if (node->getSettingPanel()) {
                 _imp->_gui->putSettingsPanelFirst( node->getSettingPanel() );
+            } else {
+                ViewerInstance* isViewer = dynamic_cast<ViewerInstance*>(node->getNode()->getLiveInstance());
+                if (isViewer) {
+                    ViewerGL* viewer = dynamic_cast<ViewerGL*>(isViewer->getUiContext());
+                    assert(viewer);
+                    ViewerTab* tab = viewer->getViewerTab();
+                    assert(tab);
+                    
+                    TabWidget* foundTab = 0;
+                    QWidget* parent = tab->parentWidget();
+                    while (parent) {
+                        foundTab = dynamic_cast<TabWidget*>(parent);
+                        if (foundTab) {
+                            break;
+                        }
+                        parent = parent->parentWidget();
+                    }
+                    if (foundTab) {
+                        foundTab->setCurrentWidget(tab);
+                    } else {
+                        
+                        //try to find a floating window
+                        FloatingWidget* floating = 0;
+                        parent = tab->parentWidget();
+                        while (parent) {
+                            floating = dynamic_cast<FloatingWidget*>(parent);
+                            if (floating) {
+                                break;
+                            }
+                            parent = parent->parentWidget();
+                        }
+                        if (floating) {
+                            floating->activateWindow();
+                        }
+                    }
+                }
             }
         }
         if ( !node->wasBeginEditCalled() ) {
@@ -4205,11 +4245,23 @@ NodeGraph::refreshNodesKnobsAtTime(SequenceTime time)
     }
 }
 
+void
+NodeGraph::onTimelineTimeAboutToChange()
+{
+    assert(QThread::currentThread() == qApp->thread());
+    _imp->wasLaskUserSeekDuringPlayback = false;
+    const std::list<ViewerTab*>& viewers = _imp->_gui->getViewersList();
+    for (std::list<ViewerTab*>::const_iterator it = viewers.begin(); it != viewers.end(); ++it) {
+        RenderEngine* engine = (*it)->getInternalNode()->getRenderEngine();
+        _imp->wasLaskUserSeekDuringPlayback |= engine->abortRendering(true);
+    }
+}
 
 void
 NodeGraph::onTimeChanged(SequenceTime time,
                          int reason)
 {
+    assert(QThread::currentThread() == qApp->thread());
     std::vector<ViewerInstance* > viewers;
 
     if (!_imp->_gui) {
@@ -4232,10 +4284,20 @@ NodeGraph::onTimeChanged(SequenceTime time,
     }
     ViewerInstance* leadViewer = getGui()->getApp()->getLastViewerUsingTimeline();
 
+    bool isUserEdited = reason == eTimelineChangeReasonUserSeek ||
+    reason == eTimelineChangeReasonDopeSheetEditorSeek ||
+    reason == eTimelineChangeReasonCurveEditorSeek;
+    
+    bool startPlayback = isUserEdited && _imp->wasLaskUserSeekDuringPlayback;
+    
     ///Syncrhronize viewers
     for (U32 i = 0; i < viewers.size(); ++i) {
-        if ( (viewers[i] != leadViewer) || (reason == eTimelineChangeReasonUserSeek) ) {
-            viewers[i]->renderCurrentFrame(reason != eTimelineChangeReasonPlaybackSeek);
+        if (!startPlayback) {
+            if (viewers[i] != leadViewer || isUserEdited) {
+                viewers[i]->renderCurrentFrame(reason != eTimelineChangeReasonPlaybackSeek);
+            }
+        } else {
+            viewers[i]->renderFromCurrentFrameUsingCurrentDirection();
         }
     }
 }

@@ -2261,8 +2261,8 @@ UrlModel::removeRowIndex(const QModelIndex& index)
 }
 
 
-FavoriteItemDelegate::FavoriteItemDelegate(QFileSystemModel *model)
-: QStyledItemDelegate(),_model(model)
+FavoriteItemDelegate::FavoriteItemDelegate()
+: QStyledItemDelegate()
 {
     
 
@@ -2379,7 +2379,7 @@ FavoriteView::setModelAndUrls(QFileSystemModel *model,
     urlModel = new UrlModel(envVars,this);
     urlModel->setFileSystemModel(model);
     assert(!_itemDelegate);
-    _itemDelegate = new FavoriteItemDelegate(model);
+    _itemDelegate = new FavoriteItemDelegate();
     setItemDelegate(_itemDelegate);
     setModel(urlModel);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -2986,7 +2986,11 @@ SequenceFileDialog::refreshPreviewAfterSelectionChange()
         }
         _preview->viewerNode->getNode()->connectInput(reader->getNode(), 0);
         
-        
+        double firstFrame,lastFrame;
+        reader->getNode()->getLiveInstance()->getFrameRange_public(reader->getNode()->getHashValue(), &firstFrame, &lastFrame);
+        _preview->viewerUI->setTimelineBounds(firstFrame, lastFrame);
+        _preview->viewerUI->centerOn(firstFrame,lastFrame);
+
     }
     _preview->viewerUI->getInternalNode()->renderCurrentFrame(false);
 }

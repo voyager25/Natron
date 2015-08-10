@@ -3028,19 +3028,13 @@ OfxParametricInstance::OfxParametricInstance(OfxEffectInstance* node,
     }
 
     QObject::connect( knob.get(),SIGNAL( mustInitializeOverlayInteract(OverlaySupport*) ),this,SLOT( initializeInteract(OverlaySupport*) ) );
-    QObject::connect( knob.get(), SIGNAL( mustResetToDefault(QVector<int>) ), this, SLOT( onResetToDefault(QVector<int>) ) );
     setDisplayRange();
 }
 
 void
-OfxParametricInstance::onResetToDefault(const QVector<int> & dimensions)
+OfxParametricInstance::onCurvesDefaultInitialized()
 {
-    for (int i = 0; i < dimensions.size(); ++i) {
-        Natron::StatusEnum st = _knob.lock()->deleteAllControlPoints( dimensions.at(i) );
-        assert(st == Natron::eStatusOK);
-        (void)st;
-        defaultInitializeFromDescriptor(dimensions.at(i),_descriptor);
-    }
+    _knob.lock()->setDefaultCurvesFromCurves();
 }
 
 void

@@ -18,11 +18,13 @@
 #include <fstream>
 #include <sstream>
 
-#if defined(Q_OS_UNIX)
+#include "Global/Macros.h"
+
+#if defined(__NATRON_UNIX__)
 #include <sys/signal.h>
 #endif
 
-#include <QApplication>
+#include <QCoreApplication>
 
 #include "Gui/GuiApplicationManager.h"
 
@@ -34,7 +36,7 @@ main(int argc,
      char *argv[])
 {
     CLArgs::printBackGroundWelcomeMessage();
-    
+
     CLArgs args(argc,argv,false);
     if (args.getError() > 0) {
         return 1;
@@ -70,7 +72,7 @@ main(int argc,
 void
 setShutDownSignal(int signalId)
 {
-#if defined(Q_OS_UNIX)
+#if defined(__NATRON_UNIX__)
     struct sigaction sa;
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);

@@ -950,6 +950,7 @@ OfxEffectInstance::onInputChanged(int inputNo)
                                              0, //texture index
                                              getApp()->getTimeLine().get(),
                                              NodePtr(),
+                                             false,
                                              false);
     
     EffectPointerThreadProperty_RAII propHolder_raii(this);
@@ -2096,6 +2097,7 @@ OfxEffectInstance::render(const RenderActionArgs& args)
                                      args.mappedScale,
                                      args.isSequentialRender,
                                      args.isRenderResponseToUserInteraction,
+                                     args.draftMode,
                                      args.view,
                                      viewsCount,
                                      ofxPlanes);

@@ -85,8 +85,11 @@ RotoSmear::getOutputPremultiplication() const
 Natron::StatusEnum
 RotoSmear::getRegionOfDefinition(U64 hash,double time, const RenderScale & scale, int view, RectD* rod)
 {
-    (void)EffectInstance::getRegionOfDefinition(hash, time, scale, view, rod);
-    
+    Natron::StatusEnum st = EffectInstance::getRegionOfDefinition(hash, time, scale, view, rod);
+    if (st != eStatusOK) {
+        rod->x1 = rod->y1 = rod->x2 = rod->y2 = 0.;
+    }
+
     RectD maskRod;
     boost::shared_ptr<Node> node = getNode();
     node->getPaintStrokeRoD(time, &maskRod);
@@ -180,7 +183,6 @@ static void renderSmearDot(boost::shared_ptr<RotoStrokeItem>& stroke,
         
         float* dstPixels = (float*)wacc.pixelAt(nextDotBounds.x1, y);
         const float* maskPixels = (const float*)mracc.pixelAt(nextDotBounds.x1, y);
-        const float* srcPixels = (const float*)tmpAcc.pixelAt(prevDotBounds.x1, yPrev);
         assert(dstPixels && maskPixels);
         
         int xPrev = prevDotBounds.x1;
@@ -189,15 +191,14 @@ static void renderSmearDot(boost::shared_ptr<RotoStrokeItem>& stroke,
              dstPixels += nComps,
              ++maskPixels) {
             
-            
+            const float* srcPixels = (const float*)tmpAcc.pixelAt(xPrev, yPrev);
+
             if (srcPixels) {
                 for (int k = 0; k < nComps; ++k) {
                     dstPixels[k] = srcPixels[k] * *maskPixels + dstPixels[k] * (1. - *maskPixels);
                 }
                 
-                if (srcPixels) {
-                    srcPixels += nComps;
-                }
+              
             }
             
         }

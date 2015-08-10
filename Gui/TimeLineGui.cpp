@@ -103,6 +103,7 @@ struct TimelineGuiPrivate
 {
     TimeLineGui *parent;
     ViewerInstance* viewer;
+    ViewerTab* viewerTab;
     boost::shared_ptr<TimeLine> timeline; //ptr to the internal timeline
     Gui* gui; //< ptr to the gui
     bool alphaCursor; // should cursor be drawn semi-transparant
@@ -122,9 +123,11 @@ struct TimelineGuiPrivate
     
     TimelineGuiPrivate(TimeLineGui *qq,
                        ViewerInstance* viewer,
-                       Gui* gui)
-        : parent(qq),
-          viewer(viewer)
+                       Gui* gui,
+                       ViewerTab* viewerTab)
+        : parent(qq)
+        , viewer(viewer)
+        , viewerTab(viewerTab)
         , timeline()
         , gui(gui)
         , alphaCursor(false)
@@ -168,10 +171,9 @@ struct TimelineGuiPrivate
 TimeLineGui::TimeLineGui(ViewerInstance* viewer,
                          boost::shared_ptr<TimeLine> timeline,
                          Gui* gui,
-                         QWidget* parent,
-                         const QGLWidget *shareWidget)
-    : QGLWidget(parent,shareWidget)
-    , _imp( new TimelineGuiPrivate(this, viewer,gui) )
+                         ViewerTab* viewerTab)
+    : QGLWidget(viewerTab)
+    , _imp( new TimelineGuiPrivate(this, viewer,gui, viewerTab) )
 {
     setTimeline(timeline);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
@@ -313,7 +315,14 @@ TimeLineGui::paintGL()
 
         /// change the backgroud color of the portion of the timeline where images are lying
         double firstFrame,lastFrame;
-        _imp->gui->getApp()->getFrameRange(&firstFrame, &lastFrame);
+        if (!_imp->viewerTab->isFileDialogViewer()) {
+            _imp->gui->getApp()->getFrameRange(&firstFrame, &lastFrame);
+        } else {
+            int f,l;
+            _imp->viewerTab->getTimelineBounds(&f, &l);
+            firstFrame = (double)f;
+            lastFrame = (double)l;
+        }
         QPointF firstFrameWidgetPos = toWidgetCoordinates(firstFrame,0);
         QPointF lastFrameWidgetPos = toWidgetCoordinates(lastFrame,0);
 
@@ -695,7 +704,7 @@ TimeLineGui::mouseMoveEvent(QMouseEvent* e)
     bool onEditingFinishedOnly = appPTR->getCurrentSettings()->getRenderOnEditingFinishedOnly();
     if (_imp->state == eTimelineStateDraggingCursor && !onEditingFinishedOnly) {
         if ( tseq != _imp->timeline->currentFrame() ) {
-            _imp->gui->setUserScrubbingSlider(true);
+            _imp->gui->setDraftRenderEnabled(true);
             _imp->gui->getApp()->setLastViewerUsingTimeline(_imp->viewer->getNode());
             Q_EMIT frameChanged(tseq);
         }
@@ -759,8 +768,8 @@ TimeLineGui::mouseReleaseEvent(QMouseEvent* e)
     if (_imp->state == eTimelineStateDraggingCursor) {
         
         bool wasScrubbing = false;
-        if (_imp->gui->isUserScrubbingSlider()) {
-            _imp->gui->setUserScrubbingSlider(false);
+        if (_imp->gui->isDraftRenderEnabled()) {
+            _imp->gui->setDraftRenderEnabled(false);
             wasScrubbing = true;
         }
         _imp->gui->refreshAllPreviews();
@@ -1055,6 +1064,10 @@ TimeLineGui::clearCachedFrames()
 void
 TimeLineGui::onProjectFrameRangeChanged(int left,int right)
 {
+    assert(_imp->viewerTab);
+    if (_imp->viewerTab->isFileDialogViewer()) {
+        return;
+    }
     if (!isFrameRangeEdited()) {
         setBoundariesInternal(left, right, true);
         setFrameRangeEdited(false);
