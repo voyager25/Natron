@@ -5217,7 +5217,7 @@ EffectInstance::newMemoryInstance(size_t nBytes)
     bool wasntLocked = ret->alloc(nBytes);
 
     assert(wasntLocked);
-    (void)wasntLocked;
+    Q_UNUSED(wasntLocked);
 
     return ret;
 }
@@ -6858,7 +6858,7 @@ EffectInstance::getNearestNonIdentity(double time)
     Natron::StatusEnum stat = getRegionOfDefinition_public(hash, time, scale, 0, &rod, &isProjectFormat);
     
     ///Ignore the result of getRoD if it failed
-    (void)stat;
+    Q_UNUSED(stat);
     
     double inputTimeIdentity;
     int inputNbIdentity;

@@ -2436,8 +2436,8 @@ ViewerGL::transferBufferFromRAMtoGPU(const unsigned char* ramBuffer,
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
     assert( QGLContext::currentContext() == context() );
-    (void)glGetError();
-    
+    GLenum e = glGetError();
+    Q_UNUSED(e);
     
     GLint currentBoundPBO = 0;
     glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &currentBoundPBO);
@@ -2867,7 +2867,7 @@ ViewerGL::mousePressEvent(QMouseEvent* e)
         }
         overlaysCaught = true;
     }
-    (void)overlaysCaught;
+    Q_UNUSED(overlaysCaught);
 
     if (mustRedraw) {
         update(); // Does not need to be instantaneous, can wait event loop
@@ -5393,7 +5393,7 @@ ViewerGL::currentTimeForEvent(QInputEvent* e)
         return (double)e->timestamp() / 1000000;
     }
 #else
-    (void)e;
+    Q_UNUSED(e);
 #endif
     // Qt 4 has no event timestamp, use gettimeofday (defined in Timer.cpp for windows)
     struct timeval now;

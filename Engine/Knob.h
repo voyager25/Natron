@@ -1284,12 +1284,12 @@ protected:
      **/
     virtual void cloneExtraData(KnobI* /*other*/,int dimension = -1)
     {
-        (void)dimension;
+        Q_UNUSED(dimension);
     }
 
     virtual bool cloneExtraDataAndCheckIfChanged(KnobI* /*other*/,int dimension = -1)
     {
-        (void)dimension;
+        Q_UNUSED(dimension);
         return false;
     }
     
@@ -1298,7 +1298,7 @@ protected:
                                 const RangeD* /*range*/,
                                 int dimension = -1)
     {
-        (void)dimension;
+        Q_UNUSED(dimension);
     }
     
     void cloneExpressions(KnobI* other,int dimension = -1);
@@ -2134,7 +2134,7 @@ protected:
      **/
     virtual void beginKnobsValuesChanged(Natron::ValueChangedReasonEnum reason)
     {
-        (void)reason;
+        Q_UNUSED(reason);
     }
 
     /**
@@ -2144,7 +2144,7 @@ protected:
      **/
     virtual void endKnobsValuesChanged(Natron::ValueChangedReasonEnum reason)
     {
-        (void)reason;
+        Q_UNUSED(reason);
     }
 
     /**

@@ -941,7 +941,7 @@ Node::declareRotoPythonField()
     }
     bool ok = Natron::interpretPythonScript(script, &err, 0);
     assert(ok);
-    (void)ok;
+    Q_UNUSED(ok);
     _imp->rotoContext->declarePythonFields();
 }
 
@@ -3917,7 +3917,7 @@ Node::activate(const std::list< Node* > & outputsToRestore,
             if (outputHasInput) {
                 bool ok = getApp()->getProject()->disconnectNodes(outputHasInput.get(), it->first);
                 assert(ok);
-                (void)ok;
+                Q_UNUSED(ok);
             }
             
             ///and connect the output to this node
@@ -5527,7 +5527,7 @@ Node::getUserComponents(int inputNb,bool* processChannels, bool* isAll,Natron::I
     if (chanIndex != -1) {
         
         *isAll = false;
-        (void)chanIndex;
+        Q_UNUSED(chanIndex);
         processChannels[0] = true;
         processChannels[1] = true;
         processChannels[2] = true;
@@ -6305,7 +6305,7 @@ Node::declareNodeVariableToPython(const std::string& nodeName)
     bool alreadyDefined = false;
     PyObject* nodeObj = getAttrRecursive(varName, mainModule, &alreadyDefined);
     assert(nodeObj);
-    (void)nodeObj;
+    Q_UNUSED(nodeObj);
 
     if (!alreadyDefined) {
         std::string script = varName + " = " + appID + ".getNode(\"";
@@ -6388,7 +6388,7 @@ Node::declarePythonFields()
     std::string nodeFullName = appID + "." + fullName;
     PyObject* nodeObj = getAttrRecursive(nodeFullName, getMainModule(), &alreadyDefined);
     assert(nodeObj);
-    (void)nodeObj;
+    Q_UNUSED(nodeObj);
     if (!alreadyDefined) {
         qDebug() << QString("declarePythonFields(): attribute ") + nodeFullName.c_str() + " is not defined";
         throw std::logic_error(std::string("declarePythonFields(): attribute ") + nodeFullName + " is not defined");
@@ -6419,7 +6419,7 @@ Node::removeParameterFromPython(const std::string& parameterName)
     
     PyObject* nodeObj = getAttrRecursive(nodeFullName, getMainModule(), &alreadyDefined);
     assert(nodeObj);
-    (void)nodeObj;
+    Q_UNUSED(nodeObj);
     if (!alreadyDefined) {
         qDebug() << QString("declarePythonFields(): attribute ") + nodeFullName.c_str() + " is not defined";
         throw std::logic_error(std::string("declarePythonFields(): attribute ") + nodeFullName + " is not defined");
