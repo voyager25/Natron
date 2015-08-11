@@ -858,7 +858,8 @@ TrackMarker::getMarkerImage(int time) const
                                              0, //texture index
                                              node->getApp()->getTimeLine().get(),
                                              NodePtr(),
-                                             true);
+                                             true, //isAnalysis
+                                             false); //draftMode
     
     RenderScale scale;
     scale.x = scale.y = 1.;
@@ -2352,7 +2353,8 @@ FrameAccessorImpl::GetImage(int /*clip*/,
                                              0, //texture index
                                              node->getApp()->getTimeLine().get(),
                                              NodePtr(),
-                                             true);
+                                             true, //isAnalysis
+                                             false); //draftMode
 
     
     EffectInstance::RenderRoIArgs args(frame,
