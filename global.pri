@@ -45,12 +45,6 @@ unix:LIBS += $$QMAKE_LIBS_DYNLOAD
   QMAKE_CXXFLAGS += -ftemplate-depth-1024
   QMAKE_CXXFLAGS_WARN_ON += -Wextra
   GCCVer = $$system($$QMAKE_CXX --version)
-  contains(GCCVer,[0-3]\\.[0-9]+.*) {
-  } else {
-    contains(GCCVer,4\\.7.*) {
-      QMAKE_CXXFLAGS += -Wno-c++11-extensions
-    }
-  }
   c++11 {
     # check for at least version 4.7
     contains(GCCVer,[0-3]\\.[0-9]+.*) {
@@ -66,6 +60,13 @@ unix:LIBS += $$QMAKE_LIBS_DYNLOAD
         }
       }
     }
+  } else {
+    contains(GCCVer,[0-3]\\.[0-9]+.*) {
+    } else {
+      contains(GCCVer,4\\.7.*) {
+        QMAKE_CXXFLAGS += -Wno-c++11-extensions
+      }
+    }
   }
 }
 
@@ -74,26 +75,64 @@ macx {
   # (else qmake generates an old pbproj on Snow Leopard)
   QMAKE_PBUILDER_VERSION = 46
 
+  # We're usually building using homebrew or macports Qt, so the deployment version should be the
+  # build OS
+  OSVer = $$system(uname -r)
+  contains(OSVer,9\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.4
+  }
+  contains(OSVer,10\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.5
+  }
+  contains(OSVer,11\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.6
+  }
+  contains(OSVer,12\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.7
+  }
+  contains(OSVer,13\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.8
+  }
+  contains(OSVer,13\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.9
+  }
+  contains(OSVer,14\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.10
+  }
+  contains(OSVer,15\\.[0-9]+\\.[0-9]+) {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.11
+  }
   QMAKE_MACOSX_DEPLOYMENT_VERSION = $$split(QMAKE_MACOSX_DEPLOYMENT_TARGET, ".")
   QMAKE_MACOSX_DEPLOYMENT_MAJOR_VERSION = $$first(QMAKE_MACOSX_DEPLOYMENT_VERSION)
   QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION = $$last(QMAKE_MACOSX_DEPLOYMENT_VERSION)
   universal {
     message("Compiling for universal OSX $${QMAKE_MACOSX_DEPLOYMENT_MAJOR_VERSION}.$$QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION")
     contains(QMAKE_MACOSX_DEPLOYMENT_MAJOR_VERSION, 10) {
-      contains(QMAKE_MACOSX_DEPLOYMENT_TARGET, 4)|contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 5) {
+      contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 4)|contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 5) {
         # OSX 10.4 (Tiger) and 10.5 (Leopard) are x86/ppc
         message("Compiling for universal ppc/i386")
         CONFIG += x86 ppc
+      } else {
+        contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 6) {
+          message("Compiling for universal i386/x86_64")
+          # OSX 10.6 (Snow Leopard) may run on Intel 32 or 64 bits architectures
+          CONFIG += x86 x86_64
+        } else {
+          # later OSX instances only run on x86_64, universal builds are useless
+          # (unless a later OSX supports ARM)
+	  # and the default C++ dialect is c++11 from Xcode 4.6 (which runs on OS X 10.7)
+	  CONFIG += c++11
+	}
       }
-      contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 6) {
-        message("Compiling for universal i386/x86_64")
-        # OSX 10.6 (Snow Leopard) may run on Intel 32 or 64 bits architectures
-        CONFIG += x86 x86_64
-      }
-      # later OSX instances only run on x86_64, universal builds are useless
-      # (unless a later OSX supports ARM)
     }
   } 
+  # The default C++ dialect is c++11 from Xcode 4.6 (which runs on OS X 10.7)
+  contains(QMAKE_MACOSX_DEPLOYMENT_MAJOR_VERSION, 10) {
+    contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 4)|contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 5)|contains(QMAKE_MACOSX_DEPLOYMENT_MINOR_VERSION, 6) {
+    } else {
+      CONFIG += c++11
+    }
+  }
 
   #link against the CoreFoundation framework for the StandardPaths functionnality
   LIBS += -framework CoreServices
@@ -212,10 +251,12 @@ unix {
 }
 
 *clang* {
-  QMAKE_CXXFLAGS += -ftemplate-depth-1024 -Wno-c++11-extensions
+  QMAKE_CXXFLAGS += -ftemplate-depth-1024
   QMAKE_CXXFLAGS_WARN_ON += -Wextra
   c++11 {
     QMAKE_CXXFLAGS += -std=c++11
+  } else {
+    QMAKE_CXXFLAGS += -Wno-c++11-extensions
   }
 }
 
