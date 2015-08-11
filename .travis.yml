@@ -66,8 +66,7 @@ cache:
 before_install:
    - date -u
    - uname -a
-   # Unfortunately, libmv builds break the travis 3GB memory limit
-   #- export J='-j2'
+   - export J='-j2'
 
 install:
   - . tools/travis/coverity_env.sh

@@ -28,9 +28,15 @@ CMAKE_PREFIX_PATH=$(echo /usr/local/Cellar/*/* | sed 's/ /;/g')
 git submodule update --init --recursive
 
 if [[ ${TRAVIS_OS_NAME} == "linux" ]]; then
-    if [ "$CC" = "gcc" ]; then qmake -r CONFIG+="coverage debug"; else qmake -r -spec unsupported/linux-clang CONFIG+="debug"; fi
-    make $J
-    if [ "$CC" = "gcc" ]; then cd Tests; env OFX_PLUGIN_PATH=Plugins ./Tests; cd ..; fi
+    if [ "$CC" = "gcc" ]; then
+	qmake -r CONFIG+="coverage debug"
+        # Unfortunately, libmv builds break the travis 3GB memory limit with gcc
+	make # $J
+	(cd Tests; env OFX_PLUGIN_PATH=Plugins ./Tests)
+    else
+	qmake -r -spec unsupported/linux-clang CONFIG+="debug"
+	make $J
+    fi
     
 elif [[ ${TRAVIS_OS_NAME} == "osx" ]]; then
     # on OSX, the tests are done on the clang configuration
