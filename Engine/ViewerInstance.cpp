@@ -1298,7 +1298,8 @@ ViewerInstance::renderViewer_internal(int view,
         // it comes from Natron itself. All exceptions from plugins are already caught
         // by the HostSupport library.
         // We catch it  and rethrow it just to notify the rendering is done.
-        
+        ImagePtr image;
+
         try {
             
             ImageList planes;
@@ -1314,9 +1315,10 @@ ViewerInstance::renderViewer_internal(int view,
                                                                                 imageDepth, this),&planes);
             assert(planes.size() == 0 || planes.size() == 1);
             if (!planes.empty() && retCode == EffectInstance::eRenderRoIRetCodeOk) {
-                inArgs.params->image = planes.front();
+                image = planes.front();
+                inArgs.params->tiles.push_back(image);
             }
-            if (!inArgs.params->image) {
+            if (!image) {
                 if (inArgs.params->cachedFrame) {
                     inArgs.params->cachedFrame->setAborted(true);
                     appPTR->removeFromViewerCache(inArgs.params->cachedFrame);
@@ -1367,13 +1369,13 @@ ViewerInstance::renderViewer_internal(int view,
         abortCheck(inArgs.activeInputToRender);
  
         
-        ViewerColorSpaceEnum srcColorSpace = getApp()->getDefaultColorSpaceForBitDepth( inArgs.params->image->getBitDepth() );
+        ViewerColorSpaceEnum srcColorSpace = getApp()->getDefaultColorSpaceForBitDepth( image->getBitDepth() );
         
-        assert(alphaChannelIndex < (int)inArgs.params->image->getComponentsCount());
+        assert(alphaChannelIndex < (int)image->getComponentsCount());
         
         //Make sure the viewer does not render something outside the bounds
         RectI viewerRenderRoI;
-        splitRoi[rectIndex].intersect(inArgs.params->image->getBounds(), &viewerRenderRoI);
+        splitRoi[rectIndex].intersect(image->getBounds(), &viewerRenderRoI);
         
         //If we are painting, only render the portion needed
         if (!lastPaintBboxPixel.isNull()) {
@@ -1384,7 +1386,7 @@ ViewerInstance::renderViewer_internal(int view,
         if (singleThreaded) {
             if (autoContrast) {
                 double vmin, vmax;
-                std::pair<double,double> vMinMax = findAutoContrastVminVmax(inArgs.params->image, channels, viewerRenderRoI);
+                std::pair<double,double> vMinMax = findAutoContrastVminVmax(image, channels, viewerRenderRoI);
                 vmin = vMinMax.first;
                 vmax = vMinMax.second;
                 
@@ -1397,7 +1399,7 @@ ViewerInstance::renderViewer_internal(int view,
                 inArgs.params->offset = -vmin / ( vmax - vmin);
             }
             
-            const RenderViewerArgs args(inArgs.params->image,
+            const RenderViewerArgs args(image,
                                         inArgs.params->textureRect,
                                         channels,
                                         inArgs.params->srcPremult,
@@ -1435,7 +1437,7 @@ ViewerInstance::renderViewer_internal(int view,
                     
                     QFuture<std::pair<double,double> > future = QtConcurrent::mapped( splitRects,
                                                                                      boost::bind(findAutoContrastVminVmax,
-                                                                                                 inArgs.params->image,
+                                                                                                 image,
                                                                                                  channels,
                                                                                                  _1) );
                     future.waitForFinished();
@@ -1450,7 +1452,7 @@ ViewerInstance::renderViewer_internal(int view,
                         }
                     }
                 } else { //!runInCurrentThread
-                    std::pair<double,double> vMinMax = findAutoContrastVminVmax(inArgs.params->image, channels, viewerRenderRoI);
+                    std::pair<double,double> vMinMax = findAutoContrastVminVmax(image, channels, viewerRenderRoI);
                     vmin = vMinMax.first;
                     vmax = vMinMax.second;
                 }
@@ -1463,7 +1465,7 @@ ViewerInstance::renderViewer_internal(int view,
                 inArgs.params->offset =  -vmin / (vmax - vmin);
             }
             
-            const RenderViewerArgs args(inArgs.params->image,
+            const RenderViewerArgs args(image,
                                         inArgs.params->textureRect,
                                         channels,
                                         inArgs.params->srcPremult,
@@ -1498,7 +1500,9 @@ ViewerInstance::renderViewer_internal(int view,
                 }
             }
         } // if (singleThreaded)
-        
+        if (inArgs.params->cachedFrame && image) {
+            inArgs.params->cachedFrame->addOriginalTile(image);
+        }
     } // for (std::vector<RectI>::iterator rect = splitRoi.begin(); rect != splitRoi.end(), ++rect) {
     
     /*
@@ -1525,9 +1529,7 @@ ViewerInstance::renderViewer_internal(int view,
         }
     }
     
-    if (inArgs.params->cachedFrame) {
-        inArgs.params->cachedFrame->setOriginalImage(inArgs.params->image);
-    }
+   
     
     {
         QMutexLocker k(&_imp->lastRenderParamsMutex);
@@ -2300,23 +2302,23 @@ ViewerInstance::ViewerInstancePrivate::updateViewer(boost::shared_ptr<UpdateView
     }
     if (doUpdate) {
         
-        ImagePtr image;
+        ImageList tiles;
         Natron::ImageBitDepthEnum depth;
         if (params->cachedFrame) {
             depth = (Natron::ImageBitDepthEnum)params->cachedFrame->getKey().getBitDepth();
-            if (params->image) {
-                image = params->image;
+            if (!params->tiles.empty()) {
+                tiles = params->tiles;
             } else {
-                image = params->cachedFrame->getOriginalImage();
+                params->cachedFrame->getOriginalTiles(&tiles);
             }
         } else {
-            assert(params->image);
-            image = params->image;
-            depth = params->image->getBitDepth();
+            assert(!params->tiles.empty());
+            tiles = params->tiles;
+            depth = tiles.front()->getBitDepth();
         }
         
         uiContext->transferBufferFromRAMtoGPU(params->ramBuffer,
-                                              image,
+                                              tiles,
                                               depth,
                                               params->time,
                                               params->rod,
