@@ -229,6 +229,8 @@ public:
     
     void setIsTracking(bool tracking);
     bool isTracking() const;
+
+    void markAllOnRendersAsAborted();
     
 public Q_SLOTS:
     

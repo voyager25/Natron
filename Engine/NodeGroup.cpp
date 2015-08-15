@@ -837,10 +837,9 @@ NodeCollection::checkIfNodeNameExists(const std::string & n,const Natron::Node* 
     return false;
 }
 
-void
-NodeCollection::recomputeFrameRangeForAllReaders(int* firstFrame,int* lastFrame)
+static void recomputeFrameRangeForAllReadersInternal(NodeCollection* group, int* firstFrame,int* lastFrame, bool setFrameRange)
 {
-    NodeList nodes = getNodes();
+    NodeList nodes = group->getNodes();
     for (NodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
         if ((*it)->isActivated()) {
             
@@ -848,19 +847,25 @@ NodeCollection::recomputeFrameRangeForAllReaders(int* firstFrame,int* lastFrame)
                 double thisFirst,thislast;
                 (*it)->getLiveInstance()->getFrameRange_public((*it)->getHashValue(), &thisFirst, &thislast);
                 if (thisFirst != INT_MIN) {
-                    *firstFrame = std::min(*firstFrame, (int)thisFirst);
+                    *firstFrame = setFrameRange ? thisFirst : std::min(*firstFrame, (int)thisFirst);
                 }
                 if (thislast != INT_MAX) {
-                    *lastFrame = std::max(*lastFrame, (int)thislast);
+                    *lastFrame = setFrameRange ? thislast : std::max(*lastFrame, (int)thislast);
                 }
             } else {
                 NodeGroup* isGrp = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
                 if (isGrp) {
-                    recomputeFrameRangeForAllReaders(firstFrame, lastFrame);
+                    recomputeFrameRangeForAllReadersInternal(isGrp, firstFrame, lastFrame, false);
                 }
             }
         }
     }
+}
+
+void
+NodeCollection::recomputeFrameRangeForAllReaders(int* firstFrame,int* lastFrame)
+{
+    recomputeFrameRangeForAllReadersInternal(this,firstFrame,lastFrame,true);
 }
 
 void
@@ -1071,6 +1076,7 @@ struct NodeGroupPrivate
     std::list<boost::weak_ptr<Node> > outputs;
     bool isDeactivatingGroup;
     bool isActivatingGroup;
+    bool isEditable;
     
     boost::shared_ptr<Button_Knob> exportAsTemplate;
     
@@ -1080,6 +1086,7 @@ struct NodeGroupPrivate
     , outputs()
     , isDeactivatingGroup(false)
     , isActivatingGroup(false)
+    , isEditable(true)
     , exportAsTemplate()
     {
         
@@ -1439,6 +1446,21 @@ NodeGroup::knobChanged(KnobI* k,Natron::ValueChangedReasonEnum /*reason*/,
             gui_i->exportGroupAsPythonScript();
         }
     }
+}
+
+void
+NodeGroup::setSubGraphEditable(bool editable)
+{
+    assert(QThread::currentThread() == qApp->thread());
+    _imp->isEditable = editable;
+    Q_EMIT graphEditableChanged(editable);
+}
+
+bool
+NodeGroup::isSubGraphEditable() const
+{
+    assert(QThread::currentThread() == qApp->thread());
+    return _imp->isEditable;
 }
 
 
