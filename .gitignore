@@ -2,8 +2,10 @@
 *.com
 *.DS_Store
 *_moc.cpp
+*_resource.rc
 moc*.cpp
 *moc
+*MINGW-packages*
 build
 build32
 build64
@@ -13,7 +15,9 @@ DerivedData
 Natron.xcodeproj
 NatronRenderer.xcodeproj
 NatronCrashReporter.xcodeproj
+BreakpadClient.xcodeproj
 CrashReporter/NatronCrashReporter
+NatronRendererCrashReporter.xcodeproj
 Tests.xcodeproj
 HostSupport.xcodeproj
 LibMV.xcodeproj
@@ -217,3 +221,10 @@ libmv/LibMV.xcodeproj/qt_preprocess.mak
 libmv/LibMV.xcodeproj/qt_makeqmake.mak
 
 libmv/LibMV.xcodeproj/project.pbxproj
+*tmp*
+*commits-hash.sh*
+
+CrashReporterCLI/NatronRendererCrashReporter
+*repo.sh*
+*local.sh*
+OpenColorIO-Configs

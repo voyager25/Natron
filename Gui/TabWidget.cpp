@@ -1,18 +1,30 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "TabWidget.h"
+
+#include <stdexcept>
 
 #include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
@@ -25,36 +37,40 @@ CLANG_DIAG_OFF(deprecated)
 #include <QtCore/QMimeData>
 #include <QtGui/QDrag>
 #include <QDebug>
-CLANG_DIAG_OFF(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QtGui/QDragEnterEvent>
-CLANG_DIAG_ON(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 #include <QtGui/QDragLeaveEvent>
 #include <QtGui/QPaintEvent>
 #include <QScrollArea>
 #include <QSplitter>
 CLANG_DIAG_ON(deprecated)
 
-#include "Engine/ViewerInstance.h"
 #include "Engine/Project.h"
 #include "Engine/ScriptObject.h"
+#include "Engine/ViewerInstance.h"
 
+#include "Gui/ActionShortcuts.h"
 #include "Gui/Button.h"
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/Gui.h"
-#include "Gui/NodeGraph.h"
 #include "Gui/CurveEditor.h"
 #include "Gui/DopeSheetEditor.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/Histogram.h"
-#include "Gui/Splitter.h"
+#include "Gui/FloatingWidget.h"
+#include "Gui/Gui.h"
+#include "Gui/GuiAppInstance.h"
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/GuiDefines.h"
 #include "Gui/GuiMacros.h"
-#include "Gui/ActionShortcuts.h"
+#include "Gui/Histogram.h"
 #include "Gui/Menu.h"
-#include "Gui/ScriptEditor.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/PropertiesBinWrapper.h"
 #include "Gui/PythonPanels.h"
+#include "Gui/RegisteredTabs.h"
+#include "Gui/ScriptEditor.h"
+#include "Gui/Splitter.h"
 #include "Gui/Utils.h"
+#include "Gui/ViewerTab.h"
 
 #define LEFT_HAND_CORNER_BUTTON_TT "Manage the layouts for this pane"
 
@@ -246,7 +262,8 @@ TabWidget::TabWidget(Gui* gui,
 
 
     _imp->leftCornerButton = new Button(QIcon(pixL),"", _imp->header);
-    _imp->leftCornerButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE,NATRON_SMALL_BUTTON_SIZE);
+    _imp->leftCornerButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE, NATRON_SMALL_BUTTON_SIZE);
+    _imp->leftCornerButton->setIconSize(QSize(NATRON_SMALL_BUTTON_ICON_SIZE, NATRON_SMALL_BUTTON_ICON_SIZE));
     _imp->leftCornerButton->setToolTip( Natron::convertFromPlainText(tr(LEFT_HAND_CORNER_BUTTON_TT), Qt::WhiteSpaceNormal) );
     _imp->leftCornerButton->setFocusPolicy(Qt::NoFocus);
     _imp->headerLayout->addWidget(_imp->leftCornerButton);
@@ -260,7 +277,8 @@ TabWidget::TabWidget(Gui* gui,
     _imp->headerLayout->addWidget(_imp->tabBar);
     _imp->headerLayout->addStretch();
     _imp->floatButton = new Button(QIcon(pixM),"",_imp->header);
-    _imp->floatButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE,NATRON_SMALL_BUTTON_SIZE);
+    _imp->floatButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE, NATRON_SMALL_BUTTON_SIZE);
+    _imp->floatButton->setIconSize(QSize(NATRON_SMALL_BUTTON_ICON_SIZE, NATRON_SMALL_BUTTON_ICON_SIZE));
     _imp->floatButton->setToolTip( Natron::convertFromPlainText(tr("Float pane"), Qt::WhiteSpaceNormal) );
     _imp->floatButton->setEnabled(true);
     _imp->floatButton->setFocusPolicy(Qt::NoFocus);
@@ -268,7 +286,8 @@ TabWidget::TabWidget(Gui* gui,
     _imp->headerLayout->addWidget(_imp->floatButton);
 
     _imp->closeButton = new Button(QIcon(pixC),"",_imp->header);
-    _imp->closeButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE,NATRON_SMALL_BUTTON_SIZE);
+    _imp->closeButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE, NATRON_SMALL_BUTTON_SIZE);
+    _imp->closeButton->setIconSize(QSize(NATRON_SMALL_BUTTON_ICON_SIZE, NATRON_SMALL_BUTTON_ICON_SIZE));
     _imp->closeButton->setToolTip( Natron::convertFromPlainText(tr("Close pane"), Qt::WhiteSpaceNormal) );
     _imp->closeButton->setFocusPolicy(Qt::NoFocus);
     QObject::connect( _imp->closeButton, SIGNAL( clicked() ), this, SLOT( closePane() ) );
@@ -348,11 +367,11 @@ TabWidget::createMenu()
     //QFont f(appFont,appFontSize);
     //menu.setFont(f) ;
     QPixmap pixV,pixM,pixH,pixC,pixA;
-    appPTR->getIcon(NATRON_PIXMAP_TAB_WIDGET_SPLIT_VERTICALLY,&pixV);
-    appPTR->getIcon(NATRON_PIXMAP_TAB_WIDGET_SPLIT_HORIZONTALLY,&pixH);
-    appPTR->getIcon(NATRON_PIXMAP_MAXIMIZE_WIDGET,&pixM);
-    appPTR->getIcon(NATRON_PIXMAP_CLOSE_WIDGET,&pixC);
-    appPTR->getIcon(NATRON_PIXMAP_TAB_WIDGET_LAYOUT_BUTTON_ANCHOR,&pixA);
+    appPTR->getIcon(NATRON_PIXMAP_TAB_WIDGET_SPLIT_VERTICALLY,NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixV);
+    appPTR->getIcon(NATRON_PIXMAP_TAB_WIDGET_SPLIT_HORIZONTALLY,NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixH);
+    appPTR->getIcon(NATRON_PIXMAP_MAXIMIZE_WIDGET,NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixM);
+    appPTR->getIcon(NATRON_PIXMAP_CLOSE_WIDGET,NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixC);
+    appPTR->getIcon(NATRON_PIXMAP_TAB_WIDGET_LAYOUT_BUTTON_ANCHOR,NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixA);
     QAction* splitVerticallyAction = new QAction(QIcon(pixV),tr("Split vertical"),&menu);
     QObject::connect( splitVerticallyAction, SIGNAL( triggered() ), this, SLOT( onSplitVertically() ) );
     menu.addAction(splitVerticallyAction);
@@ -848,7 +867,7 @@ TabWidget::splitInternal(bool autoSave,
     assert(parentIsSplitter || parentIsFloating);
 
     /*We need to know the position in the container layout of the old tab widget*/
-    int oldIndexInParentSplitter;
+    int oldIndexInParentSplitter = -1;
     QList<int> oldSizeInParentSplitter;
     if (parentIsSplitter) {
         oldIndexInParentSplitter = parentIsSplitter->indexOf(this);
@@ -1197,7 +1216,31 @@ TabWidget::onCurrentTabDeleted()
 void
 TabWidget::paintEvent(QPaintEvent* e)
 {
+    
     QFrame::paintEvent(e);
+#ifdef DEBUG
+    // We should draw something indicating that this pane is the default pane for new viewers if it has no tabs, maybe a pixmap or something
+    bool mustDraw = false;
+    {
+        QMutexLocker k(&_imp->tabWidgetStateMutex);
+        mustDraw = _imp->tabs.empty() && _imp->isAnchor;
+    }
+    if (mustDraw) {
+        QPainter p(this);
+        QPen pen = p.pen();
+        pen.setColor(QColor(200,200,200));
+        p.setPen(pen);
+        QFont f = font();
+        f.setPointSize(50);
+        p.setFont(f);
+        QString text = tr("(Viewer Pane)");
+        QFontMetrics fm(f);
+        QPointF pos(width() / 2., height() / 2.);
+        pos.rx() -= (fm.width(text) / 2.);
+        pos.ry() -= (fm.height() / 2.);
+        p.drawText(pos, text);
+    }
+#endif
 }
 
 void
@@ -1382,9 +1425,18 @@ TabBar::makePixmapForDrag(int index)
         addTab(tabs[i].second, tabs[i].first);
     }
 
-
+    
     QImage tabBarImg = tabBarPixmap.toImage();
     QImage currentTabImg = currentTabPixmap.toImage();
+    
+#if QT_VERSION < 0x050000
+    ///Prevent a bug with grabWidget and retina display on Qt4
+    bool isHighDPI = _tabWidget->getGui()->isHighDPI();
+    if (isHighDPI) {
+        tabBarImg = tabBarImg.scaled(tabBarImg.width() / 2., tabBarImg.height() / 2.);
+        currentTabImg = currentTabImg.scaled(currentTabImg.width() / 2., currentTabImg.height() / 2.);
+    }
+#endif
 
     //now we just put together the 2 pixmaps and set it with mid transparancy
     QImage ret(currentTabImg.width(),currentTabImg.height() + tabBarImg.height(),QImage::Format_ARGB32_Premultiplied);
@@ -1438,7 +1490,8 @@ TabWidget::stopDragTab(const QPoint & globalPos)
         tryCloseFloatingPane();
     }
 
-    QWidget* draggedPanel = _imp->gui->stopDragPanel();
+    QSize draggedPanelSize;
+    QWidget* draggedPanel = _imp->gui->stopDragPanel(&draggedPanelSize);
     if (!draggedPanel) {
         return false;
     }
@@ -1515,6 +1568,7 @@ TabWidget::stopDragTab(const QPoint & globalPos)
         newTab->appendTab(draggedPanel,obj);
         floatingW->setWidget(newTab);
         floatingW->move(windowPos);
+        floatingW->resize(draggedPanelSize);
         _imp->gui->registerFloatingWindow(floatingW);
         _imp->gui->checkNumberOfNonFloatingPanes();
         
@@ -1617,9 +1671,13 @@ TabWidget::onShowHideTabBarActionTriggered()
 void
 TabWidget::setAsAnchor(bool anchor)
 {
+    bool mustUpdate = false;
     {
         QMutexLocker l(&_imp->tabWidgetStateMutex);
         _imp->isAnchor = anchor;
+        if (anchor && _imp->tabs.empty()) {
+            mustUpdate = true;
+        }
     }
     QPixmap pix;
 
@@ -1629,6 +1687,9 @@ TabWidget::setAsAnchor(bool anchor)
         appPTR->getIcon(Natron::NATRON_PIXMAP_TAB_WIDGET_LAYOUT_BUTTON, &pix);
     }
     _imp->leftCornerButton->setIcon( QIcon(pix) );
+    if (mustUpdate) {
+        update();
+    }
 }
 
 void
@@ -1900,6 +1961,9 @@ TabWidget::onTabScriptNameChanged(QWidget* tab,const std::string& oldName,const 
     _imp->gui->printAutoDeclaredVariable(script);
     bool ok = Natron::interpretPythonScript(script, &err, 0);
     assert(ok);
+    if (!ok) {
+        throw std::runtime_error("TabWidget::onTabScriptNameChanged: " + err);
+    }
 }
 
 void
@@ -1928,6 +1992,9 @@ TabWidgetPrivate::declareTabToPython(QWidget* widget,const std::string& tabName)
     gui->printAutoDeclaredVariable(script);
     bool ok = Natron::interpretPythonScript(script, &err, 0);
     assert(ok);
+    if (!ok) {
+        throw std::runtime_error("TabWidget::declareTabToPython: " + err);
+    }
 }
 
 void
@@ -1950,4 +2017,8 @@ TabWidgetPrivate::removeTabToPython(QWidget* widget,const std::string& tabName)
     gui->printAutoDeclaredVariable(script);
     bool ok = Natron::interpretPythonScript(script, &err, 0);
     assert(ok);
+    if (!ok) {
+        throw std::runtime_error("TabWidget::removeTabToPython: " + err);
+    }
 }
+

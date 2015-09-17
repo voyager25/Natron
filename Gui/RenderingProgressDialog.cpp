@@ -1,17 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "RenderingProgressDialog.h"
 
@@ -38,6 +47,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/GuiApplicationManager.h"
 #include "Gui/Gui.h"
 #include "Gui/Label.h"
+#include "Gui/LogWindow.h"
 
 struct RenderingProgressDialogPrivate
 {
@@ -296,37 +306,4 @@ RenderingProgressDialog::onProcessDeleted()
                         SLOT( onFrameRenderedWithTimer(int,double,double) ) );
     QObject::disconnect( _imp->_process.get(),SIGNAL( processFinished(int) ),this,SLOT( onProcessFinished(int) ) );
     QObject::disconnect( _imp->_process.get(),SIGNAL( deleted() ),this,SLOT( onProcessDeleted() ) );
-}
-
-LogWindow::LogWindow(const QString & log,
-                     QWidget* parent)
-    : QDialog(parent)
-{
-    mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-
-    textBrowser = new QTextBrowser(this);
-    textBrowser->setOpenExternalLinks(true);
-    textBrowser->setText(log);
-
-    mainLayout->addWidget(textBrowser);
-
-    QWidget* buttonsContainer = new QWidget(this);
-    QHBoxLayout* buttonsLayout = new QHBoxLayout(buttonsContainer);
-    
-    clearButton = new Button(tr("Clear"),buttonsContainer);
-    buttonsLayout->addWidget(clearButton);
-    QObject::connect(clearButton, SIGNAL(clicked()), this, SLOT(onClearButtonClicked()));
-    buttonsLayout->addStretch();
-    okButton = new Button(tr("Ok"),buttonsContainer);
-    buttonsLayout->addWidget(okButton);
-    QObject::connect( okButton, SIGNAL( clicked() ), this, SLOT( accept() ) );
-    mainLayout->addWidget(buttonsContainer);
-}
-
-void
-LogWindow::onClearButtonClicked()
-{
-    appPTR->clearOfxLog_mt_safe();
-    textBrowser->clear();
 }

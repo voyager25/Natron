@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_KNOBTYPES_H_
 #define NATRON_ENGINE_KNOBTYPES_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <vector>
 #include <string>
@@ -39,12 +48,14 @@ class BezierCP;
 namespace Natron {
 class Node;
 }
-/******************************INT_KNOB**************************************/
+/******************************KnobInt**************************************/
 
-class Int_Knob
+class KnobInt
     : public QObject, public Knob<int>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -53,10 +64,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Int_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobInt(holder, description, dimension,declaredByPlugin);
     }
 
-    Int_Knob(KnobHolder* holder,
+    KnobInt(KnobHolder* holder,
              const std::string &description,
              int dimension,
              bool declaredByPlugin);
@@ -94,9 +105,9 @@ private:
     static const std::string _typeNameStr;
 };
 
-/******************************BOOL_KNOB**************************************/
+/******************************KnobBool**************************************/
 
-class Bool_Knob
+class KnobBool
     :  public Knob<bool>
 {
 public:
@@ -106,10 +117,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Bool_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobBool(holder, description, dimension,declaredByPlugin);
     }
 
-    Bool_Knob(KnobHolder* holder,
+    KnobBool(KnobHolder* holder,
               const std::string &description,
               int dimension,
               bool declaredByPlugin);
@@ -133,12 +144,14 @@ private:
     static const std::string _typeNameStr;
 };
 
-/******************************DOUBLE_KNOB**************************************/
+/******************************KnobDouble**************************************/
 
-class Double_Knob
+class KnobDouble
     :  public QObject,public Knob<double>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -154,15 +167,15 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Double_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobDouble(holder, description, dimension,declaredByPlugin);
     }
 
-    Double_Knob(KnobHolder* holder,
+    KnobDouble(KnobHolder* holder,
                 const std::string &description,
                 int dimension,
                 bool declaredByPlugin );
 
-    virtual ~Double_Knob();
+    virtual ~KnobDouble();
 
     void disableSlider();
 
@@ -291,7 +304,7 @@ public:
     
     bool getHasNativeOverlayHandle() const;
     
-    virtual bool useNativeOverlayHandle() const { return getHasNativeOverlayHandle(); }
+    virtual bool useNativeOverlayHandle() const OVERRIDE { return getHasNativeOverlayHandle(); }
     
 public Q_SLOTS:
 
@@ -331,9 +344,9 @@ private:
     static const std::string _typeNameStr;
 };
 
-/******************************BUTTON_KNOB**************************************/
+/******************************KnobButton**************************************/
 
-class Button_Knob
+class KnobButton
     : public Knob<bool>
 {
 public:
@@ -343,10 +356,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Button_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobButton(holder, description, dimension,declaredByPlugin);
     }
 
-    Button_Knob(KnobHolder* holder,
+    KnobButton(KnobHolder* holder,
                 const std::string &description,
                 int dimension,
                 bool declaredByPlugin);
@@ -384,12 +397,14 @@ private:
     std::string _iconFilePath;
 };
 
-/******************************CHOICE_KNOB**************************************/
+/******************************KnobChoice**************************************/
 
-class Choice_Knob
+class KnobChoice
     : public QObject,public Knob<int>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -398,15 +413,15 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Choice_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobChoice(holder, description, dimension,declaredByPlugin);
     }
 
-    Choice_Knob(KnobHolder* holder,
+    KnobChoice(KnobHolder* holder,
                 const std::string &description,
                 int dimension,
                 bool declaredByPlugin);
 
-    virtual ~Choice_Knob();
+    virtual ~KnobChoice();
 
     /*Must be called right away after the constructor.*/
     void populateChoices( const std::vector<std::string> &entries, const std::vector<std::string> &entriesHelp = std::vector<std::string>() );
@@ -429,7 +444,7 @@ public:
     static const std::string & typeNameStatic();
     std::string getHintToolTipFull() const;
     
-    void choiceRestoration(Choice_Knob* knob,const ChoiceExtraData* data);
+    void choiceRestoration(KnobChoice* knob,const ChoiceExtraData* data);
     
     /**
      * @brief When set the menu will have a "New" entry which the user can select to create a new entry on its own.
@@ -448,11 +463,11 @@ public:
         return _isCascading;
     }
 
-    /// set the Choice_Knob value from the label
+    /// set the KnobChoice value from the label
     ValueChangedReturnCodeEnum setValueFromLabel(const std::string & value,
                                                  int dimension,
                                                  bool turnOffAutoKeying = false);
-    /// set the Choice_Knob default value from the label
+    /// set the KnobChoice default value from the label
     void setDefaultValueFromLabel(const std::string & value,int dimension = 0);
 
 Q_SIGNALS:
@@ -474,9 +489,9 @@ private:
     bool _isCascading;
 };
 
-/******************************SEPARATOR_KNOB**************************************/
+/******************************KnobSeparator**************************************/
 
-class Separator_Knob
+class KnobSeparator
     : public Knob<bool>
 {
 public:
@@ -486,10 +501,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Separator_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobSeparator(holder, description, dimension,declaredByPlugin);
     }
 
-    Separator_Knob(KnobHolder* holder,
+    KnobSeparator(KnobHolder* holder,
                    const std::string &description,
                    int dimension,
                    bool declaredByPlugin);
@@ -513,10 +528,12 @@ private:
  * In dimension 3 the knob will have 3 channel R,G,B
  * In dimension 4 the knob will have R,G,B and A channels.
  **/
-class Color_Knob
+class KnobColor
     :  public QObject, public Knob<double>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -525,10 +542,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Color_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobColor(holder, description, dimension,declaredByPlugin);
     }
 
-    Color_Knob(KnobHolder* holder,
+    KnobColor(KnobHolder* holder,
                const std::string &description,
                int dimension,
                bool declaredByPlugin);
@@ -581,11 +598,11 @@ private:
     static const std::string _typeNameStr;
 };
 
-/******************************STRING_KNOB**************************************/
+/******************************KnobString**************************************/
 
 
-class String_Knob
-    : public AnimatingString_KnobHelper
+class KnobString
+    : public AnimatingKnobStringHelper
 {
 public:
 
@@ -595,15 +612,15 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new String_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobString(holder, description, dimension,declaredByPlugin);
     }
 
-    String_Knob(KnobHolder* holder,
+    KnobString(KnobHolder* holder,
                 const std::string &description,
                 int dimension,
                 bool declaredByPlugin);
 
-    virtual ~String_Knob();
+    virtual ~KnobString();
 
     /// Can this type be animated?
     /// String animation consists in setting constant strings at
@@ -676,11 +693,13 @@ private:
     bool _isCustom;
 };
 
-/******************************GROUP_KNOB**************************************/
-class Group_Knob
+/******************************KnobGroup**************************************/
+class KnobGroup
     :  public QObject, public Knob<bool>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
     std::vector< boost::weak_ptr<KnobI> > _children;
     bool _isTab;
@@ -692,10 +711,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Group_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobGroup(holder, description, dimension,declaredByPlugin);
     }
 
-    Group_Knob(KnobHolder* holder,
+    KnobGroup(KnobHolder* holder,
                const std::string &description,
                int dimension,
                bool declaredByPlugin);
@@ -728,10 +747,12 @@ private:
 
 /******************************PAGE_KNOB**************************************/
 
-class Page_Knob
+class KnobPage
     :  public QObject,public Knob<bool>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -740,10 +761,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Page_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobPage(holder, description, dimension,declaredByPlugin);
     }
 
-    Page_Knob(KnobHolder* holder,
+    KnobPage(KnobHolder* holder,
               const std::string &description,
               int dimension,
               bool declaredByPlugin);
@@ -773,12 +794,14 @@ private:
 };
 
 
-/******************************Parametric_Knob**************************************/
+/******************************KnobParametric**************************************/
 
-class Parametric_Knob
+class KnobParametric
     :  public QObject, public Knob<double>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
     mutable QMutex _curvesMutex;
     std::vector< boost::shared_ptr<Curve> > _curves, _defaultCurves;
@@ -791,10 +814,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Parametric_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobParametric(holder, description, dimension,declaredByPlugin);
     }
 
-    Parametric_Knob(KnobHolder* holder,
+    KnobParametric(KnobHolder* holder,
                     const std::string &description,
                     int dimension,
                     bool declaredByPlugin );

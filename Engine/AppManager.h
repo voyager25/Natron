@@ -1,19 +1,29 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-#ifndef NATRON_GLOBAL_APPMANAGER_H_
-#define NATRON_GLOBAL_APPMANAGER_H_
+#ifndef _Engine_AppManager_h_
+#define _Engine_AppManager_h_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <list>
 #include <string>
@@ -24,9 +34,8 @@ CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_ON(deprecated)
 #include <QtCore/QStringList>
 #include <QtCore/QString>
-#include <QtCore/QChar>
 
-#if !defined(Q_MOC_RUN) && !defined(SBK_RUN) 
+#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/noncopyable.hpp>
@@ -34,14 +43,12 @@ CLANG_DIAG_ON(deprecated)
 
 #include "Engine/Plugin.h"
 #include "Engine/KnobFactory.h"
-#include "Engine/ImageLocker.h"
 
 /*macro to get the unique pointer to the controler*/
 #define appPTR AppManager::instance()
 
-//#define NATRON_USE_BREAKPAD
-
 class QMutex;
+class QChar;
 
 class AppInstance;
 class Format;
@@ -50,7 +57,9 @@ class KnobHolder;
 class NodeSerialization;
 class KnobSerialization;
 class RectI;
+class CLArgs;
 namespace Natron {
+class OfxImageEffectInstance;
 class Node;
 class EffectInstance;
 class LibraryBinary;
@@ -62,7 +71,9 @@ class FrameParams;
 class FrameEntry;
 class Plugin;
 class CacheSignalEmitter;
+}
 
+namespace Natron {
 enum AppInstanceStatusEnum
 {
     eAppInstanceStatusInactive = 0,     //< the app has not been loaded yet or has been closed already
@@ -77,65 +88,20 @@ struct AppInstanceRef
 };
 
 
-struct CLArgsPrivate;
-class CLArgs //: boost::noncopyable // GCC 4.2 requires the copy constructor
+class GlobalOFXTLS
 {
 public:
+    Natron::OfxImageEffectInstance* lastEffectCallingMainEntry;
     
-    struct WriterArg
+    ///Stored as int, because we need -1; list because we need it recursive for the multiThread func
+    std::list<int> threadIndexes;
+    
+    GlobalOFXTLS()
+    : lastEffectCallingMainEntry(0)
+    , threadIndexes()
     {
-        QString name;
-        QString filename;
-        bool mustCreate;
         
-        WriterArg()
-        : name(), filename(), mustCreate(false)
-        {
-            
-        }
-    };
-    
-    CLArgs();
-    
-    CLArgs(int& argc,char* argv[],bool forceBackground);
-
-    CLArgs(const QStringList& arguments, bool forceBackground);
-    
-    CLArgs(const CLArgs& other); // GCC 4.2 requires the copy constructor
-    
-    ~CLArgs();
-
-    void operator=(const CLArgs& other);
-    
-    bool isEmpty() const;
-    
-    static void printBackGroundWelcomeMessage();
-    
-    static void printUsage(const std::string& programName);
-    
-    int getError() const;
-    
-    const std::list<CLArgs::WriterArg>& getWriterArgs() const;
-    
-    bool hasFrameRange() const;
-    
-    const std::pair<int,int>& getFrameRange() const;
-    
-    bool isBackgroundMode() const;
-    
-    bool isInterpreterMode() const;
-    
-    const QString& getFilename() const;
-    
-    const QString& getDefaultOnProjectLoadedScript() const;
-    
-    const QString& getIPCPipeName() const;
-    
-    bool isPythonScript() const;
-    
-private:
-    
-    boost::scoped_ptr<CLArgsPrivate> _imp;
+    }
 };
 
 struct AppManagerPrivate;
@@ -394,7 +360,7 @@ public:
      **/
     int getNRunningThreads() const;
     
-    void setThreadAsActionCaller(bool actionCaller);
+    void setThreadAsActionCaller(Natron::OfxImageEffectInstance* instance, bool actionCaller);
 
     /**
      * @brief Returns a list of IDs of all the plug-ins currently loaded.
@@ -452,11 +418,9 @@ public:
     
 public Q_SLOTS:
     
-#ifdef NATRON_USE_BREAKPAD
     void onNewCrashReporterConnectionPending();
     
     void onCrashReporterOutputWritten();
-#endif
 
     void toggleAutoHideGraphInputs();
 
@@ -503,17 +467,24 @@ public Q_SLOTS:
     void setOnProjectLoadedCallback(const std::string& pythonFunc);
     void setOnProjectCreatedCallback(const std::string& pythonFunc);
     
+    GlobalOFXTLS& getCurrentThreadTLS();
+    
+    void requestOFXDIalogOnMainThread(void* user_data);
+    
+public Q_SLOTS:
+    
+    void onOFXDialogOnMainThreadReceived(void* user_data);
+    
 Q_SIGNALS:
 
 
     void checkerboardSettingsChanged();
     
+    void s_requestOFXDialogOnMainThread(void* user_data);
     
 protected:
 
-    virtual void initGui()
-    {
-    }
+    virtual bool initGui(const CLArgs& cl);
 
     virtual void loadBuiltinNodePlugins(std::map<std::string,std::vector< std::pair<std::string,double> > >* readersMap,
                                         std::map<std::string,std::vector< std::pair<std::string,double> > >* writersMap);
@@ -539,6 +510,8 @@ protected:
     virtual void clearLastRenderedTextures() {}
     
     virtual void initBuiltinPythonModules();
+    
+    bool loadInternalAfterInitGui(const CLArgs& cl);
 
 private:
 
@@ -708,5 +681,5 @@ public:
 } // namespace Natron
 
 
-#endif // NATRON_GLOBAL_CONTROLER_H_
+#endif // _Engine_AppManager_h_
 

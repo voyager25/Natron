@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "Edge.h"
 
@@ -392,33 +402,35 @@ Edge::initLine()
         }
 
         assert(foundIntersection);
-        double distToCenter = std::sqrt( ( intersection.x() - dst.x() ) * ( intersection.x() - dst.x() ) +
-                                         ( intersection.y() - dst.y() ) * ( intersection.y() - dst.y() ) );
-        distToCenter += appPTR->getCurrentSettings()->getDisconnectedArrowLength();
+        if (foundIntersection) {
+            double distToCenter = std::sqrt( ( intersection.x() - dst.x() ) * ( intersection.x() - dst.x() ) +
+                                            ( intersection.y() - dst.y() ) * ( intersection.y() - dst.y() ) );
+            distToCenter += appPTR->getCurrentSettings()->getDisconnectedArrowLength();
 
-        srcpt = QPointF( dst.x() + (std::cos(_angle) * distToCenter * sc),
-                         dst.y() - (std::sin(_angle) * distToCenter * sc) );
-        setLine( dst.x(),dst.y(),srcpt.x(),srcpt.y() );
+            srcpt = QPointF( dst.x() + (std::cos(_angle) * distToCenter * sc),
+                            dst.y() - (std::sin(_angle) * distToCenter * sc) );
+            setLine( dst.x(),dst.y(),srcpt.x(),srcpt.y() );
 
-        if (_label) {
-            QFontMetrics fm(_label->font());
-            double cosinus = std::cos(_angle);
-            int yOffset = 0;
-            if (cosinus < 0) {
-                yOffset = -fm.width(_label->toPlainText());
-            } else if ( (cosinus >= -0.01) && (cosinus <= 0.01) ) {
-                yOffset = +5;
-            } else {
-                yOffset = +10;
+            if (_label) {
+                QFontMetrics fm(_label->font());
+                double cosinus = std::cos(_angle);
+                int yOffset = 0;
+                if (cosinus < 0) {
+                    yOffset = -fm.width(_label->toPlainText());
+                } else if ( (cosinus >= -0.01) && (cosinus <= 0.01) ) {
+                    yOffset = +5;
+                } else {
+                    yOffset = +10;
+                }
+
+                /*adjusting dst to show label at the middle of the line*/
+
+                QPointF labelDst = dstIntersection;//QPointF( destBBOX.x(),destBBOX.y() ) + QPointF(dstNodeSize.width() / 2.,0);
+
+                _label->setPos( ( ( labelDst.x() + srcpt.x() ) / 2. ) + yOffset,( labelDst.y() + srcpt.y() ) / 2. - 20 );
             }
-
-            /*adjusting dst to show label at the middle of the line*/
-
-            QPointF labelDst = dstIntersection;//QPointF( destBBOX.x(),destBBOX.y() ) + QPointF(dstNodeSize.width() / 2.,0);
-
-            _label->setPos( ( ( labelDst.x() + srcpt.x() ) / 2. ) + yOffset,( labelDst.y() + srcpt.y() ) / 2. - 20 );
         }
-    } 
+    }
 
 
     double length = std::max(EDGE_LENGTH_MIN, line().length());

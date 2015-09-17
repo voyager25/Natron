@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "SequenceFileDialog.h"
 
@@ -23,6 +33,9 @@
 #include <cassert>
 #include <locale>
 #include <algorithm>
+
+CLANG_DIAG_OFF(deprecated)
+CLANG_DIAG_OFF(uninitialized)
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QMessageBox>
@@ -40,10 +53,10 @@
 #include <QFileDialog>
 #include <QStyleFactory>
 #include <QFileIconProvider>
-CLANG_DIAG_OFF(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QtGui/QKeyEvent>
-CLANG_DIAG_ON(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 #include <QtGui/QColor>
 #if QT_VERSION < 0x050000
 #include <QtGui/QAction>
@@ -58,17 +71,18 @@ CLANG_DIAG_ON(unused-private-field)
 #include <QtWidgets/QStyleOptionViewItem>
 #include <QStandardPaths>
 #endif
-
 #include <QtCore/QEvent>
 #include <QtCore/QMimeData>
 #include <QtConcurrentRun>
-
 #include <QtCore/QSettings>
+CLANG_DIAG_ON(deprecated)
+CLANG_DIAG_ON(uninitialized)
 
 #include <SequenceParsing.h>
 
 #include "Global/QtCompat.h"
 #include "Global/MemoryInfo.h"
+#include "Gui/GuiDefines.h"
 
 #include "Engine/Node.h"
 #include "Engine/Settings.h"
@@ -89,6 +103,11 @@ CLANG_DIAG_ON(unused-private-field)
 #include "Gui/Label.h"
 #include "Gui/Menu.h"
 #include "Gui/Utils.h"
+
+#ifdef __NATRON_WIN32__
+#include <ofxhUtilities.h> // for wideStringToString
+#endif
+#include "Global/QtCompat.h" // removeFileExtension
 
 #define FILE_DIALOG_DISABLE_ICONS
 
@@ -178,14 +197,25 @@ static QString mapPathWithDriveLetterToPathWithNetworkShareName(const QString& p
 
 		QString driveName = path.mid(0,2);
 
-		TCHAR szDeviceName[512]; 
+		TCHAR szDeviceName[512];
 		DWORD dwResult, cchBuff = sizeof(szDeviceName);
+#ifdef UNICODE
+        dwResult = WNetGetConnection(Natron::s2ws(driveName.toStdString()).c_str(), szDeviceName, &cchBuff);
+#else
 		dwResult = WNetGetConnection(driveName.toStdString().c_str(), szDeviceName, &cchBuff);
+#endif
 		if (dwResult == NO_ERROR) {
 			ret = path.mid(2,-1);
 
-			//Replace \\ with / 
-			QString qDeviceName(szDeviceName);
+			//Replace \\ with /
+#ifdef UNICODE
+            std::wstring wstr(szDeviceName);
+            std::string str = OFX::wideStringToString(wstr);
+            QString qDeviceName(str.c_str());
+#else
+            QString qDeviceName(szDeviceName);
+#endif
+			
 			qDeviceName.replace('\\','/');
 
 			//Make sure we remember the mapping
@@ -308,7 +338,7 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
 
     _lookInCombobox = new FileDialogComboBox(this,_buttonsWidget);
     _buttonsLayout->addWidget(_lookInCombobox);
-    QObject::connect( _lookInCombobox, SIGNAL( activated(QString) ), this, SLOT( goToDirectory(QString) ) );
+    QObject::connect( _lookInCombobox, SIGNAL( activated(QString) ), this, SLOT( onLookingComboboxChanged(QString) ) );
     _lookInCombobox->setInsertPolicy(QComboBox::NoInsert);
     _lookInCombobox->setDuplicatesEnabled(false);
 
@@ -318,18 +348,22 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
 
 
     _previousButton = new Button(style()->standardIcon(QStyle::SP_ArrowBack),"",_buttonsWidget);
+    _previousButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _buttonsLayout->addWidget(_previousButton);
     QObject::connect( _previousButton, SIGNAL( clicked() ), this, SLOT( previousFolder() ) );
 
     _nextButton = new Button(style()->standardIcon(QStyle::SP_ArrowForward),"",_buttonsWidget);
+    _nextButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _buttonsLayout->addWidget(_nextButton);
     QObject::connect( _nextButton, SIGNAL( clicked() ), this, SLOT( nextFolder() ) );
 
     _upButton = new Button(style()->standardIcon(QStyle::SP_ArrowUp),"",_buttonsWidget);
+    _upButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _buttonsLayout->addWidget(_upButton);
     QObject::connect( _upButton, SIGNAL( clicked() ), this, SLOT( parentFolder() ) );
 
     _createDirButton = new Button(style()->standardIcon(QStyle::SP_FileDialogNewFolder),"",_buttonsWidget);
+    _createDirButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _buttonsLayout->addWidget(_createDirButton);
     QObject::connect( _createDirButton, SIGNAL( clicked() ), this, SLOT( createDir() ) );
 
@@ -386,6 +420,7 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
         icPreview.addPixmap(pixPreviewButtonEnabled,QIcon::Normal,QIcon::On);
         icPreview.addPixmap(pixPreviewButtonDisabled,QIcon::Normal,QIcon::Off);
         _togglePreviewButton = new Button(icPreview,"",_centerArea);
+        _togglePreviewButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         QObject::connect(_togglePreviewButton, SIGNAL(clicked(bool)), this, SLOT(onTogglePreviewButtonClicked(bool) ) );
         _togglePreviewButton->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Expanding);
         _togglePreviewButton->setCheckable(true);
@@ -1674,26 +1709,20 @@ SequenceFileDialog::autoCompleteFileName(const QString & text)
 }
 
 void
-SequenceFileDialog::goToDirectory(const QString & path)
+SequenceFileDialog::onLookingComboboxChanged(const QString & /*path*/)
 {
-   /* QModelIndex index = _lookInCombobox->model()->index( _lookInCombobox->currentIndex(),
+    QModelIndex index = _lookInCombobox->model()->index( _lookInCombobox->currentIndex(),
                                                          _lookInCombobox->modelColumn(),
                                                          _lookInCombobox->rootModelIndex() );
-    QString path2 = path;
 
     if ( !index.isValid() ) {
-        index =  _model->index( getEnvironmentVariable(path) );
+        return;
     }
     
-    QDir dir(path2);
-    if ( !dir.exists() ) {
-        dir = getEnvironmentVariable(path2);
-    }
-
-    if ( dir.exists() || path2.isEmpty() || ( path2 == _model->myComputer().toString() ) ) {
-        enterDirectory(index);
-    }*/
-	setDirectory(path);
+    QUrl url = index.data(UrlModel::UrlRole).toUrl();
+    url = Natron::toLocalFileUrlFixed(url);
+    //enterDirectory(index);
+	setDirectory(url.path());
 }
 
 QString
@@ -2047,10 +2076,10 @@ UrlModel::setUrl(const QModelIndex &index,
         }
 
         // Make sure that we have at least 32x32 images
-        const QSize size = newIcon.actualSize( QSize(32,32) );
-        if (size.width() < 32) {
-            QPixmap smallPixmap = newIcon.pixmap( QSize(32, 32) );
-            newIcon.addPixmap( smallPixmap.scaledToWidth(32, Qt::SmoothTransformation) );
+        const QSize size = newIcon.actualSize( QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE,NATRON_MEDIUM_BUTTON_ICON_SIZE) );
+        if (size.width() != NATRON_MEDIUM_BUTTON_ICON_SIZE) {
+            QPixmap smallPixmap = newIcon.pixmap( QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE) );
+            newIcon.addPixmap( smallPixmap.scaledToWidth(NATRON_MEDIUM_BUTTON_ICON_SIZE, Qt::SmoothTransformation) );
         }
 		newName = mapUrlToDisplayName(newName);
 
@@ -2979,7 +3008,7 @@ SequenceFileDialog::refreshPreviewAfterSelectionChange()
     if (reader) {
         const std::vector<boost::shared_ptr<KnobI> > & knobs = reader->getNode()->getKnobs();
         for (U32 i = 0; i < knobs.size(); ++i) {
-            File_Knob* fileKnob = dynamic_cast<File_Knob*>(knobs[i].get());
+            KnobFile* fileKnob = dynamic_cast<KnobFile*>(knobs[i].get());
             if ( fileKnob && fileKnob->isInputImageFile() ) {
                 fileKnob->setValue(pattern,0);
             }

@@ -1,35 +1,43 @@
-//
-//  OfxHost.h
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-//  Created by Frédéric Devernay on 03/09/13.
-//
-//
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_OFXHOST_H_
 #define NATRON_ENGINE_OFXHOST_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <list>
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/shared_ptr.hpp>
+#include <boost/scoped_ptr.hpp>
 #endif
-
 #include "Global/Macros.h"
-// ofxhPropertySuite.h:565:37: warning: 'this' pointer cannot be null in well-defined C++ code; comparison may be assumed to always evaluate to true [-Wtautological-undefined-compare]
 CLANG_DIAG_OFF(unknown-pragmas)
-CLANG_DIAG_OFF(tautological-undefined-compare) // appeared in clang 3.5
+CLANG_DIAG_OFF(tautological-undefined-compare)
 #include <ofxhPluginCache.h>
 CLANG_DIAG_ON(tautological-undefined-compare)
 CLANG_DIAG_ON(unknown-pragmas)
 #include <ofxhImageEffectAPI.h>
 
-#include "Global/Macros.h"
 #include "Global/Enums.h"
 
 //#define MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
@@ -38,10 +46,14 @@ class AbstractOfxEffectInstance;
 class AppInstance;
 class QMutex;
 class NodeSerialization;
+class GlobalOFXTLS;
 class KnobSerialization;
 namespace Natron {
+class OfxImageEffectInstance;
 class Node;
 class Plugin;
+    
+struct OfxHostPrivate;
 class OfxHost
     : public OFX::Host::ImageEffect::Host
 {
@@ -108,6 +120,17 @@ public:
     virtual OfxStatus mutexUnLock(const OfxMutexHandle mutex) OVERRIDE;
     virtual OfxStatus mutexTryLock(const OfxMutexHandle mutex) OVERRIDE;
 #endif
+#ifdef OFX_SUPPORTS_DIALOG
+    // dialog suite
+    // In OfxDialogSuiteV1, only the host can figure out which effect instance triggered
+    // that request.
+
+    /// @see OfxDialogSuiteV1.RequestDialog()
+    virtual OfxStatus requestDialog(void* user_data) OVERRIDE;
+
+    /// @see OfxDialogSuiteV1.NotifyRedrawPending()
+    virtual OfxStatus notifyRedrawPending() OVERRIDE;
+#endif
 #ifdef OFX_SUPPORTS_OPENGLRENDER
     /// @see OfxImageEffectOpenGLRenderSuiteV1.flushResources()
     virtual OfxStatus flushOpenGLResources() const OVERRIDE;
@@ -130,47 +153,21 @@ public:
 
     void clearPluginsLoadedCache();
 
-    void setThreadAsActionCaller(bool actionCaller);
+    void setThreadAsActionCaller(Natron::OfxImageEffectInstance* instance, bool actionCaller);
     
     static OFX::Host::ImageEffect::Descriptor* getPluginContextAndDescribe(OFX::Host::ImageEffect::ImageEffectPlugin* plugin,
                                                                            Natron::ContextEnum* ctx);
-private:
+    
+    GlobalOFXTLS& getCurrentThreadTLS();
 
     
-
+private:
+    
     /*Writes all plugins loaded and their descriptors to
-       the OFX plugin cache. (called by the destructor) */
+     the OFX plugin cache. (called by the destructor) */
     void writeOFXCache();
 
-    OFX::Host::ImageEffect::PluginCache* _imageEffectPluginCache;
-
-
-    /*plugin name -> pair< plugin id , plugin grouping >
-       The name of the plugin is followed by the first part of the grouping in brackets
-       to help identify two distinct plugins with the same name. e.g :
-       1)Invert [OFX]  with plugin id net.sourceforge.openfx.invert and grouping OFX/
-       2)Invert [Toto] with plugin id com.toto.invert and grouping Toto/SuperPlugins/OFX/
-     */
-    struct OFXPluginEntry
-    {
-        std::string openfxId;
-        std::string grouping;
-        OFXPluginEntry(const std::string &ofxid,
-                       const std::string &grp)
-            : openfxId(ofxid)
-              , grouping(grp)
-        {
-        }
-
-        OFXPluginEntry()
-        {
-        }
-    };
-    
-#ifdef MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
-    std::list<QMutex*> _pluginsMutexes;
-    QMutex* _pluginsMutexesLock; //<protects _pluginsMutexes
-#endif
+    boost::scoped_ptr<OfxHostPrivate> _imp;
 };
 } // namespace Natron
 

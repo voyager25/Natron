@@ -1,19 +1,29 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef APPINSTANCE_H
 #define APPINSTANCE_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <vector>
 #include <list>
@@ -284,14 +294,18 @@ public:
     
     virtual bool isGuiFrozen() const { return false; }
 
-    virtual void startProgress(KnobHolder* /*effect*/,
-                               const std::string & /*message*/,
-                              bool canCancel = true)
+    virtual void progressStart(KnobHolder* effect,
+                               const std::string &message,
+                               const std::string &messageid,
+                               bool canCancel = true)
     {
+        Q_UNUSED(effect);
+        Q_UNUSED(message);
+        Q_UNUSED(messageid);
         Q_UNUSED(canCancel);
     }
 
-    virtual void endProgress(KnobHolder* /*effect*/)
+    virtual void progressEnd(KnobHolder* /*effect*/)
     {
     }
 
@@ -323,10 +337,10 @@ public:
     
   
     
-    void startWritersRendering(const std::list<RenderRequest>& writers);
-    void startWritersRendering(const std::list<RenderWork>& writers);
+    void startWritersRendering(bool enableRenderStats,const std::list<RenderRequest>& writers);
+    void startWritersRendering(bool enableRenderStats,const std::list<RenderWork>& writers);
 
-    virtual void startRenderingFullSequence(const RenderWork& writerWork,bool renderInSeparateProcess,const QString& savePath);
+    virtual void startRenderingFullSequence(bool enableRenderStats,const RenderWork& writerWork,bool renderInSeparateProcess,const QString& savePath);
 
     virtual void clearViewersLastRenderedTexture() {}
 
@@ -382,6 +396,21 @@ public:
     virtual void setUserIsPainting(const boost::shared_ptr<Natron::Node>& /*rotopaintNode*/) {}
     virtual boost::shared_ptr<Natron::Node> getIsUserPainting() const { return boost::shared_ptr<Natron::Node>(); }
     
+    virtual bool isRenderStatsActionChecked() const { return false; }
+    
+    bool saveTemp(const std::string& filename);
+    virtual bool save(const std::string& filename);
+    virtual bool saveAs(const std::string& filename);
+    virtual AppInstance* loadProject(const std::string& filename);
+    
+    ///Close the current project but keep the window
+    virtual bool resetProject();
+    
+    ///Reset + close window, quit if last window
+    virtual bool closeProject();
+    
+    ///Opens a new window
+    virtual AppInstance* newProject();
     
 public Q_SLOTS:
     

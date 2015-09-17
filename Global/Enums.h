@@ -1,12 +1,20 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_GLOBAL_ENUMS_H_
 #define NATRON_GLOBAL_ENUMS_H_
@@ -392,6 +400,7 @@ enum ImageBitDepthEnum
     eImageBitDepthNone = 0,
     eImageBitDepthByte,
     eImageBitDepthShort,
+    eImageBitDepthHalf,
     eImageBitDepthFloat
 };
 
@@ -525,7 +534,36 @@ enum PenType
     ePenTypeCursor,
     ePenTypeEraser
 };
+    
+enum PluginOpenGLRenderSupport {
+    ePluginOpenGLRenderSupportNone, // None
+    ePluginOpenGLRenderSupportYes, // Can do both CPU or GPU
+    ePluginOpenGLRenderSupportNeeded // Can do only GPU
+};
 
+enum CurveChangeReason
+{
+     eCurveChangeReasonCurveEditor,
+     eCurveChangeReasonDopeSheet,
+     eCurveChangeReasonInternal
+};
+    
+enum DopeSheetItemType
+{
+    eDopeSheetItemTypeCommon = 1001,
+    
+    // Range-based nodes
+    eDopeSheetItemTypeReader,
+    eDopeSheetItemTypeRetime,
+    eDopeSheetItemTypeTimeOffset,
+    eDopeSheetItemTypeFrameRange,
+    eDopeSheetItemTypeGroup,
+    
+    // Others
+    eDopeSheetItemTypeKnobRoot,
+    eDopeSheetItemTypeKnobDim
+};
+    
 }
 Q_DECLARE_METATYPE(Natron::StandardButtons)
 

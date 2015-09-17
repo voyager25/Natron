@@ -1,45 +1,61 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "NodeGroup.h"
 
 #include <set>
 #include <locale>
 #include <cfloat>
-#include <QThreadPool>
-#include <QCoreApplication>
-#include <QTextStream>
 #include <algorithm> // min, max
+#include <stdexcept>
+
+#include <QtCore/QThreadPool>
+#include <QtCore/QCoreApplication>
+#include <QtCore/QTextStream>
 
 #include "Engine/AppInstance.h"
-#include "Engine/Node.h"
-#include "Engine/OutputSchedulerThread.h"
-#include "Engine/Project.h"
-#include "Engine/KnobTypes.h"
-#include "Engine/KnobFile.h"
-#include "Engine/TimeLine.h"
-#include "Engine/NoOp.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/Plugin.h"
-#include "Engine/NodeGuiI.h"
+#include "Engine/Bezier.h"
+#include "Engine/BezierCP.h"
 #include "Engine/Curve.h"
+#include "Engine/GroupInput.h"
+#include "Engine/GroupOutput.h"
+#include "Engine/Image.h"
+#include "Engine/KnobFile.h"
+#include "Engine/KnobTypes.h"
+#include "Engine/Node.h"
 #include "Engine/NodeGraphI.h"
-#include "Engine/Settings.h"
+#include "Engine/NodeGuiI.h"
+#include "Engine/OutputSchedulerThread.h"
+#include "Engine/Plugin.h"
+#include "Engine/Project.h"
 #include "Engine/RotoContext.h"
+#include "Engine/RotoLayer.h"
+#include "Engine/Settings.h"
+#include "Engine/TimeLine.h"
+#include "Engine/ViewerInstance.h"
 
-#define NATRON_PYPLUG_EXPORTER_VERSION 1
+#define NATRON_PYPLUG_EXPORTER_VERSION 2
 
 using namespace Natron;
 
@@ -314,7 +330,7 @@ NodeCollection::refreshViewersAndPreviews()
             } else {
                 ViewerInstance* n = dynamic_cast<ViewerInstance*>((*it)->getLiveInstance());
                 if (n) {
-                    n->getRenderEngine()->renderCurrentFrame(true);
+                    n->renderCurrentFrame(true);
                 }
             }
         }
@@ -479,7 +495,6 @@ NodeCollection::connectNodes(int inputNumber,const NodePtr& input,Natron::Node* 
         assert(ok);
         if (input->getMaxInputCount() > 0) {
             ok = connectNodes(input->getPreferredInputForConnection(), existingInput, input.get());
-            assert(ok);
         }
     }
     
@@ -487,8 +502,13 @@ NodeCollection::connectNodes(int inputNumber,const NodePtr& input,Natron::Node* 
         return true;
     }
     
+    Node::CanConnectInputReturnValue ret = output->canConnectInput(input, inputNumber);
     
-    if ( !output->connectInput(input, inputNumber) ) {
+    bool connectionOk = ret == Node::eCanConnectInput_ok ||
+    ret == Node::eCanConnectInput_differentFPS ||
+    ret == Node::eCanConnectInput_differentPars;
+    
+    if ( !connectionOk || !output->connectInput(input, inputNumber) ) {
         return false;
     }
     
@@ -760,7 +780,7 @@ NodeCollection::fixRelativeFilePaths(const std::string& projectPathName,const st
             for (U32 j = 0; j < knobs.size(); ++j) {
                 
                 Knob<std::string>* isString = dynamic_cast< Knob<std::string>* >(knobs[j].get());
-                String_Knob* isStringKnob = dynamic_cast<String_Knob*>(isString);
+                KnobString* isStringKnob = dynamic_cast<KnobString*>(isString);
                 if (!isString || isStringKnob || knobs[j] == project->getEnvVarKnob()) {
                     continue;
                 }
@@ -797,7 +817,7 @@ NodeCollection::fixPathName(const std::string& oldName,const std::string& newNam
             for (U32 j = 0; j < knobs.size(); ++j) {
                 
                 Knob<std::string>* isString = dynamic_cast< Knob<std::string>* >(knobs[j].get());
-                String_Knob* isStringKnob = dynamic_cast<String_Knob*>(isString);
+                KnobString* isStringKnob = dynamic_cast<KnobString*>(isString);
                 if (!isString || isStringKnob || knobs[j] == project->getEnvVarKnob()) {
                     continue;
                 }
@@ -883,6 +903,9 @@ NodeCollection::forceGetClipPreferencesOnAllTrees()
 }
 
 
+
+
+
 void
 NodeCollection::setParallelRenderArgs(int time,
                                       int view,
@@ -890,12 +913,15 @@ NodeCollection::setParallelRenderArgs(int time,
                                       bool isSequential,
                                       bool canAbort,
                                       U64 renderAge,
-                                      Natron::OutputEffectInstance* renderRequester,
+                                      const boost::shared_ptr<Natron::Node>& treeRoot,
+                                      const FrameRequestMap* request,
                                       int textureIndex,
                                       const TimeLine* timeline,
                                       const boost::shared_ptr<Natron::Node>& activeRotoPaintNode,
                                       bool isAnalysis,
-                                      bool draftMode)
+                                      bool draftMode,
+                                      bool viewerProgressReportEnabled,
+                                      const boost::shared_ptr<RenderStats>& stats)
 {
     
     bool doNanHandling = appPTR->getCurrentSettings()->isNaNHandlingEnabled();
@@ -916,11 +942,43 @@ NodeCollection::setParallelRenderArgs(int time,
             roto->getRotoPaintTreeNodes(&rotoPaintNodes);
         }
         
-        liveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it)->getHashValue(),
-                                               rotoAge,renderAge,renderRequester,textureIndex, timeline, isAnalysis,duringPaintStrokeCreation, rotoPaintNodes, safety, doNanHandling, draftMode);
-        
+        {
+            U64 nodeHash = 0;
+            bool hashSet = false;
+            boost::shared_ptr<NodeFrameRequest> nodeRequest;
+            if (request) {
+                FrameRequestMap::const_iterator foundRequest = request->find(*it);
+                if (foundRequest != request->end()) {
+                    nodeRequest = foundRequest->second;
+                    nodeHash = nodeRequest->nodeHash;
+                    hashSet = true;
+                }
+            }
+            if (!hashSet) {
+                nodeHash = (*it)->getHashValue();
+            }
+            
+            liveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, nodeHash,
+                                                   rotoAge,renderAge,treeRoot, nodeRequest,textureIndex, timeline, isAnalysis,duringPaintStrokeCreation, rotoPaintNodes, safety, doNanHandling, draftMode, viewerProgressReportEnabled, stats);
+        }
         for (NodeList::iterator it2 = rotoPaintNodes.begin(); it2 != rotoPaintNodes.end(); ++it2) {
-            (*it2)->getLiveInstance()->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it2)->getHashValue(), (*it2)->getRotoAge(), renderAge, renderRequester, textureIndex, timeline, isAnalysis, activeRotoPaintNode && (*it2)->isDuringPaintStrokeCreation(), NodeList(), (*it2)->getCurrentRenderThreadSafety(), doNanHandling, draftMode);
+            
+            boost::shared_ptr<NodeFrameRequest> childRequest;
+            U64 nodeHash = 0;
+            bool hashSet = false;
+            if (request) {
+                FrameRequestMap::const_iterator foundRequest = request->find(*it2);
+                if (foundRequest != request->end()) {
+                    childRequest = foundRequest->second;
+                    nodeHash = childRequest->nodeHash;
+                    hashSet = true;
+                }
+            }
+            if (!hashSet) {
+                nodeHash = (*it2)->getHashValue();
+            }
+            
+            (*it2)->getLiveInstance()->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, nodeHash, (*it2)->getRotoAge(), renderAge, treeRoot, childRequest, textureIndex, timeline, isAnalysis, activeRotoPaintNode && (*it2)->isDuringPaintStrokeCreation(), NodeList(), (*it2)->getCurrentRenderThreadSafety(), doNanHandling, draftMode, viewerProgressReportEnabled,stats);
         }
         
         if ((*it)->isMultiInstance()) {
@@ -930,11 +988,27 @@ NodeCollection::setParallelRenderArgs(int time,
             NodeList children;
             (*it)->getChildrenMultiInstance(&children);
             for (NodeList::iterator it2 = children.begin(); it2!=children.end(); ++it2) {
+                
+                boost::shared_ptr<NodeFrameRequest> childRequest;
+                U64 nodeHash = 0;
+                bool hashSet = false;
+                if (request) {
+                    FrameRequestMap::const_iterator foundRequest = request->find(*it2);
+                    if (foundRequest != request->end()) {
+                        childRequest = foundRequest->second;
+                        nodeHash = childRequest->nodeHash;
+                        hashSet = true;
+                    }
+                }
+                if (!hashSet) {
+                    nodeHash = (*it2)->getHashValue();
+                }
+                
                 assert(*it2);
                 Natron::EffectInstance* childLiveInstance = (*it2)->getLiveInstance();
                 assert(childLiveInstance);
                 Natron::RenderSafetyEnum childSafety = (*it2)->getCurrentRenderThreadSafety();
-                childLiveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, (*it2)->getHashValue(),0, renderAge,renderRequester, textureIndex, timeline, isAnalysis, false, std::list<boost::shared_ptr<Natron::Node> >(), childSafety, doNanHandling, draftMode);
+                childLiveInstance->setParallelRenderArgsTLS(time, view, isRenderUserInteraction, isSequential, canAbort, nodeHash,0, renderAge,treeRoot, childRequest, textureIndex, timeline, isAnalysis, false, std::list<boost::shared_ptr<Natron::Node> >(), childSafety, doNanHandling, draftMode, viewerProgressReportEnabled,stats);
                 
             }
         }
@@ -942,7 +1016,7 @@ NodeCollection::setParallelRenderArgs(int time,
         
         NodeGroup* isGrp = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
         if (isGrp) {
-            isGrp->setParallelRenderArgs(time, view, isRenderUserInteraction, isSequential, canAbort,  renderAge, renderRequester, textureIndex, timeline, activeRotoPaintNode, isAnalysis, draftMode);
+            isGrp->setParallelRenderArgs(time, view, isRenderUserInteraction, isSequential, canAbort,  renderAge, treeRoot, request, textureIndex, timeline, activeRotoPaintNode, isAnalysis, draftMode, viewerProgressReportEnabled,stats);
         }
 
     }
@@ -969,6 +1043,14 @@ NodeCollection::invalidateParallelRenderArgs()
             }
         }
         
+        NodeList rotoPaintNodes;
+        boost::shared_ptr<RotoContext> roto = (*it)->getRotoContext();
+        if (roto) {
+            roto->getRotoPaintTreeNodes(&rotoPaintNodes);
+        }
+        for (NodeList::iterator it2 = rotoPaintNodes.begin(); it2 != rotoPaintNodes.end(); ++it2) {
+            (*it2)->getLiveInstance()->invalidateParallelRenderArgsTLS();
+        }
         
         NodeGroup* isGrp = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
         if (isGrp) {
@@ -988,9 +1070,9 @@ NodeCollection::getParallelRenderArgs(std::map<boost::shared_ptr<Natron::Node>,P
         if (!(*it)->isActivated()) {
             continue;
         }
-        ParallelRenderArgs args = (*it)->getLiveInstance()->getParallelRenderArgsTLS();
-        if (args.validArgs) {
-            argsMap.insert(std::make_pair(*it, args));
+        const ParallelRenderArgs* args = (*it)->getLiveInstance()->getParallelRenderArgsTLS();
+        if (args && args->validArgs) {
+            argsMap.insert(std::make_pair(*it, *args));
         }
         
         if ((*it)->isMultiInstance()) {
@@ -1000,20 +1082,20 @@ NodeCollection::getParallelRenderArgs(std::map<boost::shared_ptr<Natron::Node>,P
             NodeList children;
             (*it)->getChildrenMultiInstance(&children);
             for (NodeList::iterator it2 = children.begin(); it2!=children.end(); ++it2) {
-                ParallelRenderArgs childArgs = (*it2)->getLiveInstance()->getParallelRenderArgsTLS();
-                if (childArgs.validArgs) {
-                    argsMap.insert(std::make_pair(*it2, childArgs));
+                const ParallelRenderArgs* childArgs = (*it2)->getLiveInstance()->getParallelRenderArgsTLS();
+                if (childArgs && childArgs->validArgs) {
+                    argsMap.insert(std::make_pair(*it2, *childArgs));
                 }
             }
         }
         
         //If the node has an attached stroke, that means it belongs to the roto paint tree, hence it is not in the project.
         boost::shared_ptr<RotoContext> rotoContext = (*it)->getRotoContext();
-        if (rotoContext) {
-            for (NodeList::iterator it2 = args.rotoPaintNodes.begin(); it2 != args.rotoPaintNodes.end(); ++it2) {
-                ParallelRenderArgs args = (*it2)->getLiveInstance()->getParallelRenderArgsTLS();
-                if (args.validArgs) {
-                    argsMap.insert(std::make_pair(*it2, args));
+        if (args && rotoContext) {
+            for (NodeList::const_iterator it2 = args->rotoPaintNodes.begin(); it2 != args->rotoPaintNodes.end(); ++it2) {
+                const ParallelRenderArgs* args2 = (*it2)->getLiveInstance()->getParallelRenderArgsTLS();
+                if (args2 && args2->validArgs) {
+                    argsMap.insert(std::make_pair(*it2, *args2));
                 }
             }
         }
@@ -1027,6 +1109,7 @@ NodeCollection::getParallelRenderArgs(std::map<boost::shared_ptr<Natron::Node>,P
     }
 }
 
+
 ParallelRenderArgsSetter::ParallelRenderArgsSetter(NodeCollection* n,
                                                    int time,
                                                    int view,
@@ -1034,16 +1117,19 @@ ParallelRenderArgsSetter::ParallelRenderArgsSetter(NodeCollection* n,
                                                    bool isSequential,
                                                    bool canAbort,
                                                    U64 renderAge,
-                                                   Natron::OutputEffectInstance* renderRequester,
+                                                   const boost::shared_ptr<Natron::Node>& treeRoot,
+                                                   const FrameRequestMap* request,
                                                    int textureIndex,
                                                    const TimeLine* timeline,
                                                    const boost::shared_ptr<Natron::Node>& activeRotoPaintNode,
                                                    bool isAnalysis,
-                                                   bool draftMode)
+                                                   bool draftMode,
+                                                   bool viewerProgressReportEnabled,
+                                                   const boost::shared_ptr<RenderStats>& stats)
 : collection(n)
 , argsMap()
 {
-    collection->setParallelRenderArgs(time,view,isRenderUserInteraction,isSequential,canAbort,renderAge, renderRequester,textureIndex,timeline, activeRotoPaintNode, isAnalysis, draftMode);
+    collection->setParallelRenderArgs(time,view,isRenderUserInteraction,isSequential,canAbort,renderAge, treeRoot, request ,textureIndex,timeline, activeRotoPaintNode, isAnalysis, draftMode, viewerProgressReportEnabled,stats);
 }
 
 ParallelRenderArgsSetter::ParallelRenderArgsSetter(const std::map<boost::shared_ptr<Natron::Node>,ParallelRenderArgs >& args)
@@ -1072,18 +1158,20 @@ ParallelRenderArgsSetter::~ParallelRenderArgsSetter()
 struct NodeGroupPrivate
 {
     mutable QMutex nodesLock; // protects inputs & outputs
-    std::vector<boost::weak_ptr<Node> > inputs;
-    std::list<boost::weak_ptr<Node> > outputs;
+    std::vector<boost::weak_ptr<Node> > inputs,guiInputs;
+    std::list<boost::weak_ptr<Node> > outputs,guiOutputs;
     bool isDeactivatingGroup;
     bool isActivatingGroup;
     bool isEditable;
     
-    boost::shared_ptr<Button_Knob> exportAsTemplate;
+    boost::shared_ptr<KnobButton> exportAsTemplate;
     
     NodeGroupPrivate()
     : nodesLock(QMutex::Recursive)
     , inputs()
+    , guiInputs()
     , outputs()
+    , guiOutputs()
     , isDeactivatingGroup(false)
     , isActivatingGroup(false)
     , isEditable(true)
@@ -1169,14 +1257,19 @@ NodeGroup::getMaxInputCount() const
 std::string
 NodeGroup::getInputLabel(int inputNb) const
 {
-    if (inputNb >= (int)_imp->inputs.size() || inputNb < 0) {
-        return std::string();
-    }
-    
-    ///If the input name starts with "input" remove it, otherwise keep the full name
-    NodePtr input = _imp->inputs[inputNb].lock();
-    if (!input) {
-        return std::string();
+    NodePtr input;
+    {
+        QMutexLocker k(&_imp->nodesLock);
+        if (inputNb >= (int)_imp->inputs.size() || inputNb < 0) {
+            return std::string();
+        }
+        
+        ///If the input name starts with "input" remove it, otherwise keep the full name
+        
+        input = _imp->inputs[inputNb].lock();
+        if (!input) {
+            return std::string();
+        }
     }
     QString inputName(input->getLabel_mt_safe().c_str());
     if (inputName.startsWith("input",Qt::CaseInsensitive)) {
@@ -1188,7 +1281,7 @@ NodeGroup::getInputLabel(int inputNb) const
 double
 NodeGroup::getCurrentTime() const
 {
-    NodePtr node = getOutputNodeInput();
+    NodePtr node = getOutputNodeInput(false);
     if (node) {
         return node->getLiveInstance()->getCurrentTime();
     }
@@ -1198,7 +1291,7 @@ NodeGroup::getCurrentTime() const
 int
 NodeGroup::getCurrentView() const
 {
-    NodePtr node = getOutputNodeInput();
+    NodePtr node = getOutputNodeInput(false);
     if (node) {
         return node->getLiveInstance()->getCurrentView();
     }
@@ -1209,19 +1302,26 @@ NodeGroup::getCurrentView() const
 bool
 NodeGroup::isInputOptional(int inputNb) const
 {
-    if (inputNb >= (int)_imp->inputs.size() || inputNb < 0) {
-        return false;
-    }
+    NodePtr n;
     
-    NodePtr n = _imp->inputs[inputNb].lock();
-    if (!n) {
-        return false;
+    {
+        QMutexLocker k(&_imp->nodesLock);
+        
+        if (inputNb >= (int)_imp->inputs.size() || inputNb < 0) {
+            return false;
+        }
+        
+        
+        n = _imp->inputs[inputNb].lock();
+        if (!n) {
+            return false;
+        }
     }
     GroupInput* input = dynamic_cast<GroupInput*>(n->getLiveInstance());
     assert(input);
     boost::shared_ptr<KnobI> knob = input->getKnobByName(kNatronGroupInputIsOptionalParamName);
     assert(knob);
-    Bool_Knob* isBool = dynamic_cast<Bool_Knob*>(knob.get());
+    KnobBool* isBool = dynamic_cast<KnobBool*>(knob.get());
     assert(isBool);
     return isBool->getValue();
 }
@@ -1230,19 +1330,26 @@ bool
 NodeGroup::isInputMask(int inputNb) const
 {
     
-    if (inputNb >= (int)_imp->inputs.size() || inputNb < 0) {
-        return false;
-    }
+    NodePtr n;
     
-    NodePtr n = _imp->inputs[inputNb].lock();
-    if (!n) {
-        return false;
+    {
+        QMutexLocker k(&_imp->nodesLock);
+        
+        if (inputNb >= (int)_imp->inputs.size() || inputNb < 0) {
+            return false;
+        }
+        
+        
+        n = _imp->inputs[inputNb].lock();
+        if (!n) {
+            return false;
+        }
     }
     GroupInput* input = dynamic_cast<GroupInput*>(n->getLiveInstance());
     assert(input);
     boost::shared_ptr<KnobI> knob = input->getKnobByName(kNatronGroupInputIsMaskParamName);
     assert(knob);
-    Bool_Knob* isBool = dynamic_cast<Bool_Knob*>(knob.get());
+    KnobBool* isBool = dynamic_cast<KnobBool*>(knob.get());
     assert(isBool);
     return isBool->getValue();
 }
@@ -1252,9 +1359,9 @@ NodeGroup::initializeKnobs()
 {
     boost::shared_ptr<KnobI> nodePage = getKnobByName(NATRON_PARAMETER_PAGE_NAME_EXTRA);
     assert(nodePage);
-    Page_Knob* isPage = dynamic_cast<Page_Knob*>(nodePage.get());
+    KnobPage* isPage = dynamic_cast<KnobPage*>(nodePage.get());
     assert(isPage);
-    _imp->exportAsTemplate = Natron::createKnob<Button_Knob>(this, "Export as PyPlug");
+    _imp->exportAsTemplate = Natron::createKnob<KnobButton>(this, "Export as PyPlug");
     _imp->exportAsTemplate->setName("exportAsPyPlug");
     _imp->exportAsTemplate->setHintToolTip("Export this group as a Python group script (PyPlug) that can be shared and/or later "
                                            "on re-used as a plug-in.");
@@ -1300,6 +1407,10 @@ NodeGroup::notifyNodeDeactivated(const boost::shared_ptr<Natron::Node>& node)
                 }
             }
         }
+        
+        ///Sync gui inputs/outputs
+        _imp->guiInputs = _imp->inputs;
+        _imp->guiOutputs = _imp->outputs;
     }
     
     ///Notify outputs of the group nodes that their inputs may have changed
@@ -1327,11 +1438,13 @@ NodeGroup::notifyNodeActivated(const boost::shared_ptr<Natron::Node>& node)
         GroupInput* isInput = dynamic_cast<GroupInput*>(node->getLiveInstance());
         if (isInput) {
             _imp->inputs.push_back(node);
+            _imp->guiInputs.push_back(node);
             thisNode->initializeInputs();
         }
         GroupOutput* isOutput = dynamic_cast<GroupOutput*>(node->getLiveInstance());
         if (isOutput) {
             _imp->outputs.push_back(node);
+            _imp->guiOutputs.push_back(node);
         }
     }
     ///Notify outputs of the group nodes that their inputs may have changed
@@ -1364,51 +1477,56 @@ NodeGroup::notifyNodeNameChanged(const boost::shared_ptr<Natron::Node>& node)
     }
 }
 
+void
+NodeGroup::dequeueConnexions()
+{
+    QMutexLocker k(&_imp->nodesLock);
+    _imp->inputs = _imp->guiInputs;
+    _imp->outputs = _imp->guiOutputs;
+}
+
 boost::shared_ptr<Natron::Node>
-NodeGroup::getOutputNode() const
+NodeGroup::getOutputNode(bool useGuiConnexions) const
 {
     QMutexLocker k(&_imp->nodesLock);
     ///A group can only have a single output.
-    if (_imp->outputs.empty()) {
+    if ((!useGuiConnexions && _imp->outputs.empty()) || (useGuiConnexions && _imp->guiOutputs.empty())) {
         return NodePtr();
     }
-    return _imp->outputs.front().lock();
+    return useGuiConnexions ? _imp->guiOutputs.front().lock() : _imp->outputs.front().lock();
 }
 
-NodeList
-NodeGroup::getAllOutputNodes() const
-{
-    NodeList ret;
-    QMutexLocker k(&_imp->nodesLock);
-    for (std::list<boost::weak_ptr<Natron::Node> >::const_iterator it = _imp->outputs.begin(); it != _imp->outputs.end(); ++it) {
-        NodePtr node = it->lock();
-        if (node) {
-            ret.push_back(node);
-        }
-    }
-    return ret;
-}
+
 
 boost::shared_ptr<Natron::Node>
-NodeGroup::getOutputNodeInput() const
+NodeGroup::getOutputNodeInput(bool useGuiConnexions) const
 {
-    NodePtr output = getOutputNode();
+    NodePtr output = getOutputNode(useGuiConnexions);
     if (output) {
-        return output->getInput(0);
+        return useGuiConnexions ? output->getGuiInput(0) : output->getInput(0);
     }
     return NodePtr();
 }
 
 boost::shared_ptr<Natron::Node>
-NodeGroup::getRealInputForInput(const boost::shared_ptr<Natron::Node>& input) const
+NodeGroup::getRealInputForInput(bool useGuiConnexions,const boost::shared_ptr<Natron::Node>& input) const
 {
     
     {
         QMutexLocker k(&_imp->nodesLock);
-        for (U32 i = 0; i < _imp->inputs.size(); ++i) {
-            if (_imp->inputs[i].lock() == input) {
-                return getNode()->getInput(i);
+        if (!useGuiConnexions) {
+            for (U32 i = 0; i < _imp->inputs.size(); ++i) {
+                if (_imp->inputs[i].lock() == input) {
+                    return getNode()->getInput(i);
+                }
             }
+        } else {
+            for (U32 i = 0; i < _imp->guiInputs.size(); ++i) {
+                if (_imp->guiInputs[i].lock() == input) {
+                    return getNode()->getGuiInput(i);
+                }
+            }
+
         }
     }
     return boost::shared_ptr<Natron::Node>();
@@ -1515,7 +1633,8 @@ static QString escapeString(const std::string& str)
 #define WRITE_STRING(str) ts << str << "\n"
 #define NUM(n) QString::number(n)
 
-static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
+static bool exportKnobValues(int indentLevel,
+                             const boost::shared_ptr<KnobI> knob,
                              const QString& paramFullName,
                              bool mustDefineParam,
                              QTextStream& ts)
@@ -1524,14 +1643,14 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
     bool hasExportedValue = false;
     
     Knob<std::string>* isStr = dynamic_cast<Knob<std::string>*>(knob.get());
-    AnimatingString_KnobHelper* isAnimatedStr = dynamic_cast<AnimatingString_KnobHelper*>(knob.get());
+    AnimatingKnobStringHelper* isAnimatedStr = dynamic_cast<AnimatingKnobStringHelper*>(knob.get());
     Knob<double>* isDouble = dynamic_cast<Knob<double>*>(knob.get());
     Knob<int>* isInt = dynamic_cast<Knob<int>*>(knob.get());
     Knob<bool>* isBool = dynamic_cast<Knob<bool>*>(knob.get());
-    Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(knob.get());
-    Choice_Knob* isChoice = dynamic_cast<Choice_Knob*>(knob.get());
-    Group_Knob* isGrp = dynamic_cast<Group_Knob*>(knob.get());
-    String_Knob* isStringKnob = dynamic_cast<String_Knob*>(knob.get());
+    KnobParametric* isParametric = dynamic_cast<KnobParametric*>(knob.get());
+    KnobChoice* isChoice = dynamic_cast<KnobChoice*>(knob.get());
+    KnobGroup* isGrp = dynamic_cast<KnobGroup*>(knob.get());
+    KnobString* isStringKnob = dynamic_cast<KnobString*>(knob.get());
     
     ///Don't export this kind of parameter. Mainly this is the html label of the node which is 99% of times empty
     if (isStringKnob &&
@@ -1552,8 +1671,8 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
             if (!hasExportedValue) {
                 hasExportedValue = true;
                 if (mustDefineParam) {
-                    WRITE_INDENT(1); WRITE_STRING("param = " + paramFullName);
-                    WRITE_INDENT(1); WRITE_STRING("if param is not None:");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("param = " + paramFullName);
+                    WRITE_INDENT(indentLevel); WRITE_STRING("if param is not None:");
                 }
             }
             boost::shared_ptr<Curve> curve = isParametric->getParametricCurve(i);
@@ -1581,8 +1700,8 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
                     if (!hasExportedValue) {
                         hasExportedValue = true;
                         if (mustDefineParam) {
-                            WRITE_INDENT(1); WRITE_STRING("param = " + paramFullName);
-                            WRITE_INDENT(1); WRITE_STRING("if param is not None:");
+                            WRITE_INDENT(indentLevel); WRITE_STRING("param = " + paramFullName);
+                            WRITE_INDENT(indentLevel); WRITE_STRING("if param is not None:");
                         }
                     }
                 }
@@ -1613,8 +1732,8 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
                 if (!hasExportedValue) {
                     hasExportedValue = true;
                     if (mustDefineParam) {
-                        WRITE_INDENT(1); WRITE_STRING("param = " + paramFullName);
-                        WRITE_INDENT(1); WRITE_STRING("if param is not None:");
+                        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + paramFullName);
+                        WRITE_INDENT(indentLevel); WRITE_STRING("if param is not None:");
                     }
                 }
                 
@@ -1663,8 +1782,8 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
         if (!hasExportedValue) {
             hasExportedValue = true;
             if (mustDefineParam) {
-                WRITE_INDENT(1); WRITE_STRING("param = " + paramFullName);
-                WRITE_INDENT(1); WRITE_STRING("if param is not None:");
+                WRITE_INDENT(indentLevel); WRITE_STRING("param = " + paramFullName);
+                WRITE_INDENT(indentLevel); WRITE_STRING("if param is not None:");
             }
         }
 
@@ -1676,8 +1795,8 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
             if (!hasExportedValue) {
                 hasExportedValue = true;
                 if (mustDefineParam) {
-                    WRITE_INDENT(1); WRITE_STRING("param = " + paramFullName);
-                    WRITE_INDENT(1); WRITE_STRING("if param is not None:");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("param = " + paramFullName);
+                    WRITE_INDENT(indentLevel); WRITE_STRING("if param is not None:");
                 }
             }
 
@@ -1692,20 +1811,20 @@ static bool exportKnobValues(const boost::shared_ptr<KnobI> knob,
     return hasExportedValue;
 }
 
-static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& fullyQualifiedNodeName,Group_Knob* group,Page_Knob* page,QTextStream& ts)
+static void exportUserKnob(int indentLevel,const boost::shared_ptr<KnobI>& knob,const QString& fullyQualifiedNodeName,KnobGroup* group,KnobPage* page,QTextStream& ts)
 {
-    Int_Knob* isInt = dynamic_cast<Int_Knob*>(knob.get());
-    Double_Knob* isDouble = dynamic_cast<Double_Knob*>(knob.get());
-    Bool_Knob* isBool = dynamic_cast<Bool_Knob*>(knob.get());
-    Choice_Knob* isChoice = dynamic_cast<Choice_Knob*>(knob.get());
-    Color_Knob* isColor = dynamic_cast<Color_Knob*>(knob.get());
-    String_Knob* isStr = dynamic_cast<String_Knob*>(knob.get());
-    File_Knob* isFile = dynamic_cast<File_Knob*>(knob.get());
-    OutputFile_Knob* isOutFile = dynamic_cast<OutputFile_Knob*>(knob.get());
-    Path_Knob* isPath = dynamic_cast<Path_Knob*>(knob.get());
-    Group_Knob* isGrp = dynamic_cast<Group_Knob*>(knob.get());
-    Button_Knob* isButton = dynamic_cast<Button_Knob*>(knob.get());
-    Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(knob.get());
+    KnobInt* isInt = dynamic_cast<KnobInt*>(knob.get());
+    KnobDouble* isDouble = dynamic_cast<KnobDouble*>(knob.get());
+    KnobBool* isBool = dynamic_cast<KnobBool*>(knob.get());
+    KnobChoice* isChoice = dynamic_cast<KnobChoice*>(knob.get());
+    KnobColor* isColor = dynamic_cast<KnobColor*>(knob.get());
+    KnobString* isStr = dynamic_cast<KnobString*>(knob.get());
+    KnobFile* isFile = dynamic_cast<KnobFile*>(knob.get());
+    KnobOutputFile* isOutFile = dynamic_cast<KnobOutputFile*>(knob.get());
+    KnobPath* isPath = dynamic_cast<KnobPath*>(knob.get());
+    KnobGroup* isGrp = dynamic_cast<KnobGroup*>(knob.get());
+    KnobButton* isButton = dynamic_cast<KnobButton*>(knob.get());
+    KnobParametric* isParametric = dynamic_cast<KnobParametric*>(knob.get());
     
     if (isInt) {
         QString createToken;
@@ -1724,7 +1843,7 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
                 createToken = ".createIntParam(";
                 break;
         }
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + createToken + ESC(isInt->getName()) +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + createToken + ESC(isInt->getName()) +
                                       ", " + ESC(isInt->getDescription()) + ")");
         
         std::vector<int> defaultValues = isInt->getDefaultValues_mt_safe();
@@ -1735,23 +1854,23 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
             int dMin = isInt->getDisplayMinimum(i);
             int dMax = isInt->getDisplayMaximum(i);
             if (min != INT_MIN) {
-                WRITE_INDENT(1); WRITE_STRING("param.setMinimum(" + NUM(min) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setMinimum(" + NUM(min) + ", " +
                                               NUM(i) + ")");
             }
             if (max != INT_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setMaximum(" + NUM(max) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setMaximum(" + NUM(max) + ", " +
                                               NUM(i) + ")");
             }
             if (dMin != INT_MIN) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDisplayMinimum(" + NUM(dMin) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDisplayMinimum(" + NUM(dMin) + ", " +
                                               NUM(i) + ")");
             }
             if (dMax != INT_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDisplayMaximum(" + NUM(dMax) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDisplayMaximum(" + NUM(dMax) + ", " +
                                               NUM(i) + ")");
             }
             if (defaultValues[i] != 0) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[i]) + ", " + NUM(i) + ")");
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[i]) + ", " + NUM(i) + ")");
             }
         }
     } else if (isDouble) {
@@ -1771,7 +1890,7 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
                 createToken = ".createDoubleParam(";
                 break;
         }
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + createToken + ESC(isDouble->getName()) +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + createToken + ESC(isDouble->getName()) +
                                       ", " + ESC(isDouble->getDescription()) + ")");
         
         std::vector<double> defaultValues = isDouble->getDefaultValues_mt_safe();
@@ -1782,41 +1901,41 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
             double dMin = isDouble->getDisplayMinimum(i);
             double dMax = isDouble->getDisplayMaximum(i);
             if (min != -DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setMinimum(" + NUM(min) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setMinimum(" + NUM(min) + ", " +
                                               NUM(i) + ")");
             }
             if (max != DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setMaximum(" + NUM(max) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setMaximum(" + NUM(max) + ", " +
                                               NUM(i) + ")");
             }
             if (dMin != -DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDisplayMinimum(" + NUM(dMin) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDisplayMinimum(" + NUM(dMin) + ", " +
                                               NUM(i) + ")");
             }
             if (dMax != DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDisplayMaximum(" + NUM(dMax) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDisplayMaximum(" + NUM(dMax) + ", " +
                                               NUM(i) + ")");
             }
             if (defaultValues[i] != 0.) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[i]) + ", " + NUM(i) + ")");
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[i]) + ", " + NUM(i) + ")");
             }
         }
 
     } else if (isBool) {
         
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createBooleanParam(" + ESC(isBool->getName()) +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createBooleanParam(" + ESC(isBool->getName()) +
                                       ", " + ESC(isBool->getDescription()) + ")");
         
         std::vector<bool> defaultValues = isBool->getDefaultValues_mt_safe();
         assert((int)defaultValues.size() == isBool->getDimension());
         
         if (defaultValues[0]) {
-            WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[0]) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[0]) + ")");
         }
         
         
     } else if (isChoice) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createChoiceParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createChoiceParam(" +
                                       ESC(isChoice->getName()) +
                                       ", " + ESC(isChoice->getDescription()) + ")");
         std::vector<std::string> entries = isChoice->getEntries_mt_safe();
@@ -1827,24 +1946,24 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
                     helps.push_back("");
                 }
             }
-            WRITE_INDENT(1); ts << "entries = [ (" << ESC(entries[0]) << ", " << ESC(helps[0]) << "),\n";
+            WRITE_INDENT(indentLevel); ts << "entries = [ (" << ESC(entries[0]) << ", " << ESC(helps[0]) << "),\n";
             for (U32 i = 1; i < entries.size(); ++i) {
                 QString endToken = (i == entries.size() - 1) ? ")]" : "),";
-                WRITE_INDENT(1); WRITE_STRING("(" + ESC(entries[i]) + ", " + ESC(helps[i]) + endToken);
+                WRITE_INDENT(indentLevel); WRITE_STRING("(" + ESC(entries[i]) + ", " + ESC(helps[i]) + endToken);
             }
-            WRITE_INDENT(1); WRITE_STATIC_LINE("param.setOptions(entries)");
-            WRITE_INDENT(1); WRITE_STATIC_LINE("del entries");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("param.setOptions(entries)");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del entries");
         }
         
         std::vector<int> defaultValues = isChoice->getDefaultValues_mt_safe();
         assert((int)defaultValues.size() == isChoice->getDimension());
         if (defaultValues[0] != 0) {
-            WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[0]) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[0]) + ")");
         }
         
     } else if (isColor) {
         QString hasAlphaStr = (isColor->getDimension() == 4) ? "True" : "False";
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createColorParam(" + ESC(isColor->getName()) +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createColorParam(" + ESC(isColor->getName()) +
                                       ", " + ESC(isColor->getDescription()) + ", " + hasAlphaStr +  ")");
         
         std::vector<double> defaultValues = isColor->getDefaultValues_mt_safe();
@@ -1856,32 +1975,32 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
             double dMin = isColor->getDisplayMinimum(i);
             double dMax = isColor->getDisplayMaximum(i);
             if (min != -DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setMinimum(" + NUM(min) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setMinimum(" + NUM(min) + ", " +
                                               NUM(i) + ")");
             }
             if (max != DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setMaximum(" + NUM(max) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setMaximum(" + NUM(max) + ", " +
                                               NUM(i) + ")");
             }
             if (dMin != -DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDisplayMinimum(" + NUM(dMin) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDisplayMinimum(" + NUM(dMin) + ", " +
                                               NUM(i) + ")");
             }
             if (dMax != DBL_MAX) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDisplayMaximum(" + NUM(dMax) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDisplayMaximum(" + NUM(dMax) + ", " +
                                               NUM(i) + ")");
             }
             if (defaultValues[i] != 0.) {
-                WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[i]) + ", " + NUM(i) + ")");
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + NUM(defaultValues[i]) + ", " + NUM(i) + ")");
             }
         }
 
     } else if (isButton) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createButtonParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createButtonParam(" +
                                       ESC(isButton->getName()) +
                                       ", " + ESC(isButton->getDescription()) + ")");
     } else if (isStr) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createStringParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createStringParam(" +
                                       ESC(isStr->getName()) +
                                       ", " + ESC(isStr->getDescription()) + ")");
         QString typeStr;
@@ -1898,68 +2017,68 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
         } else {
             typeStr = "eStringTypeDefault";
         }
-        WRITE_INDENT(1); WRITE_STRING("param.setType(NatronEngine.StringParam.TypeEnum." + typeStr + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setType(NatronEngine.StringParam.TypeEnum." + typeStr + ")");
         
         std::vector<std::string> defaultValues = isStr->getDefaultValues_mt_safe();
         assert((int)defaultValues.size() == isStr->getDimension());
         QString def(defaultValues[0].c_str());
         if (!def.isEmpty()) {
-            WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + ESC(def) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + ESC(def) + ")");
         }
         
     } else if (isFile) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createFileParam(" + ESC(isFile->getName()) +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createFileParam(" + ESC(isFile->getName()) +
                                       ", " + ESC(isFile->getDescription()) + ")");
         QString seqStr = isFile->isInputImageFile() ? "True" : "False";
-        WRITE_INDENT(1); WRITE_STRING("param.setSequenceEnabled("+ seqStr + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setSequenceEnabled("+ seqStr + ")");
         
         std::vector<std::string> defaultValues = isFile->getDefaultValues_mt_safe();
         assert((int)defaultValues.size() == isFile->getDimension());
         QString def(defaultValues[0].c_str());
         if (!def.isEmpty()) {
-            WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + def + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + def + ")");
         }
         
     } else if (isOutFile) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createOutputFileParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createOutputFileParam(" +
                                       ESC(isOutFile->getName()) +
                                       ", " + ESC(isOutFile->getDescription()) + ")");
         assert(isOutFile); 
         QString seqStr = isOutFile->isOutputImageFile() ? "True" : "False";
-        WRITE_INDENT(1); WRITE_STRING("param.setSequenceEnabled("+ seqStr + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setSequenceEnabled("+ seqStr + ")");
         
         std::vector<std::string> defaultValues = isOutFile->getDefaultValues_mt_safe();
         assert((int)defaultValues.size() == isOutFile->getDimension());
         QString def(defaultValues[0].c_str());
         if (!def.isEmpty()) {
-            WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + ESC(def) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + ESC(def) + ")");
         }
 
     } else if (isPath) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createPathParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createPathParam(" +
                                       ESC(isPath->getName()) +
                                       ", " + ESC(isPath->getDescription()) + ")");
         if (isPath->isMultiPath()) {
-            WRITE_INDENT(1); WRITE_STRING("param.setAsMultiPathTable()");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setAsMultiPathTable()");
         }
         
         std::vector<std::string> defaultValues = isPath->getDefaultValues_mt_safe();
         assert((int)defaultValues.size() == isPath->getDimension());
         QString def(defaultValues[0].c_str());
         if (!def.isEmpty()) {
-            WRITE_INDENT(1); WRITE_STRING("param.setDefaultValue(" + ESC(def) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setDefaultValue(" + ESC(def) + ")");
         }
 
     } else if (isGrp) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createGroupParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createGroupParam(" +
                                       ESC(isGrp->getName()) +
                                       ", " + ESC(isGrp->getDescription()) + ")");
         if (isGrp->isTab()) {
-            WRITE_INDENT(1); WRITE_STRING("param.setAsTab()");
+            WRITE_INDENT(indentLevel); WRITE_STRING("param.setAsTab()");
         }
 
     } else if (isParametric) {
-        WRITE_INDENT(1); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createParametricParam(" +
+        WRITE_INDENT(indentLevel); WRITE_STRING("param = " + fullyQualifiedNodeName + ".createParametricParam(" +
                                       ESC(isParametric->getName()) +
                                       ", " + ESC(isParametric->getDescription()) +  ", " +
                                       NUM(isParametric->getDimension()) + ")");
@@ -1969,57 +2088,58 @@ static void exportUserKnob(const boost::shared_ptr<KnobI>& knob,const QString& f
 
     if (group) {
         QString grpFullName = fullyQualifiedNodeName + "." + QString(group->getName().c_str());
-        WRITE_INDENT(1); WRITE_STATIC_LINE("#Add the param to the group, no need to add it to the page");
-        WRITE_INDENT(1); WRITE_STRING(grpFullName + ".addParam(param)");
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Add the param to the group, no need to add it to the page");
+        WRITE_INDENT(indentLevel); WRITE_STRING(grpFullName + ".addParam(param)");
     } else {
         assert(page);
         QString pageFullName = fullyQualifiedNodeName + "." + QString(page->getName().c_str());
-        WRITE_INDENT(1); WRITE_STATIC_LINE("#Add the param to the page");
-        WRITE_INDENT(1); WRITE_STRING(pageFullName + ".addParam(param)");
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Add the param to the page");
+        WRITE_INDENT(indentLevel); WRITE_STRING(pageFullName + ".addParam(param)");
     }
     
     WRITE_STATIC_LINE("");
-    WRITE_INDENT(1); WRITE_STATIC_LINE("#Set param properties");
+    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Set param properties");
 
     QString help(knob->getHintToolTip().c_str());
-    WRITE_INDENT(1); WRITE_STRING("param.setHelp(" + ESC(help) + ")");
+    WRITE_INDENT(indentLevel); WRITE_STRING("param.setHelp(" + ESC(help) + ")");
     if (knob->isNewLineActivated()) {
-        WRITE_INDENT(1); WRITE_STRING("param.setAddNewLine(True)");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setAddNewLine(True)");
     } else {
-        WRITE_INDENT(1); WRITE_STRING("param.setAddNewLine(False)");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setAddNewLine(False)");
     }
     
     if (!knob->getIsPersistant()) {
-        WRITE_INDENT(1); WRITE_STRING("param.setPersistant(False)");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setPersistant(False)");
     }
     
     if (!knob->getEvaluateOnChange()) {
-        WRITE_INDENT(1); WRITE_STRING("param.setEvaluateOnChange(False)");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setEvaluateOnChange(False)");
     }
     
     if (knob->canAnimate()) {
         QString animStr = knob->isAnimationEnabled() ? "True" : "False";
-        WRITE_INDENT(1); WRITE_STRING("param.setAnimationEnabled(" + animStr + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("param.setAnimationEnabled(" + animStr + ")");
     }
     
     
     
-    exportKnobValues(knob,"", false, ts);
-    WRITE_INDENT(1); WRITE_STRING(fullyQualifiedNodeName + "." + QString(knob->getName().c_str()) + " = param");
-    WRITE_INDENT(1); WRITE_STATIC_LINE("del param");
+    exportKnobValues(indentLevel,knob,"", false, ts);
+    WRITE_INDENT(indentLevel); WRITE_STRING(fullyQualifiedNodeName + "." + QString(knob->getName().c_str()) + " = param");
+    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del param");
     
     WRITE_STATIC_LINE("");
     
     if (isGrp) {
         std::vector<boost::shared_ptr<KnobI> > children =  isGrp->getChildren();
         for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it3 = children.begin(); it3 != children.end(); ++it3) {
-            exportUserKnob(*it3, fullyQualifiedNodeName, isGrp, page, ts);
+            exportUserKnob(indentLevel,*it3, fullyQualifiedNodeName, isGrp, page, ts);
         }
     }
     
 }
 
-static void exportBezierPointAtTime(const boost::shared_ptr<BezierCP>& point,
+static void exportBezierPointAtTime(int indentLevel,
+                                    const boost::shared_ptr<BezierCP>& point,
                                     bool isFeather,
                                     int time,
                                     int idx,
@@ -2028,11 +2148,11 @@ static void exportBezierPointAtTime(const boost::shared_ptr<BezierCP>& point,
     
     QString token = isFeather ? "bezier.setFeatherPointAtIndex(" : "bezier.setPointAtIndex(";
     double x,y,lx,ly,rx,ry;
-    point->getPositionAtTime(time, &x, &y);
-    point->getLeftBezierPointAtTime(time, &lx, &ly);
-    point->getRightBezierPointAtTime(time, &rx, &ry);
+    point->getPositionAtTime(false ,time, &x, &y);
+    point->getLeftBezierPointAtTime(false ,time, &lx, &ly);
+    point->getRightBezierPointAtTime(false ,time, &rx, &ry);
     
-    WRITE_INDENT(1); WRITE_STATIC_LINE(token + NUM(idx) + ", " +
+    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE(token + NUM(idx) + ", " +
                                        NUM(time) + ", " + NUM(x) + ", " +
                                        NUM(y) + ", " + NUM(lx) + ", " +
                                        NUM(ly) + ", " + NUM(rx) + ", " +
@@ -2040,7 +2160,8 @@ static void exportBezierPointAtTime(const boost::shared_ptr<BezierCP>& point,
    
 }
 
-static void exportRotoLayer(const std::list<boost::shared_ptr<RotoItem> >& items,
+static void exportRotoLayer(int indentLevel,
+                            const std::list<boost::shared_ptr<RotoItem> >& items,
                             const boost::shared_ptr<RotoLayer>& layer,
                             QTextStream& ts)
 {
@@ -2060,37 +2181,37 @@ static void exportRotoLayer(const std::list<boost::shared_ptr<RotoItem> >& items
                 continue;
             }
             
-            time = cps.front()->getKeyframeTime(0);
+            time = cps.front()->getKeyframeTime(false ,0);
             
-            WRITE_INDENT(1); WRITE_STATIC_LINE("bezier = roto.createBezier(0,0, " + NUM(time) + ")");
-            WRITE_INDENT(1); WRITE_STATIC_LINE("bezier.setScriptName(" + ESC(isBezier->getScriptName()) + ")");
-            WRITE_INDENT(1); WRITE_STATIC_LINE("bezier.setLabel(" + ESC(isBezier->getLabel()) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("bezier = roto.createBezier(0,0, " + NUM(time) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("bezier.setScriptName(" + ESC(isBezier->getScriptName()) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("bezier.setLabel(" + ESC(isBezier->getLabel()) + ")");
             QString lockedStr = isBezier->getLocked() ? "True" : "False";
-            WRITE_INDENT(1); WRITE_STRING("bezier.setLocked(" + lockedStr + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("bezier.setLocked(" + lockedStr + ")");
             QString visibleStr = isBezier->isGloballyActivated() ? "True" : "False";
-            WRITE_INDENT(1); WRITE_STRING("bezier.setVisible(" + visibleStr + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING("bezier.setVisible(" + visibleStr + ")");
             
-            boost::shared_ptr<Bool_Knob> activatedKnob = isBezier->getActivatedKnob();
-            exportKnobValues(activatedKnob, "bezier.getActivatedParam()", true, ts);
+            boost::shared_ptr<KnobBool> activatedKnob = isBezier->getActivatedKnob();
+            exportKnobValues(indentLevel,activatedKnob, "bezier.getActivatedParam()", true, ts);
             
-            boost::shared_ptr<Double_Knob> featherDist = isBezier->getFeatherKnob();
-            exportKnobValues(featherDist,"bezier.getFeatherDistanceParam()", true, ts);
+            boost::shared_ptr<KnobDouble> featherDist = isBezier->getFeatherKnob();
+            exportKnobValues(indentLevel,featherDist,"bezier.getFeatherDistanceParam()", true, ts);
             
-            boost::shared_ptr<Double_Knob> opacityKnob = isBezier->getOpacityKnob();
-            exportKnobValues(opacityKnob,"bezier.getOpacityParam()", true, ts);
+            boost::shared_ptr<KnobDouble> opacityKnob = isBezier->getOpacityKnob();
+            exportKnobValues(indentLevel,opacityKnob,"bezier.getOpacityParam()", true, ts);
             
-            boost::shared_ptr<Double_Knob> fallOffKnob = isBezier->getFeatherFallOffKnob();
-            exportKnobValues(fallOffKnob,"bezier.getFeatherFallOffParam()", true, ts);
+            boost::shared_ptr<KnobDouble> fallOffKnob = isBezier->getFeatherFallOffKnob();
+            exportKnobValues(indentLevel,fallOffKnob,"bezier.getFeatherFallOffParam()", true, ts);
             
-            boost::shared_ptr<Color_Knob> colorKnob = isBezier->getColorKnob();
-            exportKnobValues(colorKnob, "bezier.getColorParam()", true, ts);
+            boost::shared_ptr<KnobColor> colorKnob = isBezier->getColorKnob();
+            exportKnobValues(indentLevel,colorKnob, "bezier.getColorParam()", true, ts);
             
-            boost::shared_ptr<Choice_Knob> compositing = isBezier->getOperatorKnob();
-            exportKnobValues(compositing, "bezier.getCompositingOperatorParam()", true, ts);
+            boost::shared_ptr<KnobChoice> compositing = isBezier->getOperatorKnob();
+            exportKnobValues(indentLevel,compositing, "bezier.getCompositingOperatorParam()", true, ts);
 
             
-            WRITE_INDENT(1); WRITE_STRING(parentLayerName + ".addItem(bezier)");
-            WRITE_INDENT(1); WRITE_STATIC_LINE("");
+            WRITE_INDENT(indentLevel); WRITE_STRING(parentLayerName + ".addItem(bezier)");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("");
            
             assert(cps.size() == fps.size());
             
@@ -2099,7 +2220,7 @@ static void exportRotoLayer(const std::list<boost::shared_ptr<RotoItem> >& items
             
             //the last python call already registered the first control point
             int nbPts = cps.size() - 1;
-            WRITE_INDENT(1); WRITE_STATIC_LINE("for i in range(0, " + NUM(nbPts) +"):");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("for i in range(0, " + NUM(nbPts) +"):");
             WRITE_INDENT(2); WRITE_STATIC_LINE("bezier.addControlPoint(0,0)");
           
             ///Now that all points are created position them
@@ -2107,72 +2228,72 @@ static void exportRotoLayer(const std::list<boost::shared_ptr<RotoItem> >& items
             std::list<boost::shared_ptr<BezierCP> >::const_iterator fpIt = fps.begin();
             for (std::list<boost::shared_ptr<BezierCP> >::const_iterator it2 = cps.begin(); it2 != cps.end(); ++it2, ++fpIt, ++idx) {
                 for (std::set<int>::iterator it3 = kf.begin(); it3 != kf.end(); ++it3) {
-                    exportBezierPointAtTime(*it2, false, *it3, idx, ts);
-                    exportBezierPointAtTime(*fpIt, true, *it3, idx, ts);
+                    exportBezierPointAtTime(indentLevel,*it2, false, *it3, idx, ts);
+                    exportBezierPointAtTime(indentLevel,*fpIt, true, *it3, idx, ts);
                 }
                 if (kf.empty()) {
-                    exportBezierPointAtTime(*it2, false, time, idx, ts);
-                    exportBezierPointAtTime(*fpIt, true, time, idx, ts);
+                    exportBezierPointAtTime(indentLevel,*it2, false, time, idx, ts);
+                    exportBezierPointAtTime(indentLevel,*fpIt, true, time, idx, ts);
                 }
-                boost::shared_ptr<Double_Knob> track = (*it2)->isSlaved();
+                boost::shared_ptr<KnobDouble> track = (*it2)->isSlaved();
                 if (track) {
                     Natron::EffectInstance* effect = dynamic_cast<Natron::EffectInstance*>(track->getHolder());
                     assert(effect && effect->getNode()->isPointTrackerNode());
                     std::string trackerName = effect->getNode()->getScriptName_mt_safe();
                     int trackTime = (*it2)->getOffsetTime();
-                    WRITE_INDENT(1); WRITE_STRING("tracker = group.getNode(\"" + QString(trackerName.c_str()) + "\")");
-                    WRITE_INDENT(1); WRITE_STRING("center = tracker.getParam(\"" + QString(track->getName().c_str()) + "\")");
-                    WRITE_INDENT(1); WRITE_STRING("bezier.slavePointToTrack(" + NUM(idx) + ", " +
+                    WRITE_INDENT(indentLevel); WRITE_STRING("tracker = group.getNode(\"" + QString(trackerName.c_str()) + "\")");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("center = tracker.getParam(\"" + QString(track->getName().c_str()) + "\")");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("bezier.slavePointToTrack(" + NUM(idx) + ", " +
                                                   NUM(trackTime) + ",center)");
-                    WRITE_INDENT(1); WRITE_STATIC_LINE("del center");
-                    WRITE_INDENT(1); WRITE_STATIC_LINE("del tracker");
+                    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del center");
+                    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del tracker");
                 }
                 
             }
             if (isBezier->isCurveFinished()) {
-                WRITE_INDENT(1); WRITE_STRING("bezier.setCurveFinished(True)");
+                WRITE_INDENT(indentLevel); WRITE_STRING("bezier.setCurveFinished(True)");
             }
             
-            WRITE_INDENT(1); WRITE_STATIC_LINE("del bezier");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del bezier");
             
             
         } else {
             
             QString name =  QString(isLayer->getScriptName().c_str());
             QString layerName = name + "_layer";
-            WRITE_INDENT(1); WRITE_STATIC_LINE(name + " = roto.createLayer()");
-            WRITE_INDENT(1); WRITE_STATIC_LINE(layerName +  ".setScriptName(" + ESC(name) + ")");
-            WRITE_INDENT(1); WRITE_STATIC_LINE(layerName +  ".setLabel(" + ESC(isLayer->getLabel()) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE(name + " = roto.createLayer()");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE(layerName +  ".setScriptName(" + ESC(name) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE(layerName +  ".setLabel(" + ESC(isLayer->getLabel()) + ")");
             QString lockedStr = isLayer->getLocked() ? "True" : "False";
-            WRITE_INDENT(1); WRITE_STRING(layerName + ".setLocked(" + lockedStr + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING(layerName + ".setLocked(" + lockedStr + ")");
             QString visibleStr = isLayer->isGloballyActivated() ? "True" : "False";
-            WRITE_INDENT(1); WRITE_STRING(layerName + ".setVisible(" + visibleStr + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING(layerName + ".setVisible(" + visibleStr + ")");
             
-            WRITE_INDENT(1); WRITE_STRING(parentLayerName + ".addItem(" + layerName);
+            WRITE_INDENT(indentLevel); WRITE_STRING(parentLayerName + ".addItem(" + layerName);
             
             const std::list<boost::shared_ptr<RotoItem> >& items = isLayer->getItems();
-            exportRotoLayer(items, isLayer, ts);
-            WRITE_INDENT(1); WRITE_STRING("del " + layerName);
+            exportRotoLayer(indentLevel,items, isLayer, ts);
+            WRITE_INDENT(indentLevel); WRITE_STRING("del " + layerName);
         }
         WRITE_STATIC_LINE("");
     }
 }
 
-static void exportAllNodeKnobs(const boost::shared_ptr<Natron::Node>& node,QTextStream& ts)
+static void exportAllNodeKnobs(int indentLevel,const boost::shared_ptr<Natron::Node>& node,QTextStream& ts)
 {
     
     const std::vector<boost::shared_ptr<KnobI> >& knobs = node->getKnobs();
-    std::list<Page_Knob*> userPages;
+    std::list<KnobPage*> userPages;
     for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it2 = knobs.begin(); it2 != knobs.end(); ++it2) {
         if ((*it2)->getIsPersistant() && !(*it2)->isUserKnob()) {
-            if (exportKnobValues(*it2,"lastNode.getParam(\"" + QString((*it2)->getName().c_str()) + "\")", true, ts)) {
+            if (exportKnobValues(indentLevel,*it2,"lastNode.getParam(\"" + QString((*it2)->getName().c_str()) + "\")", true, ts)) {
                 WRITE_STATIC_LINE("");
             }
             
         }
         
         if ((*it2)->isUserKnob()) {
-            Page_Knob* isPage = dynamic_cast<Page_Knob*>(it2->get());
+            KnobPage* isPage = dynamic_cast<KnobPage*>(it2->get());
             if (isPage) {
                 userPages.push_back(isPage);
             }
@@ -2180,21 +2301,21 @@ static void exportAllNodeKnobs(const boost::shared_ptr<Natron::Node>& node,QText
     }// for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it2 = knobs.begin(); it2 != knobs.end(); ++it2)
     if (!userPages.empty()) {
         WRITE_STATIC_LINE("");
-        WRITE_INDENT(1); WRITE_STATIC_LINE("#Create the user-parameters");
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Create the user-parameters");
     }
-    for (std::list<Page_Knob*>::iterator it2 = userPages.begin(); it2!= userPages.end(); ++it2) {
-        WRITE_INDENT(1); WRITE_STRING("lastNode." + QString((*it2)->getName().c_str()) +
+    for (std::list<KnobPage*>::iterator it2 = userPages.begin(); it2!= userPages.end(); ++it2) {
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode." + QString((*it2)->getName().c_str()) +
                                       " = lastNode.createPageParam(" + ESC((*it2)->getName()) + ", " +
                                       ESC((*it2)->getDescription()) + ")");
         std::vector<boost::shared_ptr<KnobI> > children =  (*it2)->getChildren();
         for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it3 = children.begin(); it3 != children.end(); ++it3) {
-            exportUserKnob(*it3, "lastNode", 0, *it2, ts);
+            exportUserKnob(indentLevel,*it3, "lastNode", 0, *it2, ts);
         }
     }
     
     if (!userPages.empty()) {
-        WRITE_INDENT(1); WRITE_STATIC_LINE("#Refresh the GUI with the newly created parameters");
-        WRITE_INDENT(1); WRITE_STATIC_LINE("lastNode.refreshUserParamsGUI()");
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Refresh the GUI with the newly created parameters");
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("lastNode.refreshUserParamsGUI()");
     }
     
     boost::shared_ptr<RotoContext> roto = node->getRotoContext();
@@ -2202,27 +2323,28 @@ static void exportAllNodeKnobs(const boost::shared_ptr<Natron::Node>& node,QText
         const std::list<boost::shared_ptr<RotoLayer> >& layers = roto->getLayers();
         
         if (!layers.empty()) {
-            WRITE_INDENT(1); WRITE_STATIC_LINE("#For the roto node, create all layers and beziers");
-            WRITE_INDENT(1); WRITE_STRING("roto = lastNode.getRotoContext()");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#For the roto node, create all layers and beziers");
+            WRITE_INDENT(indentLevel); WRITE_STRING("roto = lastNode.getRotoContext()");
             boost::shared_ptr<RotoLayer> baseLayer = layers.front();
             QString baseLayerName = QString(baseLayer->getScriptName().c_str());
             QString baseLayerToken = baseLayerName +"_layer";
-            WRITE_INDENT(1); WRITE_STATIC_LINE(baseLayerToken + " = roto.getBaseLayer()");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE(baseLayerToken + " = roto.getBaseLayer()");
             
-            WRITE_INDENT(1); WRITE_STRING(baseLayerToken + ".setScriptName(" + ESC(baseLayerName) + ")");
-            WRITE_INDENT(1); WRITE_STRING(baseLayerToken + ".setLabel(" + ESC(baseLayer->getLabel()) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING(baseLayerToken + ".setScriptName(" + ESC(baseLayerName) + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING(baseLayerToken + ".setLabel(" + ESC(baseLayer->getLabel()) + ")");
             QString lockedStr = baseLayer->getLocked() ? "True" : "False";
-            WRITE_INDENT(1); WRITE_STRING(baseLayerToken + ".setLocked(" + lockedStr + ")");
+            WRITE_INDENT(indentLevel); WRITE_STRING(baseLayerToken + ".setLocked(" + lockedStr + ")");
             QString visibleStr = baseLayer->isGloballyActivated() ? "True" : "False";
-            WRITE_INDENT(1); WRITE_STRING(baseLayerToken + ".setVisible(" + visibleStr + ")");
-            exportRotoLayer(baseLayer->getItems(),baseLayer,  ts);
-            WRITE_INDENT(1); WRITE_STRING("del " + baseLayerToken);
-            WRITE_INDENT(1); WRITE_STRING("del roto");
+            WRITE_INDENT(indentLevel); WRITE_STRING(baseLayerToken + ".setVisible(" + visibleStr + ")");
+            exportRotoLayer(indentLevel,baseLayer->getItems(),baseLayer,  ts);
+            WRITE_INDENT(indentLevel); WRITE_STRING("del " + baseLayerToken);
+            WRITE_INDENT(indentLevel); WRITE_STRING("del roto");
         }
     }
 }
 
-static bool exportKnobLinks(const boost::shared_ptr<Natron::Node>& node,
+static bool exportKnobLinks(int indentLevel,
+                            const boost::shared_ptr<Natron::Node>& node,
                      const QString& nodeName,
                      QTextStream& ts)
 {
@@ -2237,25 +2359,25 @@ static bool exportKnobLinks(const boost::shared_ptr<Natron::Node>& node,
             QString hasRetVar = (*it2)->isExpressionUsingRetVariable(i) ? "True" : "False";
             if (!expr.empty()) {
                 if (!hasDefined) {
-                    WRITE_INDENT(1); WRITE_STRING("param = " + paramName);
+                    WRITE_INDENT(indentLevel); WRITE_STRING("param = " + paramName);
                     hasDefined = true;
                 }
                 hasExportedLink = true;
-                WRITE_INDENT(1); WRITE_STRING("param.setExpression(" + ESC(expr) + ", " +
+                WRITE_INDENT(indentLevel); WRITE_STRING("param.setExpression(" + ESC(expr) + ", " +
                                               hasRetVar + ", " + NUM(i) + ")");
             }
             
         }
         if (hasDefined) {
-            WRITE_INDENT(1); WRITE_STATIC_LINE("del param");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del param");
         }
     }
     return hasExportedLink;
 }
 
-static void exportGroupInternal(const NodeCollection* collection,const QString& groupName, QTextStream& ts)
+static void exportGroupInternal(int indentLevel,const NodeCollection* collection,const QString& groupName, QTextStream& ts)
 {
-    WRITE_INDENT(1); WRITE_STATIC_LINE("#Create all nodes in the group");
+    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Create all nodes in the group");
     
     NodeList nodes = collection->getNodes();
     NodeList exportedNodes;
@@ -2295,42 +2417,58 @@ static void exportGroupInternal(const NodeCollection* collection,const QString& 
         
         QString nodeName((*it)->getPluginID().c_str());
         
-        WRITE_INDENT(1); WRITE_STRING("lastNode = app.createNode(" + ESC(nodeName) + ", " +
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode = app.createNode(" + ESC(nodeName) + ", " +
                                       NUM((*it)->getPlugin()->getMajorVersion()) + ", " + groupName +
                                       ")");
-        WRITE_INDENT(1); WRITE_STRING("lastNode.setScriptName(" + ESC((*it)->getScriptName_mt_safe()) + ")");
-        WRITE_INDENT(1); WRITE_STRING("lastNode.setLabel(" + ESC((*it)->getLabel_mt_safe()) + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setScriptName(" + ESC((*it)->getScriptName_mt_safe()) + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setLabel(" + ESC((*it)->getLabel_mt_safe()) + ")");
         double x,y;
         (*it)->getPosition(&x,&y);
         double w,h;
         (*it)->getSize(&w, &h);
-        WRITE_INDENT(1); WRITE_STRING("lastNode.setPosition(" + NUM(x) + ", " + NUM(y) + ")");
-        WRITE_INDENT(1); WRITE_STRING("lastNode.setSize(" + NUM(w) + ", " + NUM(h) + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setPosition(" + NUM(x) + ", " + NUM(y) + ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setSize(" + NUM(w) + ", " + NUM(h) + ")");
         
         double r,g,b;
         (*it)->getColor(&r,&g,&b);
-        WRITE_INDENT(1); WRITE_STRING("lastNode.setColor(" + NUM(r) + ", " + NUM(g) + ", " + NUM(b) +  ")");
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setColor(" + NUM(r) + ", " + NUM(g) + ", " + NUM(b) +  ")");
+        
+        std::list<Natron::ImageComponents> userComps;
+        (*it)->getUserComponents(&userComps);
+        for (std::list<Natron::ImageComponents>::iterator it2 = userComps.begin(); it2 != userComps.end(); ++it2) {
+            
+            const std::vector<std::string>& channels = it2->getComponentsNames();
+            QString compStr("[");
+            for (std::size_t i = 0; i < channels.size(); ++i) {
+                compStr.append(ESC(channels[i]));
+                if (i < (channels.size() - 1)) {
+                    compStr.push_back(',');
+                }
+            }
+            compStr.push_back(']');
+            WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.addUserPlane(" + ESC(it2->getLayerName()) + ", " + compStr +  ")");
+        }
         
         QString nodeNameInScript = groupName + QString((*it)->getScriptName_mt_safe().c_str());
-        WRITE_INDENT(1); WRITE_STRING(nodeNameInScript + " = lastNode");
+        WRITE_INDENT(indentLevel); WRITE_STRING(nodeNameInScript + " = lastNode");
         WRITE_STATIC_LINE("");
-        exportAllNodeKnobs(*it,ts);
-        WRITE_INDENT(1); WRITE_STRING("del lastNode");
+        exportAllNodeKnobs(indentLevel,*it,ts);
+        WRITE_INDENT(indentLevel); WRITE_STRING("del lastNode");
         WRITE_STATIC_LINE("");
         
         
         std::list< NodePtr > children;
         (*it)->getChildrenMultiInstance(&children);
         if (!children.empty()) {
-            WRITE_INDENT(1); WRITE_STATIC_LINE("#Create children if the node is a multi-instance such as a tracker");
+            WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Create children if the node is a multi-instance such as a tracker");
             for (std::list< NodePtr > ::iterator it2 = children.begin(); it2 != children.end(); ++it2) {
                 if ((*it2)->isActivated()) {
-                    WRITE_INDENT(1); WRITE_STRING("lastNode = " + nodeNameInScript + ".createChild()");
-                    WRITE_INDENT(1); WRITE_STRING("lastNode.setScriptName(\"" + QString((*it2)->getScriptName_mt_safe().c_str()) + "\")");
-                    WRITE_INDENT(1); WRITE_STRING("lastNode.setLabel(\"" + QString((*it2)->getLabel_mt_safe().c_str()) + "\")");
-                    exportAllNodeKnobs(*it2,ts);
-                    WRITE_INDENT(1); WRITE_STRING(nodeNameInScript + "." + QString((*it2)->getScriptName_mt_safe().c_str()) + " = lastNode");
-                    WRITE_INDENT(1); WRITE_STRING("del lastNode");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("lastNode = " + nodeNameInScript + ".createChild()");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setScriptName(\"" + QString((*it2)->getScriptName_mt_safe().c_str()) + "\")");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("lastNode.setLabel(\"" + QString((*it2)->getLabel_mt_safe().c_str()) + "\")");
+                    exportAllNodeKnobs(indentLevel,*it2,ts);
+                    WRITE_INDENT(indentLevel); WRITE_STRING(nodeNameInScript + "." + QString((*it2)->getScriptName_mt_safe().c_str()) + " = lastNode");
+                    WRITE_INDENT(indentLevel); WRITE_STRING("del lastNode");
                 }
             }
         }
@@ -2340,8 +2478,8 @@ static void exportGroupInternal(const NodeCollection* collection,const QString& 
         
         NodeGroup* isGrp = dynamic_cast<NodeGroup*>((*it)->getLiveInstance());
         if (isGrp) {
-            WRITE_INDENT(1); WRITE_STRING(groupName + "group = " + nodeNameInScript);
-            exportGroupInternal(isGrp, groupName + "group", ts);
+            WRITE_INDENT(indentLevel); WRITE_STRING(groupName + "group = " + nodeNameInScript);
+            exportGroupInternal(indentLevel, isGrp, groupName + "group", ts);
         }
         WRITE_STATIC_LINE("");
         
@@ -2350,14 +2488,14 @@ static void exportGroupInternal(const NodeCollection* collection,const QString& 
     
     const NodeGroup* isGroup = dynamic_cast<const NodeGroup*>(collection);
     if (isGroup) {
-        WRITE_INDENT(1); WRITE_STATIC_LINE("#Create the parameters of the group node the same way we did for all internal nodes");
-        WRITE_INDENT(1); WRITE_STRING("lastNode = " + groupName);
-        exportAllNodeKnobs(isGroup->getNode(),ts);
-        WRITE_INDENT(1); WRITE_STATIC_LINE("del lastNode");
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Create the parameters of the group node the same way we did for all internal nodes");
+        WRITE_INDENT(indentLevel); WRITE_STRING("lastNode = " + groupName);
+        exportAllNodeKnobs(indentLevel,isGroup->getNode(),ts);
+        WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("del lastNode");
         WRITE_STATIC_LINE("");
     }
     
-    WRITE_INDENT(1); WRITE_STATIC_LINE("#Now that all nodes are created we can connect them together, restore expressions");
+    WRITE_INDENT(indentLevel); WRITE_STATIC_LINE("#Now that all nodes are created we can connect them together, restore expressions");
     for (NodeList::iterator it = exportedNodes.begin(); it != exportedNodes.end(); ++it) {
         
         QString nodeQualifiedName(groupName + (*it)->getScriptName_mt_safe().c_str());
@@ -2368,12 +2506,12 @@ static void exportGroupInternal(const NodeCollection* collection,const QString& 
                 if (inputNode) {
                     hasConnected = true;
                     QString inputQualifiedName(groupName  + inputNode->getScriptName_mt_safe().c_str());
-                    WRITE_INDENT(1); WRITE_STRING(nodeQualifiedName + ".connectInput(" + NUM(i) +
+                    WRITE_INDENT(indentLevel); WRITE_STRING(nodeQualifiedName + ".connectInput(" + NUM(i) +
                                                   ", " + inputQualifiedName + ")");
                 }
             }
         }
-        if (exportKnobLinks(*it,nodeQualifiedName, ts) || hasConnected) {
+        if (exportKnobLinks(indentLevel,*it,nodeQualifiedName, ts) || hasConnected) {
             WRITE_STATIC_LINE("");
         }
     }
@@ -2398,8 +2536,18 @@ NodeCollection::exportGroupToPython(const QString& pluginID,
     WRITE_STATIC_LINE("#Note that Viewers are never exported");
     WRITE_STRING(descline);
     WRITE_STATIC_LINE("import " NATRON_ENGINE_PYTHON_MODULE_NAME);
+    WRITE_STATIC_LINE("import sys");
     WRITE_STATIC_LINE("");
-   
+    WRITE_STATIC_LINE("#Try to import the extensions file where callbacks and hand-written code should be located.");
+    WRITE_STATIC_LINE("try:");
+    
+    QString extModule(pluginLabel);
+    extModule.append("Ext");
+    WRITE_INDENT(1);WRITE_STRING("from " + extModule + " import *");
+    WRITE_STRING("except ImportError:");
+    WRITE_INDENT(1);WRITE_STRING("pass");
+    WRITE_STATIC_LINE("");
+    
     WRITE_STATIC_LINE("def getPluginID():");
     WRITE_INDENT(1);WRITE_STRING("return \"" + pluginID + "\"");
     WRITE_STATIC_LINE("");
@@ -2431,5 +2579,13 @@ NodeCollection::exportGroupToPython(const QString& pluginID,
     
     WRITE_STATIC_LINE("def createInstance(app,group):");
     WRITE_STATIC_LINE("");
-    exportGroupInternal(this, "group", ts);
+    
+    exportGroupInternal(1, this, "group", ts);
+    
+    ///Import user hand-written code
+    WRITE_INDENT(1);WRITE_STRING("extModule = sys.modules[" + ESC(extModule) + "]");
+    
+    QString testAttr = QString("if hasattr(extModule ,\"createInstanceExt\") and hasattr(extModule.createInstanceExt,\"__call__\"):").arg(extModule);
+    WRITE_INDENT(1);WRITE_STRING(testAttr);
+    WRITE_INDENT(2);WRITE_STRING("extModule.createInstanceExt(app,group)");
 }

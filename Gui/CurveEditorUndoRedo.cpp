@@ -1,29 +1,42 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "CurveEditorUndoRedo.h"
 
 #include <cmath>
-#include <QDebug>
+#include <stdexcept>
+
+#include <QtCore/QDebug>
 
 #include "Global/GlobalDefines.h"
 
 #include "Gui/CurveEditor.h"
+#include "Gui/CurveGui.h"
 #include "Gui/KnobGui.h"
 #include "Gui/CurveWidget.h"
 
+#include "Engine/Bezier.h"
 #include "Engine/Knob.h"
 #include "Engine/Curve.h"
 #include "Engine/RotoContext.h"
@@ -68,9 +81,9 @@ AddKeysCommand::addOrRemoveKeyframe(bool isSetKeyCommand, bool add)
         if (isKnobCurve) {
             knob = isKnobCurve->getInternalKnob();
         }
-        boost::shared_ptr<Parametric_Knob> isParametric;
+        boost::shared_ptr<KnobParametric> isParametric;
         if (knob) {
-            isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(knob);
+            isParametric = boost::dynamic_pointer_cast<KnobParametric>(knob);
         }
 
         if (add && isSetKeyCommand) {
@@ -78,6 +91,9 @@ AddKeysCommand::addOrRemoveKeyframe(bool isSetKeyCommand, bool add)
                 if (isParametric) {
                     Natron::StatusEnum st = isParametric->deleteAllControlPoints(isKnobCurve->getDimension());
                     assert(st == Natron::eStatusOK);
+                    if (st != Natron::eStatusOK) {
+                        throw std::logic_error("addOrRemoveKeyframe");
+                    }
                 } else {
                     knob->removeAnimation(isKnobCurve->getDimension());
                 }
@@ -127,7 +143,7 @@ AddKeysCommand::addOrRemoveKeyframe(bool isSetKeyCommand, bool add)
                         }
                     } else {
                         
-                        boost::shared_ptr<Parametric_Knob> knob = boost::dynamic_pointer_cast<Parametric_Knob>( isKnobCurve->getInternalKnob() );
+                        boost::shared_ptr<KnobParametric> knob = boost::dynamic_pointer_cast<KnobParametric>( isKnobCurve->getInternalKnob() );
                         
                         if (knob) {
                             Natron::StatusEnum st = knob->deleteControlPoint( isKnobCurve->getDimension(),
@@ -135,7 +151,7 @@ AddKeysCommand::addOrRemoveKeyframe(bool isSetKeyCommand, bool add)
                             assert(st == Natron::eStatusOK);
                             Q_UNUSED(st);
                         } else {
-                            isKnobCurve->getInternalKnob()->deleteValueAtTime(it->second[i].getTime(), isKnobCurve->getDimension() );
+                            isKnobCurve->getInternalKnob()->deleteValueAtTime(Natron::eCurveChangeReasonCurveEditor, it->second[i].getTime(), isKnobCurve->getDimension() );
                         }
                     }
                 } else if (isBezierCurve) {
@@ -199,7 +215,7 @@ SetKeysCommand::undo()
     
     if (isKnobCurve) {
         boost::shared_ptr<KnobI> knob = isKnobCurve->getInternalKnob();
-        boost::shared_ptr<Parametric_Knob> isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(knob);
+        boost::shared_ptr<KnobParametric> isParametric = boost::dynamic_pointer_cast<KnobParametric>(knob);
         if (!isParametric) {
             knob->cloneCurve(isKnobCurve->getDimension(), *_oldCurve);
         } else {
@@ -240,9 +256,9 @@ RemoveKeysCommand::addOrRemoveKeyframe(bool add)
         if (isKnobCurve) {
             knob = isKnobCurve->getInternalKnob();
         }
-        boost::shared_ptr<Parametric_Knob> isParametric;
+        boost::shared_ptr<KnobParametric> isParametric;
         if (knob) {
-            isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(knob);
+            isParametric = boost::dynamic_pointer_cast<KnobParametric>(knob);
         }
         
         if (guiKnob && isKnobCurve && !isParametric) {
@@ -286,7 +302,7 @@ RemoveKeysCommand::addOrRemoveKeyframe(bool add)
                         }
                     } else {
                         
-                        boost::shared_ptr<Parametric_Knob> knob = boost::dynamic_pointer_cast<Parametric_Knob>( isKnobCurve->getInternalKnob() );
+                        boost::shared_ptr<KnobParametric> knob = boost::dynamic_pointer_cast<KnobParametric>( isKnobCurve->getInternalKnob() );
                         
                         if (knob) {
                             Natron::StatusEnum st = knob->deleteControlPoint( isKnobCurve->getDimension(),
@@ -294,7 +310,7 @@ RemoveKeysCommand::addOrRemoveKeyframe(bool add)
                             assert(st == Natron::eStatusOK);
                             Q_UNUSED(st);
                         } else {
-                            isKnobCurve->getInternalKnob()->deleteValueAtTime(it->second[i].getTime(), isKnobCurve->getDimension() );
+                            isKnobCurve->getInternalKnob()->deleteValueAtTime(Natron::eCurveChangeReasonCurveEditor, it->second[i].getTime(), isKnobCurve->getDimension() );
                         }
                     }
                 } else if (isBezierCurve) {
@@ -359,7 +375,7 @@ moveKey(KeyPtr &k,
     BezierCPCurveGui* isBezierCurve = dynamic_cast<BezierCPCurveGui*>(k->curve.get());
     if (isKnobCurve) {
         boost::shared_ptr<KnobI> knob = isKnobCurve->getInternalKnob();
-        Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(knob.get());
+        KnobParametric* isParametric = dynamic_cast<KnobParametric*>(knob.get());
         
         if (isParametric) {
            // std::pair<double,double> curveYRange = k->curve->getInternalCurve()->getCurveYRange();
@@ -379,7 +395,7 @@ moveKey(KeyPtr &k,
             k->key = curve->setKeyFrameValueAndTime(newX,newY, keyframeIndex, &newIndex);
             isParametric->evaluateValueChange(isKnobCurve->getDimension(), Natron::eValueChangedReasonUserEdited);
         } else {
-            knob->moveValueAtTime(k->key.getTime(), isKnobCurve->getDimension(), dt, dv,&k->key);
+            knob->moveValueAtTime(Natron::eCurveChangeReasonCurveEditor, k->key.getTime(), isKnobCurve->getDimension(), dt, dv,&k->key);
         }
     } else if (isBezierCurve) {
         int oldTime = k->key.getTime();
@@ -394,6 +410,9 @@ void
 MoveKeysCommand::move(double dt,
                       double dv)
 {
+    //Prevent all redraws from moveKey
+    _widget->setUpdatesEnabled(false);
+    
     std::list<KnobHolder*> differentKnobs;
 
     std::list<boost::shared_ptr<RotoContext> > rotoToEvaluate;
@@ -420,6 +439,7 @@ MoveKeysCommand::move(double dt,
         }
     }
     
+    
     for (SelectedKeys::iterator it = _keys.begin(); it != _keys.end(); ++it) {
         moveKey(*it, dt, dv);
     }
@@ -429,6 +449,8 @@ MoveKeysCommand::move(double dt,
             (*it)->endChanges();
         }
     }
+    
+    _widget->setUpdatesEnabled(true);
     
     for (std::list<boost::shared_ptr<RotoContext> >::iterator it = rotoToEvaluate.begin(); it != rotoToEvaluate.end(); ++it) {
         (*it)->evaluateChange();
@@ -532,7 +554,7 @@ SetKeysInterpolationCommand::setNewInterpolation(bool undo)
         KnobCurveGui* isKnobCurve = dynamic_cast<KnobCurveGui*>(it->key->curve.get());
         if (isKnobCurve) {
             boost::shared_ptr<KnobI> knob = isKnobCurve->getInternalKnob();
-            Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(knob.get());
+            KnobParametric* isParametric = dynamic_cast<KnobParametric*>(knob.get());
             
             if (isParametric) {
                 
@@ -542,7 +564,7 @@ SetKeysInterpolationCommand::setNewInterpolation(bool undo)
                 }
                 
             } else {
-                knob->setInterpolationAtTime(isKnobCurve->getDimension(), it->key->key.getTime(), interp, &it->key->key);
+                knob->setInterpolationAtTime(Natron::eCurveChangeReasonCurveEditor, isKnobCurve->getDimension(), it->key->key.getTime(), interp, &it->key->key);
             }
         } else {
             ///interpolation for bezier curve is either linear or constant
@@ -705,7 +727,7 @@ MoveTangentCommand::setNewDerivatives(bool undo)
     if (isKnobCurve) {
         boost::shared_ptr<KnobI> attachedKnob = isKnobCurve->getInternalKnob();
         assert(attachedKnob);
-        Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(attachedKnob.get());
+        KnobParametric* isParametric = dynamic_cast<KnobParametric*>(attachedKnob.get());
         
         
         double left = undo ? _oldLeft : _newLeft;
@@ -715,14 +737,14 @@ MoveTangentCommand::setNewDerivatives(bool undo)
         if (!isParametric) {
             attachedKnob->beginChanges();
             if (_setBoth) {
-                attachedKnob->moveDerivativesAtTime(isKnobCurve->getDimension(), _key->key.getTime(), left, right);
+                attachedKnob->moveDerivativesAtTime(Natron::eCurveChangeReasonCurveEditor, isKnobCurve->getDimension(), _key->key.getTime(), left, right);
             } else {
-                attachedKnob->moveDerivativeAtTime(isKnobCurve->getDimension(), _key->key.getTime(),
+                attachedKnob->moveDerivativeAtTime(Natron::eCurveChangeReasonCurveEditor, isKnobCurve->getDimension(), _key->key.getTime(),
                                                    _deriv == eSelectedTangentLeft ? left : right,
                                                    _deriv == eSelectedTangentLeft);
                 
             }
-            attachedKnob->setInterpolationAtTime(isKnobCurve->getDimension(), _key->key.getTime(), interp, &_key->key);
+            attachedKnob->setInterpolationAtTime(Natron::eCurveChangeReasonCurveEditor, isKnobCurve->getDimension(), _key->key.getTime(), interp, &_key->key);
             if (_firstRedoCalled || _updateOnFirstRedo) {
                 attachedKnob->endChanges();
             }
@@ -846,7 +868,7 @@ TransformKeysCommand::undo()
     std::list<std::pair<boost::shared_ptr<Curve>,boost::shared_ptr<Curve> > >::iterator itCurve = _curves.begin();
     for (std::list<CurveGui*>::iterator it = processedCurves.begin(); it != processedCurves.end(); ++it, ++itCurve) {
         KnobCurveGui* isKnobCurve = dynamic_cast<KnobCurveGui*>(*it);
-        if (isKnobCurve && !dynamic_cast<Parametric_Knob*>(isKnobCurve->getInternalKnob().get())) {
+        if (isKnobCurve && !dynamic_cast<KnobParametric*>(isKnobCurve->getInternalKnob().get())) {
             isKnobCurve->getInternalKnob()->cloneCurve(isKnobCurve->getDimension(),*itCurve->first);
         } else {
             (*it)->getInternalCurve()->clone(*(itCurve->first));
@@ -919,7 +941,7 @@ TransformKeysCommand::redo()
         std::list<std::pair<boost::shared_ptr<Curve>,boost::shared_ptr<Curve> > >::iterator itCurve = _curves.begin();
         for (std::list<CurveGui*>::iterator it = processedCurves.begin(); it != processedCurves.end(); ++it, ++itCurve) {
             KnobCurveGui* isKnobCurve = dynamic_cast<KnobCurveGui*>(*it);
-            if (isKnobCurve && !dynamic_cast<Parametric_Knob*>(isKnobCurve->getInternalKnob().get())) {
+            if (isKnobCurve && !dynamic_cast<KnobParametric*>(isKnobCurve->getInternalKnob().get())) {
                 isKnobCurve->getInternalKnob()->cloneCurve(isKnobCurve->getDimension(),*itCurve->second);
             } else {
                 (*it)->getInternalCurve()->clone(*(itCurve->second));
@@ -984,7 +1006,7 @@ TransformKeysCommand::transform(const KeyPtr& k)
     
     if (isKnobCurve) {
         boost::shared_ptr<KnobI> knob = isKnobCurve->getInternalKnob();
-        Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(knob.get());
+        KnobParametric* isParametric = dynamic_cast<KnobParametric*>(knob.get());
         
         if (isParametric) {
             // std::pair<double,double> curveYRange = k->curve->getInternalCurve()->getCurveYRange();
@@ -1008,7 +1030,7 @@ TransformKeysCommand::transform(const KeyPtr& k)
             k->key = curve->setKeyFrameValueAndTime(p.x,p.y, keyframeIndex, &newIndex);
             isParametric->evaluateValueChange(isKnobCurve->getDimension(), Natron::eValueChangedReasonUserEdited);
         } else {
-            knob->transformValueAtTime(k->key.getTime(), isKnobCurve->getDimension(), *_matrix,&k->key);
+            knob->transformValueAtTime(Natron::eCurveChangeReasonCurveEditor, k->key.getTime(), isKnobCurve->getDimension(), *_matrix,&k->key);
         }
     } else if (isBezierCurve) {
         int oldTime = k->key.getTime();

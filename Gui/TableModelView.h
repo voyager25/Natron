@@ -1,15 +1,30 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 
 #ifndef TABLEMODELVIEW_H
 #define TABLEMODELVIEW_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
@@ -234,7 +249,9 @@ struct TableViewPrivate;
 class TableView
     : public QTreeView
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -279,12 +296,14 @@ Q_SIGNALS:
 
     void deleteKeyPressed();
     void itemRightClicked(TableItem* item);
+    void itemDoubleClicked(TableItem* item);
 
 private:
 
     virtual void mousePressEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual void mouseReleaseEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
+    virtual void mouseDoubleClickEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual bool edit(const QModelIndex & index, QAbstractItemView::EditTrigger trigger, QEvent * event) OVERRIDE FINAL;
 
     
@@ -295,7 +314,9 @@ struct TableModelPrivate;
 class TableModel
     : public QAbstractTableModel
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -316,6 +337,7 @@ public:
     virtual bool removeRows( int row, int count = 1, const QModelIndex &parent = QModelIndex() ) OVERRIDE FINAL;
     virtual bool removeColumns( int column, int count = 1, const QModelIndex &parent = QModelIndex() ) OVERRIDE FINAL;
 
+    void setTable(const QVector<TableItem*>& items);
     void setItem(int row, int column, TableItem *item);
     TableItem * takeItem(int row, int column);
     TableItem * item(int row, int column) const;
@@ -330,7 +352,7 @@ public:
     }
 
     QModelIndex index(const TableItem *item) const;
-    Qt::ItemFlags flags(const QModelIndex &index) const;
+    Qt::ItemFlags flags(const QModelIndex &index) const OVERRIDE FINAL WARN_UNUSED_RETURN;
 
     void setHorizontalHeaderItem(int section, TableItem *item);
     TableItem * takeHorizontalHeaderItem(int section);
@@ -348,6 +370,11 @@ public:
     virtual QVariant headerData(int section, Qt::Orientation orientation, int role) const OVERRIDE FINAL;
     virtual bool setHeaderData(int section, Qt::Orientation orientation, const QVariant &value, int role) OVERRIDE FINAL;
     inline long tableIndex(int row, int column) const;
+    
+    /**
+     * @brief Override to implement sorting
+     **/
+    virtual void sort(int /*column*/, Qt::SortOrder order = Qt::AscendingOrder) OVERRIDE { Q_UNUSED(order); }
 
     void itemChanged(TableItem *item);
 

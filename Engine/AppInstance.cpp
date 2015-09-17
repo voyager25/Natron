@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "AppInstance.h"
 
@@ -27,23 +37,27 @@
 #include <QSettings>
 
 #if !defined(SBK_RUN) && !defined(Q_MOC_RUN)
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
+// /usr/local/include/boost/bind/arg.hpp:37:9: warning: unused typedef 'boost_static_assert_typedef_37' [-Wunused-local-typedef]
 #include <boost/bind.hpp>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #endif
 
-#include "Global/QtCompat.h"
+#include "Global/QtCompat.h" // removeFileExtension
 
-#include "Engine/Project.h"
-#include "Engine/Plugin.h"
-#include "Engine/AppManager.h"
-#include "Engine/Node.h"
-#include "Engine/ViewerInstance.h"
 #include "Engine/BlockingBackgroundRender.h"
-#include "Engine/NodeSerialization.h"
+#include "Engine/CLArgs.h"
 #include "Engine/FileDownloader.h"
-#include "Engine/Settings.h"
+#include "Engine/GroupOutput.h"
 #include "Engine/KnobTypes.h"
-#include "Engine/NoOp.h"
+#include "Engine/Node.h"
+#include "Engine/NodeSerialization.h"
 #include "Engine/OfxHost.h"
+#include "Engine/Plugin.h"
+#include "Engine/Project.h"
+#include "Engine/RotoLayer.h"
+#include "Engine/Settings.h"
+#include "Engine/ViewerInstance.h"
 
 using namespace Natron;
 
@@ -154,6 +168,7 @@ AppInstance::checkForNewVersion() const
 
 //return -1 if a < b, 0 if a == b and 1 if a > b
 //Returns -2 if not understood
+static
 int compareDevStatus(const QString& a,const QString& b)
 {
     if (a == NATRON_DEVELOPMENT_ALPHA) {
@@ -450,7 +465,7 @@ AppInstance::load(const CLArgs& cl)
         }
         
         try {
-            startWritersRendering(writersWork);
+            startWritersRendering(cl.areRenderStatsEnabled(),writersWork);
         } catch (const std::exception& e) {
             getProject()->removeLockFile();
             throw e;
@@ -497,9 +512,16 @@ AppInstance::loadPythonScript(const QFileInfo& file)
     std::string err;
     bool ok  = interpretPythonScript(addToPythonPath, &err, 0);
     assert(ok);
+    if (!ok) {
+        throw std::runtime_error("AppInstance::loadPythonScript(" + file.path().toStdString() + "): interpretPythonScript("+addToPythonPath+" failed!");
+    }
 
-    ok = Natron::interpretPythonScript("app = app1\n", &err, 0);
+    std::string s = "app = app1\n";
+    ok = Natron::interpretPythonScript(s, &err, 0);
     assert(ok);
+    if (!ok) {
+        throw std::runtime_error("AppInstance::loadPythonScript(" + file.path().toStdString() + "): interpretPythonScript("+s+" failed!");
+    }
     
     QFile f(file.absoluteFilePath());
     if (!f.open(QIODevice::ReadOnly)) {
@@ -644,11 +666,15 @@ AppInstance::createNodeFromPythonModule(Natron::Plugin* plugin,
         ss << ", app" << appID << "." << containerFullySpecifiedName;
         ss << ")\n";
         std::string err;
-        if (!Natron::interpretPythonScript(ss.str(), &err, NULL)) {
+        std::string output;
+        if (!Natron::interpretPythonScript(ss.str(), &err, &output)) {
             Natron::errorDialog(tr("Group plugin creation error").toStdString(), err);
             containerNode->destroyNode(false);
             return node;
         } else {
+            if (!output.empty()) {
+                appendToScriptEditor(output);
+            }
             node = containerNode;
         }
         if (requestedByLoad) {
@@ -1071,7 +1097,7 @@ AppInstance::triggerAutoSave()
 
 
 void
-AppInstance::startWritersRendering(const std::list<RenderRequest>& writers)
+AppInstance::startWritersRendering(bool enableRenderStats,const std::list<RenderRequest>& writers)
 {
     
     std::list<RenderWork> renderers;
@@ -1125,11 +1151,11 @@ AppInstance::startWritersRendering(const std::list<RenderRequest>& writers)
         }
     }
     
-    startWritersRendering(renderers);
+    startWritersRendering(enableRenderStats, renderers);
 }
 
 void
-AppInstance::startWritersRendering(const std::list<RenderWork>& writers)
+AppInstance::startWritersRendering(bool enableRenderStats,const std::list<RenderWork>& writers)
 {
     
     
@@ -1143,22 +1169,23 @@ AppInstance::startWritersRendering(const std::list<RenderWork>& writers)
     if ( appPTR->isBackground() ) {
         
         //blocking call, we don't want this function to return pre-maturely, in which case it would kill the app
-        QtConcurrent::blockingMap( writers,boost::bind(&AppInstance::startRenderingFullSequence,this,_1,false,QString()) );
+        QtConcurrent::blockingMap( writers,boost::bind(&AppInstance::startRenderingFullSequence,this,enableRenderStats, _1,false,QString()) );
     } else {
         
         //Take a snapshot of the graph at this time, this will be the version loaded by the process
         bool renderInSeparateProcess = appPTR->getCurrentSettings()->isRenderInSeparatedProcessEnabled();
-        QString savePath = getProject()->saveProject("","RENDER_SAVE.ntp",true);
+        QString savePath;
+        getProject()->saveProject_imp("","RENDER_SAVE.ntp",true, false,&savePath);
 
         for (std::list<RenderWork>::const_iterator it = writers.begin(); it != writers.end(); ++it) {
             ///Use the frame range defined by the writer GUI because we're in an interactive session
-            startRenderingFullSequence(*it,renderInSeparateProcess,savePath);
+            startRenderingFullSequence(enableRenderStats,*it,renderInSeparateProcess,savePath);
         }
     }
 }
 
 void
-AppInstance::startRenderingFullSequence(const RenderWork& writerWork,bool /*renderInSeparateProcess*/,const QString& /*savePath*/)
+AppInstance::startRenderingFullSequence(bool enableRenderStats,const RenderWork& writerWork,bool /*renderInSeparateProcess*/,const QString& /*savePath*/)
 {
     BlockingBackgroundRender backgroundRender(writerWork.writer);
     double first,last;
@@ -1172,7 +1199,7 @@ AppInstance::startRenderingFullSequence(const RenderWork& writerWork,bool /*rend
         last = writerWork.lastFrame;
     }
     
-    backgroundRender.blockingRender(first,last); //< doesn't return before rendering is finished
+    backgroundRender.blockingRender(enableRenderStats,first,last); //< doesn't return before rendering is finished
 }
 
 void
@@ -1245,7 +1272,9 @@ AppInstance::declareCurrentAppVariable_Python()
     
     bool ok = Natron::interpretPythonScript(script, &err, 0);
     assert(ok);
-    Q_UNUSED(ok);
+    if (!ok) {
+        throw std::runtime_error("AppInstance::declareCurrentAppVariable_Python() failed!");
+    }
 
     if (appPTR->isBackground()) {
         std::string err;
@@ -1360,4 +1389,85 @@ AppInstance::onGroupCreationFinished(const boost::shared_ptr<Natron::Node>& /*no
 //        }
 //        isGrp->forceGetClipPreferencesOnAllTrees();
 //    }
+}
+
+bool
+AppInstance::saveTemp(const std::string& filename)
+{
+    std::string outFile = filename;
+    std::string path = SequenceParsing::removePath(outFile);
+    boost::shared_ptr<Natron::Project> project= getProject();
+    return project->saveProject_imp(path.c_str(), outFile.c_str(), false, false,0);
+}
+
+bool
+AppInstance::save(const std::string& filename)
+{
+    boost::shared_ptr<Natron::Project> project= getProject();
+    if (project->hasProjectBeenSavedByUser()) {
+        QString projectName = project->getProjectName();
+        QString projectPath = project->getProjectPath();
+        return project->saveProject(projectPath, projectName, 0);
+    } else {
+        return saveAs(filename);
+    }
+}
+
+bool
+AppInstance::saveAs(const std::string& filename)
+{
+    std::string outFile = filename;
+    std::string path = SequenceParsing::removePath(outFile);
+    return getProject()->saveProject(path.c_str(), outFile.c_str(), 0);
+}
+
+AppInstance*
+AppInstance::loadProject(const std::string& filename)
+{
+    
+    QFileInfo file(filename.c_str());
+    if (!file.exists()) {
+        return 0;
+    }
+    QString fileUnPathed = file.fileName();
+    QString path = file.path() + "/";
+    
+    CLArgs cl;
+    AppInstance* app = appPTR->newAppInstance(cl);
+    
+    bool ok  = app->getProject()->loadProject( path, fileUnPathed);
+    if (ok) {
+        return app;
+    }
+    
+    app->getProject()->closeProject(true);
+    app->quit();
+    
+    return 0;
+}
+
+///Close the current project but keep the window
+bool
+AppInstance::resetProject()
+{
+    getProject()->closeProject(false);
+    return true;
+}
+
+///Reset + close window, quit if last window
+bool
+AppInstance::closeProject()
+{
+    getProject()->closeProject(true);
+    quit();
+    return true;
+}
+
+///Opens a new project
+AppInstance*
+AppInstance::newProject()
+{
+    CLArgs cl;
+    AppInstance* app = appPTR->newAppInstance(cl);
+    return app;
 }

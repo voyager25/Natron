@@ -1,547 +1,59 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
-#include "Gui/Gui.h"
+#include "Gui.h"
 
 #include <cassert>
-#include <fstream>
-#include <algorithm> // min, max
 
-#include <QtCore/QTextStream>
-#include <QWaitCondition>
-#include <QMutex>
-#include <QCoreApplication>
-#include <QAction>
-#include <QSettings>
-#include <QDebug>
-#include <QThread>
-#include <QCheckBox>
-#include <QTimer>
-#include <QTextEdit>
+#include "Global/Macros.h"
 
-
-#if QT_VERSION >= 0x050000
-#include <QScreen>
-#endif
-#include <QUndoGroup>
-CLANG_DIAG_OFF(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QCloseEvent>
-CLANG_DIAG_ON(unused-private-field)
-#include <QHBoxLayout>
-#include <QGraphicsScene>
-#include <QApplication>
+GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
+#include <QApplication> // qApp
 #include <QMenuBar>
-#include <QDesktopWidget>
-#include <QToolBar>
-#include <QKeySequence>
-#include <QScrollArea>
-#include <QScrollBar>
-#include <QToolButton>
-#include <QMessageBox>
-#include <QImage>
-#include <QProgressDialog>
+#include <QUndoGroup>
 
-#include <cairo/cairo.h>
-
-#include <boost/version.hpp>
-GCC_DIAG_OFF(unused-parameter)
-// /opt/local/include/boost/serialization/smart_cast.hpp:254:25: warning: unused parameter 'u' [-Wunused-parameter]
-#include <boost/archive/xml_iarchive.hpp>
-GCC_DIAG_ON(unused-parameter)
-#include <boost/archive/xml_oarchive.hpp>
-
-#include "Engine/ViewerInstance.h"
-#include "Engine/Project.h"
-#include "Engine/Plugin.h"
-#include "Engine/Settings.h"
-#include "Engine/KnobFile.h"
-#include "SequenceParsing.h"
-#include "Engine/ProcessHandler.h"
-#include "Engine/Lut.h"
-#include "Engine/Image.h"
 #include "Engine/Node.h"
-#include "Engine/KnobSerialization.h"
-#include "Engine/OutputSchedulerThread.h"
-#include "Engine/NodeGroup.h"
-#include "Engine/NoOp.h"
+#include "Engine/Project.h"
+#include "Engine/ViewerInstance.h"
 
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/NodeGraph.h"
+#include "Gui/ActionShortcuts.h"
 #include "Gui/CurveEditor.h"
-#include "Gui/CurveWidget.h"
 #include "Gui/DopeSheetEditor.h"
-#include "Gui/PreferencesPanel.h"
-#include "Gui/AboutWindow.h"
+#include "Gui/GuiAppInstance.h"
+#include "Gui/GuiApplicationManager.h" // appPTR
+#include "Gui/GuiPrivate.h"
+#include "Gui/Menu.h"
+#include "Gui/NodeGraph.h"
 #include "Gui/ProjectGui.h"
 #include "Gui/ToolButton.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ViewerGL.h"
-#include "Gui/TabWidget.h"
-#include "Gui/DockablePanel.h"
-#include "Gui/SequenceFileDialog.h"
-#include "Gui/FromQtEnums.h"
-#include "Gui/RenderingProgressDialog.h"
-#include "Gui/NodeGui.h"
-#include "Gui/Histogram.h"
-#include "Gui/Splitter.h"
-#include "Gui/SpinBox.h"
-#include "Gui/Button.h"
-#include "Gui/RotoGui.h"
-#include "Gui/ProjectGuiSerialization.h"
-#include "Gui/ActionShortcuts.h"
-#include "Gui/ShortCutEditor.h"
-#include "Gui/MessageBox.h"
-#include "Gui/MultiInstancePanel.h"
-#include "Gui/ScriptEditor.h"
-#include "Gui/PythonPanels.h"
-#include "Gui/Menu.h"
-#include "Gui/Utils.h"
-
-#define kPropertiesBinName "properties"
-
-#define NAMED_PLUGIN_GROUP_NO 15
-
-static std::string namedGroupsOrdered[NAMED_PLUGIN_GROUP_NO] = {
-    PLUGIN_GROUP_IMAGE,
-    PLUGIN_GROUP_COLOR,
-    PLUGIN_GROUP_CHANNEL,
-    PLUGIN_GROUP_MERGE,
-    PLUGIN_GROUP_FILTER,
-    PLUGIN_GROUP_TRANSFORM,
-    PLUGIN_GROUP_TIME,
-    PLUGIN_GROUP_PAINT,
-    PLUGIN_GROUP_KEYER,
-    PLUGIN_GROUP_MULTIVIEW,
-    PLUGIN_GROUP_DEEP,
-    PLUGIN_GROUP_3D,
-    PLUGIN_GROUP_TOOLSETS,
-    PLUGIN_GROUP_OTHER,
-    PLUGIN_GROUP_DEFAULT
-};
-
-#define PLUGIN_GROUP_DEFAULT_ICON_PATH NATRON_IMAGES_PATH "GroupingIcons/Set" NATRON_ICON_SET_NUMBER "/other_grouping_" NATRON_ICON_SET_NUMBER ".png"
-
+#include "Gui/RenderStatsDialog.h"
 
 using namespace Natron;
 
-namespace {
-static void
-getPixmapForGrouping(QPixmap* pixmap,
-                     const QString & grouping)
-{
-    if (grouping == PLUGIN_GROUP_COLOR) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_COLOR_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_FILTER) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_FILTER_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_IMAGE) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_IO_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_TRANSFORM) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_TRANSFORM_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_DEEP) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_DEEP_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_MULTIVIEW) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MULTIVIEW_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_TIME) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_TIME_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_PAINT) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_PAINT_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_OTHER) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MISC_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_KEYER) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_KEYER_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_TOOLSETS) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_TOOLSETS_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_3D) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_3D_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_CHANNEL) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_CHANNEL_GROUPING, pixmap);
-    } else if (grouping == PLUGIN_GROUP_MERGE) {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_GROUPING, pixmap);
-    } else {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_OTHER_PLUGINS, pixmap);
-    }
-}
-}
-
-
-class AutoHideToolBar
-    : public QToolBar
-{
-    Gui* _gui;
-
-public:
-
-    AutoHideToolBar(Gui* gui,
-                    QWidget* parent) : QToolBar(parent), _gui(gui)
-    {
-    }
-
-private:
-
-    virtual void leaveEvent(QEvent* e) OVERRIDE FINAL
-    {
-        if ( _gui->isLeftToolBarDisplayedOnMouseHoverOnly() ) {
-            _gui->setLeftToolBarVisible(false);
-        }
-        QToolBar::leaveEvent(e);
-    }
-};
-
-struct GuiPrivate
-{
-    Gui* _gui; //< ptr to the public interface
-    mutable QMutex _isInDraftModeMutex;
-    bool _isInDraftMode; //< true if the user is actively moving the cursor on the timeline or a slider. False on mouse release.
-    GuiAppInstance* _appInstance; //< ptr to the appInstance
-
-    ///Dialogs handling members
-    QWaitCondition _uiUsingMainThreadCond; //< used with _uiUsingMainThread
-    bool _uiUsingMainThread; //< true when the Gui is showing a dialog in the main thread
-    mutable QMutex _uiUsingMainThreadMutex; //< protects _uiUsingMainThread
-    Natron::StandardButtonEnum _lastQuestionDialogAnswer; //< stores the last question answer
-    bool _lastStopAskingAnswer;
-
-    ///ptrs to the undo/redo actions from the active stack.
-    QAction* _currentUndoAction;
-    QAction* _currentRedoAction;
-
-    ///all the undo stacks of Natron are gathered here
-    QUndoGroup* _undoStacksGroup;
-    std::map<QUndoStack*, std::pair<QAction*, QAction*> > _undoStacksActions;
-
-    ///all the splitters used to separate the "panes" of the application
-    mutable QMutex _splittersMutex;
-    std::list<Splitter*> _splitters;
-    mutable QMutex _pyPanelsMutex;
-    std::map<PyPanel*, std::string> _userPanels;
-
-    bool _isTripleSyncEnabled;
-
-
-    ///all the menu actions
-    ActionWithShortcut *actionNew_project;
-    ActionWithShortcut *actionOpen_project;
-    ActionWithShortcut *actionClose_project;
-    ActionWithShortcut *actionSave_project;
-    ActionWithShortcut *actionSaveAs_project;
-    ActionWithShortcut *actionExportAsGroup;
-    ActionWithShortcut *actionSaveAndIncrementVersion;
-    ActionWithShortcut *actionPreferences;
-    ActionWithShortcut *actionExit;
-    ActionWithShortcut *actionProject_settings;
-    ActionWithShortcut *actionShowOfxLog;
-    ActionWithShortcut *actionShortcutEditor;
-    ActionWithShortcut *actionNewViewer;
-    ActionWithShortcut *actionFullScreen;
-    ActionWithShortcut *actionClearDiskCache;
-    ActionWithShortcut *actionClearPlayBackCache;
-    ActionWithShortcut *actionClearNodeCache;
-    ActionWithShortcut *actionClearPluginsLoadingCache;
-    ActionWithShortcut *actionClearAllCaches;
-    ActionWithShortcut *actionShowAboutWindow;
-    QAction *actionsOpenRecentFile[NATRON_MAX_RECENT_FILES];
-    ActionWithShortcut *renderAllWriters;
-    ActionWithShortcut *renderSelectedNode;
-    ActionWithShortcut* actionConnectInput1;
-    ActionWithShortcut* actionConnectInput2;
-    ActionWithShortcut* actionConnectInput3;
-    ActionWithShortcut* actionConnectInput4;
-    ActionWithShortcut* actionConnectInput5;
-    ActionWithShortcut* actionConnectInput6;
-    ActionWithShortcut* actionConnectInput7;
-    ActionWithShortcut* actionConnectInput8;
-    ActionWithShortcut* actionConnectInput9;
-    ActionWithShortcut* actionConnectInput10;
-    ActionWithShortcut* actionImportLayout;
-    ActionWithShortcut* actionExportLayout;
-    ActionWithShortcut* actionRestoreDefaultLayout;
-    ActionWithShortcut* actionNextTab;
-    ActionWithShortcut* actionPrevTab;
-    ActionWithShortcut* actionCloseTab;
-
-    ///the main "central" widget
-    QWidget *_centralWidget;
-    QHBoxLayout* _mainLayout; //< its layout
-
-    ///strings that remember for project save/load and writers/reader dialog where
-    ///the user was the last time.
-    QString _lastLoadSequenceOpenedDir;
-    QString _lastLoadProjectOpenedDir;
-    QString _lastSaveSequenceOpenedDir;
-    QString _lastSaveProjectOpenedDir;
-    QString _lastPluginDir;
-
-    // this one is a ptr to others TabWidget.
-    //It tells where to put the viewer when making a new one
-    // If null it places it on default tab widget
-    TabWidget* _nextViewerTabPlace;
-
-    ///the splitter separating the gui and the left toolbar
-    Splitter* _leftRightSplitter;
-
-    ///a list of ptrs to all the viewer tabs.
-    mutable QMutex _viewerTabsMutex;
-    std::list<ViewerTab*> _viewerTabs;
-    
-    ///Used when all viewers are synchronized to determine which one triggered the sync
-    ViewerTab* _masterSyncViewer;
-
-    ///a list of ptrs to all histograms
-    mutable QMutex _histogramsMutex;
-    std::list<Histogram*> _histograms;
-    int _nextHistogramIndex; //< for giving a unique name to histogram tabs
-
-    ///The node graph (i.e: the view of the scene)
-    NodeGraph* _nodeGraphArea;
-    NodeGraph* _lastFocusedGraph;
-    std::list<NodeGraph*> _groups;
-
-    ///The curve editor.
-    CurveEditor *_curveEditor;
-
-    // The dope sheet
-    DopeSheetEditor *_dopeSheetEditor;
-
-    ///the left toolbar
-    QToolBar* _toolBox;
-
-    ///a vector of all the toolbuttons
-    std::vector<ToolButton* > _toolButtons;
-
-    ///holds the properties dock
-    PropertiesBinWrapper *_propertiesBin;
-    QScrollArea* _propertiesScrollArea;
-    QWidget* _propertiesContainer;
-
-    ///the vertical layout for the properties dock container.
-    QVBoxLayout *_layoutPropertiesBin;
-    Button* _clearAllPanelsButton;
-    Button* _minimizeAllPanelsButtons;
-    SpinBox* _maxPanelsOpenedSpinBox;
-    QMutex _isGUIFrozenMutex;
-    bool _isGUIFrozen;
-
-    ///The menu bar and all the menus
-    QMenuBar *menubar;
-    Menu *menuFile;
-    Menu *menuRecentFiles;
-    Menu *menuEdit;
-    Menu *menuLayout;
-    Menu *menuDisplay;
-    Menu *menuOptions;
-    Menu *menuRender;
-    Menu *viewersMenu;
-    Menu *viewerInputsMenu;
-    Menu *viewersViewMenu;
-    Menu *cacheMenu;
-
-
-    ///all TabWidget's : used to know what to hide/show for fullscreen mode
-    mutable QMutex _panesMutex;
-    std::list<TabWidget*> _panes;
-    mutable QMutex _floatingWindowMutex;
-    std::list<FloatingWidget*> _floatingWindows;
-
-    ///All the tabs used in the TabWidgets (used for d&d purpose)
-    RegisteredTabs _registeredTabs;
-
-    ///The user preferences window
-    PreferencesPanel* _settingsGui;
-
-    ///The project Gui (stored in the properties pane)
-    ProjectGui* _projectGui;
-
-    ///ptr to the currently dragged tab for d&d purpose.
-    QWidget* _currentlyDraggedPanel;
-
-    ///The "About" window.
-    AboutWindow* _aboutWindow;
-    std::map<KnobHolder*, QProgressDialog*> _progressBars;
-
-    ///list of the currently opened property panels
-    std::list<DockablePanel*> openedPanels;
-    QString _openGLVersion;
-    QString _glewVersion;
-    QToolButton* _toolButtonMenuOpened;
-    QMutex aboutToCloseMutex;
-    bool _aboutToClose;
-    ShortCutEditor* shortcutEditor;
-    bool leftToolBarDisplayedOnHoverOnly;
-    ScriptEditor* _scriptEditor;
-    TabWidget* _lastEnteredTabWidget;
-
-    ///Menu entries added by the user
-    std::map<ActionWithShortcut*, std::string> pythonCommands;
-
-    GuiPrivate(GuiAppInstance* app,
-               Gui* gui)
-        : _gui(gui)
-        , _isInDraftModeMutex()
-        , _isInDraftMode(false)
-        , _appInstance(app)
-        , _uiUsingMainThreadCond()
-        , _uiUsingMainThread(false)
-        , _uiUsingMainThreadMutex()
-        , _lastQuestionDialogAnswer(Natron::eStandardButtonNo)
-        , _lastStopAskingAnswer(false)
-        , _currentUndoAction(0)
-        , _currentRedoAction(0)
-        , _undoStacksGroup(0)
-        , _undoStacksActions()
-        , _splittersMutex()
-        , _splitters()
-        , _pyPanelsMutex()
-        , _userPanels()
-        , _isTripleSyncEnabled(false)
-        , actionNew_project(0)
-        , actionOpen_project(0)
-        , actionClose_project(0)
-        , actionSave_project(0)
-        , actionSaveAs_project(0)
-        , actionExportAsGroup(0)
-        , actionSaveAndIncrementVersion(0)
-        , actionPreferences(0)
-        , actionExit(0)
-        , actionProject_settings(0)
-        , actionShowOfxLog(0)
-        , actionShortcutEditor(0)
-        , actionNewViewer(0)
-        , actionFullScreen(0)
-        , actionClearDiskCache(0)
-        , actionClearPlayBackCache(0)
-        , actionClearNodeCache(0)
-        , actionClearPluginsLoadingCache(0)
-        , actionClearAllCaches(0)
-        , actionShowAboutWindow(0)
-        , actionsOpenRecentFile()
-        , renderAllWriters(0)
-        , renderSelectedNode(0)
-        , actionConnectInput1(0)
-        , actionConnectInput2(0)
-        , actionConnectInput3(0)
-        , actionConnectInput4(0)
-        , actionConnectInput5(0)
-        , actionConnectInput6(0)
-        , actionConnectInput7(0)
-        , actionConnectInput8(0)
-        , actionConnectInput9(0)
-        , actionConnectInput10(0)
-        , actionImportLayout(0)
-        , actionExportLayout(0)
-        , actionRestoreDefaultLayout(0)
-        , actionNextTab(0)
-        , actionPrevTab(0)
-        , actionCloseTab(0)
-        , _centralWidget(0)
-        , _mainLayout(0)
-        , _lastLoadSequenceOpenedDir()
-        , _lastLoadProjectOpenedDir()
-        , _lastSaveSequenceOpenedDir()
-        , _lastSaveProjectOpenedDir()
-        , _lastPluginDir()
-        , _nextViewerTabPlace(0)
-        , _leftRightSplitter(0)
-        , _viewerTabsMutex()
-        , _viewerTabs()
-        , _masterSyncViewer(0)
-        , _histogramsMutex()
-        , _histograms()
-        , _nextHistogramIndex(1)
-        , _nodeGraphArea(0)
-        , _lastFocusedGraph(0)
-        , _groups()
-        , _curveEditor(0)
-        , _dopeSheetEditor(0)
-        , _toolBox(0)
-        , _propertiesBin(0)
-        , _propertiesScrollArea(0)
-        , _propertiesContainer(0)
-        , _layoutPropertiesBin(0)
-        , _clearAllPanelsButton(0)
-        , _minimizeAllPanelsButtons(0)
-        , _maxPanelsOpenedSpinBox(0)
-        , _isGUIFrozenMutex()
-        , _isGUIFrozen(false)
-        , menubar(0)
-        , menuFile(0)
-        , menuRecentFiles(0)
-        , menuEdit(0)
-        , menuLayout(0)
-        , menuDisplay(0)
-        , menuOptions(0)
-        , menuRender(0)
-        , viewersMenu(0)
-        , viewerInputsMenu(0)
-        , viewersViewMenu(0)
-        , cacheMenu(0)
-        , _panesMutex()
-        , _panes()
-        , _floatingWindowMutex()
-        , _floatingWindows()
-        , _settingsGui(0)
-        , _projectGui(0)
-        , _currentlyDraggedPanel(0)
-        , _aboutWindow(0)
-        , _progressBars()
-        , openedPanels()
-        , _openGLVersion()
-        , _glewVersion()
-        , _toolButtonMenuOpened(NULL)
-        , aboutToCloseMutex()
-        , _aboutToClose(false)
-        , shortcutEditor(0)
-        , leftToolBarDisplayedOnHoverOnly(false)
-        , _scriptEditor(0)
-        , _lastEnteredTabWidget(0)
-        , pythonCommands()
-    {
-    }
-
-    void restoreGuiGeometry();
-
-    void saveGuiGeometry();
-
-    void setUndoRedoActions(QAction* undoAction, QAction* redoAction);
-
-    void addToolButton(ToolButton* tool);
-
-    ///Creates the properties bin and appends it as a tab to the propertiesPane TabWidget
-    void createPropertiesBinGui();
-
-    void notifyGuiClosing();
-
-    ///Must be called absolutely before createPropertiesBinGui
-    void createNodeGraphGui();
-
-    void createCurveEditorGui();
-
-    void createDopeSheetGui();
-
-    void createScriptEditorGui();
-
-    ///If there's only 1 non-floating pane in the main window, return it, otherwise returns NULL
-    TabWidget* getOnly1NonFloatingPane(int & count) const;
-
-    void refreshLeftToolBarVisibility(const QPoint & p);
-
-    QAction* findActionRecursive(int i, QWidget* widget, const QStringList & grouping);
-    
-    ///True= yes overwrite
-    bool checkProjectLockAndWarn(const QString& projectPath,const QString& projectName);
-};
 
 // Helper function: Get the icon with the given name from the icon theme.
 // If unavailable, fall back to the built-in icon. Icon names conform to this specification:
@@ -554,13 +66,24 @@ get_icon(const QString &name)
 
 Gui::Gui(GuiAppInstance* app,
          QWidget* parent)
-    : QMainWindow(parent)
-    , SerializableWindow()
-    , _imp( new GuiPrivate(app, this) )
+#ifndef __NATRON_WIN32__
+: QMainWindow(parent)
+#else
+: DocumentWindow(parent)
+#endif
+, SerializableWindow()
+, _imp( new GuiPrivate(app, this) )
 
 {
+    
+#ifdef __NATRON_WIN32
+    //Register file types
+    registerFileType(NATRON_PROJECT_FILE_MIME_TYPE, "Natron Project file", "." NATRON_PROJECT_FILE_EXT, 0, true);
+    enableShellOpen();
+#endif
+    
     QObject::connect( this, SIGNAL( doDialog(int, QString, QString, bool, Natron::StandardButtons, int) ), this,
-                      SLOT( onDoDialog(int, QString, QString, bool, Natron::StandardButtons, int) ) );
+                     SLOT( onDoDialog(int, QString, QString, bool, Natron::StandardButtons, int) ) );
     QObject::connect( this, SIGNAL( doDialogWithStopAskingCheckbox(int, QString, QString, bool, Natron::StandardButtons, int) ), this,
                       SLOT( onDoDialogWithStopAskingCheckbox(int, QString, QString, bool, Natron::StandardButtons, int) ) );
     QObject::connect( app, SIGNAL( pluginsPopulated() ), this, SLOT( addToolButttonsToToolBar() ) );
@@ -608,69 +131,11 @@ Gui::setLeftToolBarVisible(bool visible)
     _imp->_toolBox->setVisible(visible);
 }
 
-void
-GuiPrivate::refreshLeftToolBarVisibility(const QPoint & p)
-{
-    int toolbarW = _toolBox->sizeHint().width();
-
-    if (p.x() <= toolbarW) {
-        _toolBox->show();
-    } else {
-        _toolBox->hide();
-    }
-}
-
-void
-GuiPrivate::notifyGuiClosing()
-{
-    ///This is to workaround an issue that when destroying a widget it calls the focusOut() handler hence can
-    ///cause bad pointer dereference to the Gui object since we're destroying it.
-    {
-        QMutexLocker k(&_viewerTabsMutex);
-        for (std::list<ViewerTab*>::iterator it = _viewerTabs.begin(); it != _viewerTabs.end(); ++it) {
-            (*it)->notifyAppClosing();
-        }
-    }
-
-    const std::list<boost::shared_ptr<NodeGui> > allNodes = _nodeGraphArea->getAllActiveNodes();
-
-    for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it = allNodes.begin(); it != allNodes.end(); ++it) {
-        DockablePanel* panel = (*it)->getSettingPanel();
-        if (panel) {
-            panel->onGuiClosing();
-        }
-    }
-    _lastFocusedGraph = 0;
-    _nodeGraphArea->discardGuiPointer();
-    for (std::list<NodeGraph*>::iterator it = _groups.begin(); it != _groups.end(); ++it) {
-        (*it)->discardGuiPointer();
-    }
-
-    {
-        QMutexLocker k(&_panesMutex);
-        for (std::list<TabWidget*>::iterator it = _panes.begin(); it != _panes.end(); ++it) {
-            (*it)->discardGuiPointer();
-        }
-    }
-}
 
 bool
 Gui::closeInstance()
 {
-    if ( getApp()->getProject()->hasNodes() ) {
-        int ret = saveWarning();
-        if (ret == 0) {
-            if ( !saveProject() ) {
-                return false;
-            }
-        } else if (ret == 2) {
-            return false;
-        }
-    }
-    _imp->saveGuiGeometry();
-    abortProject(true);
-
-    return true;
+    return abortProject(true);
 }
 
 void
@@ -685,9 +150,21 @@ Gui::closeProject()
     //_imp->_appInstance->execOnProjectCreatedCallback();
 }
 
-void
+bool
 Gui::abortProject(bool quitApp)
 {
+    if ( getApp()->getProject()->hasNodes() ) {
+        int ret = saveWarning();
+        if (ret == 0) {
+            if ( !saveProject() ) {
+                return false;
+            }
+        } else if (ret == 2) {
+            return false;
+        }
+    }
+    _imp->saveGuiGeometry();
+    
     _imp->setUndoRedoActions(0,0);
     if (quitApp) {
         ///don't show dialogs when about to close, otherwise we could enter in a deadlock situation
@@ -719,6 +196,7 @@ Gui::abortProject(bool quitApp)
     ///Reset current undo/reso actions
     _imp->_currentUndoAction = 0;
     _imp->_currentRedoAction = 0;
+    return true;
 }
 
 void
@@ -974,6 +452,10 @@ Gui::createMenuActions()
     _imp->renderSelectedNode = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionRenderSelected, kShortcutDescActionRenderSelected, this);
     QObject::connect( _imp->renderSelectedNode, SIGNAL( triggered() ), this, SLOT( renderSelectedNode() ) );
 
+    _imp->enableRenderStats = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionEnableRenderStats, kShortcutDescActionEnableRenderStats,this);
+    _imp->enableRenderStats->setCheckable(true);
+    _imp->enableRenderStats->setChecked(false);
+    QObject::connect( _imp->enableRenderStats, SIGNAL( triggered() ), this, SLOT(onEnableRenderStatsActionTriggered() ) );
 
     for (int c = 0; c < NATRON_MAX_RECENT_FILES; ++c) {
         _imp->actionsOpenRecentFile[c] = new QAction(this);
@@ -981,36 +463,39 @@ Gui::createMenuActions()
         connect( _imp->actionsOpenRecentFile[c], SIGNAL( triggered() ), this, SLOT( openRecentFile() ) );
     }
 
-    _imp->actionConnectInput1 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput1, kShortcutDescActionConnectViewerToInput1, this);
-    QObject::connect( _imp->actionConnectInput1, SIGNAL( triggered() ), this, SLOT( connectInput1() ) );
-
-    _imp->actionConnectInput2 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput2, kShortcutDescActionConnectViewerToInput2, this);
-    QObject::connect( _imp->actionConnectInput2, SIGNAL( triggered() ), this, SLOT( connectInput2() ) );
-
-    _imp->actionConnectInput3 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput3, kShortcutDescActionConnectViewerToInput3, this);
-    QObject::connect( _imp->actionConnectInput3, SIGNAL( triggered() ), this, SLOT( connectInput3() ) );
-
-    _imp->actionConnectInput4 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput4, kShortcutDescActionConnectViewerToInput4, this);
-    QObject::connect( _imp->actionConnectInput4, SIGNAL( triggered() ), this, SLOT( connectInput4() ) );
-
-    _imp->actionConnectInput5 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput5, kShortcutDescActionConnectViewerToInput5, this);
-    QObject::connect( _imp->actionConnectInput5, SIGNAL( triggered() ), this, SLOT( connectInput5() ) );
-
-
-    _imp->actionConnectInput6 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput6, kShortcutDescActionConnectViewerToInput6, this);
-    QObject::connect( _imp->actionConnectInput6, SIGNAL( triggered() ), this, SLOT( connectInput6() ) );
-
-    _imp->actionConnectInput7 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput7, kShortcutDescActionConnectViewerToInput7, this);
-    QObject::connect( _imp->actionConnectInput7, SIGNAL( triggered() ), this, SLOT( connectInput7() ) );
-
-    _imp->actionConnectInput8 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput8, kShortcutDescActionConnectViewerToInput8, this);
-    QObject::connect( _imp->actionConnectInput8, SIGNAL( triggered() ), this, SLOT( connectInput8() ) );
-
-    _imp->actionConnectInput9 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput9, kShortcutDescActionConnectViewerToInput9, this);
-
-    _imp->actionConnectInput10 = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput10, kShortcutDescActionConnectViewerToInput10, this);
-    QObject::connect( _imp->actionConnectInput9, SIGNAL( triggered() ), this, SLOT( connectInput9() ) );
-    QObject::connect( _imp->actionConnectInput10, SIGNAL( triggered() ), this, SLOT( connectInput10() ) );
+    const char* descs[10] = {
+        kShortcutDescActionConnectViewerToInput1,
+        kShortcutDescActionConnectViewerToInput2,
+        kShortcutDescActionConnectViewerToInput3,
+        kShortcutDescActionConnectViewerToInput4,
+        kShortcutDescActionConnectViewerToInput5,
+        kShortcutDescActionConnectViewerToInput6,
+        kShortcutDescActionConnectViewerToInput7,
+        kShortcutDescActionConnectViewerToInput8,
+        kShortcutDescActionConnectViewerToInput9,
+        kShortcutDescActionConnectViewerToInput10
+    };
+    
+    const char* ids[10] = {
+        kShortcutIDActionConnectViewerToInput1,
+        kShortcutIDActionConnectViewerToInput2,
+        kShortcutIDActionConnectViewerToInput3,
+        kShortcutIDActionConnectViewerToInput4,
+        kShortcutIDActionConnectViewerToInput5,
+        kShortcutIDActionConnectViewerToInput6,
+        kShortcutIDActionConnectViewerToInput7,
+        kShortcutIDActionConnectViewerToInput8,
+        kShortcutIDActionConnectViewerToInput9,
+        kShortcutIDActionConnectViewerToInput10
+    };
+    
+    
+    for (int i = 0; i < 10; ++i) {
+        _imp->actionConnectInput[i] = new ActionWithShortcut(kShortcutGroupGlobal, ids[i], descs[i], this);
+        _imp->actionConnectInput[i]->setData(i);
+        _imp->actionConnectInput[i]->setShortcutContext(Qt::WidgetShortcut);
+        QObject::connect( _imp->actionConnectInput[i], SIGNAL( triggered() ), this, SLOT( connectInput() ) );
+    }
 
     _imp->actionImportLayout = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionImportLayout, kShortcutDescActionImportLayout, this);
     QObject::connect( _imp->actionImportLayout, SIGNAL( triggered() ), this, SLOT( importLayout() ) );
@@ -1069,21 +554,16 @@ Gui::createMenuActions()
     _imp->menuDisplay->addAction( _imp->viewersMenu->menuAction() );
     _imp->viewersMenu->addAction( _imp->viewerInputsMenu->menuAction() );
     _imp->viewersMenu->addAction( _imp->viewersViewMenu->menuAction() );
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput1);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput2);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput3);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput4);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput5);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput6);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput7);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput8);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput9);
-    _imp->viewerInputsMenu->addAction(_imp->actionConnectInput10);
+    for (int i = 0; i < 10; ++i) {
+        _imp->viewerInputsMenu->addAction(_imp->actionConnectInput[i]);
+    }
+
     _imp->menuDisplay->addSeparator();
     _imp->menuDisplay->addAction(_imp->actionFullScreen);
 
     _imp->menuRender->addAction(_imp->renderAllWriters);
     _imp->menuRender->addAction(_imp->renderSelectedNode);
+    _imp->menuRender->addAction(_imp->enableRenderStats);
 
     _imp->cacheMenu->addAction(_imp->actionClearDiskCache);
     _imp->cacheMenu->addAction(_imp->actionClearPlayBackCache);
@@ -1098,6 +578,7 @@ Gui::createMenuActions()
         addMenuEntry(it->grouping, it->pythonFunction, it->key, it->modifiers);
     }
 } // createMenuActions
+<<<<<<< HEAD
 
 void
 Gui::setupUi()
@@ -5717,3 +5198,5 @@ void Gui::centerOpenedViewersOn(SequenceTime left, SequenceTime right)
         v->centerOn_tripleSync(left, right);
     }
 }
+=======
+>>>>>>> workshop

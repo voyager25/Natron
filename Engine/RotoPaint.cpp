@@ -1,12 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "RotoPaint.h"
 
@@ -17,6 +31,7 @@
 #include "Engine/Node.h"
 #include "Engine/NodeGroup.h"
 #include "Engine/RotoContext.h"
+#include "Engine/RotoDrawableItem.h"
 #include "Engine/TimeLine.h"
 
 using namespace Natron;
@@ -203,6 +218,51 @@ RotoPaint::getRegionOfDefinition(U64 hash,double time, const RenderScale & scale
     return Natron::eStatusOK;
 }
 
+FramesNeededMap
+RotoPaint::getFramesNeeded(double time, int view)
+{
+    boost::shared_ptr<RotoContext> roto = getNode()->getRotoContext();
+    std::list<boost::shared_ptr<RotoDrawableItem> > items = roto->getCurvesByRenderOrder();
+    if (items.empty()) {
+        return FramesNeededMap();
+    }
+    
+    const boost::shared_ptr<RotoDrawableItem>& firstStrokeItem = items.back();
+    assert(firstStrokeItem);
+    boost::shared_ptr<Node> bottomMerge = firstStrokeItem->getMergeNode();
+    assert(bottomMerge);
+
+    FramesNeededMap ret;
+    std::map<int, std::vector<OfxRangeD> > views;
+    OfxRangeD range;
+    range.min = range.max = time;
+    views[view].push_back(range);
+    ret.insert(std::make_pair(0,views));
+    return ret;
+}
+
+void
+RotoPaint::getRegionsOfInterest(double /*time*/,
+                          const RenderScale & /*scale*/,
+                          const RectD & /*outputRoD*/, //!< the RoD of the effect, in canonical coordinates
+                          const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
+                          int /*view*/,
+                          RoIMap* ret)
+{
+    boost::shared_ptr<RotoContext> roto = getNode()->getRotoContext();
+    std::list<boost::shared_ptr<RotoDrawableItem> > items = roto->getCurvesByRenderOrder();
+    if (items.empty()) {
+        return;
+    }
+    
+    const boost::shared_ptr<RotoDrawableItem>& firstStrokeItem = items.back();
+    assert(firstStrokeItem);
+    boost::shared_ptr<Node> bottomMerge = firstStrokeItem->getMergeNode();
+    assert(bottomMerge);
+    
+    ret->insert(std::make_pair(bottomMerge->getLiveInstance(), renderWindow));
+}
+
 bool
 RotoPaint::isIdentity(double time,
                       const RenderScale & scale,
@@ -323,7 +383,7 @@ RotoPaint::render(const RenderActionArgs& args)
         ImagePtr bgImg;
         
         bool triedGetImage = false;
-        bgImg = getImage(0, args.time, args.mappedScale, args.view, 0, bgComps.front(), bgDepth, getPreferredAspectRatio(), false, &bgImgRoI);
+        //bgImg = getImage(0, args.time, args.mappedScale, args.view, 0, bgComps.front(), bgDepth, getPreferredAspectRatio(), false, &bgImgRoI);
         
         ImageList::iterator rotoImagesIt = rotoPaintImages.begin();
         for (std::list<std::pair<Natron::ImageComponents,boost::shared_ptr<Natron::Image> > >::const_iterator plane = args.outputPlanes.begin();
@@ -340,6 +400,49 @@ RotoPaint::render(const RenderActionArgs& args)
                 ///might not be equal to the bounds of the image produced by the rotopaint. This is because the RoD of the rotopaint is the
                 ///union of all the mask strokes bounds, whereas all nodes inside the rotopaint tree don't take the mask RoD into account.
                 if (bgImg) {
+                    
+                    RectI bgBounds = bgImg->getBounds();
+                    
+                    ///The bg bounds might not be inside the roi, but yet we need to fill the whole roi, so just fill borders
+                    ///with black and transparant, e.g:
+                    /*
+                        AAAAAAAAA
+                        DDXXXXXBB
+                        DDXXXXXBB
+                        DDXXXXXBB
+                        CCCCCCCCC
+                     */
+                    RectI merge = bgBounds;
+                    merge.merge(args.roi);
+                    RectI aRect;
+                    aRect.x1 = merge.x1;
+                    aRect.y1 = bgBounds.y2;
+                    aRect.y2 = merge.y2;
+                    aRect.x2 = merge.x2;
+                    
+                    RectI bRect;
+                    bRect.x1 = bgBounds.x2;
+                    bRect.y1 = bgBounds.y1;
+                    bRect.x2 = merge.x2;
+                    bRect.y2 = bgBounds.y2;
+                    
+                    RectI cRect;
+                    cRect.x1 = merge.x1;
+                    cRect.y1 = merge.y1;
+                    cRect.x2 = merge.x2;
+                    cRect.y2 = bgBounds.y1;
+                    
+                    RectI dRect;
+                    dRect.x1 = merge.x1;
+                    dRect.y1 = bgBounds.y1;
+                    dRect.x2 = bgBounds.x1;
+                    dRect.y2 = bgBounds.y2;
+                    
+                    plane->second->fillZero(aRect);
+                    plane->second->fillZero(bRect);
+                    plane->second->fillZero(cRect);
+                    plane->second->fillZero(dRect);
+
                     plane->second->pasteFrom(*bgImg, args.roi, false);
                 } else {
                     plane->second->fillZero(args.roi);

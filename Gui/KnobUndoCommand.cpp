@@ -1,11 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "KnobUndoCommand.h"
 
@@ -40,8 +55,8 @@ PasteUndoCommand::PasteUndoCommand(KnobGui* knob,
     Knob<bool>* isBool = dynamic_cast<Knob<bool>*>( internalKnob.get() );
     Knob<double>* isDouble = dynamic_cast<Knob<double>*>( internalKnob.get() );
     Knob<std::string>* isString = dynamic_cast<Knob<std::string>*>( internalKnob.get() );
-    AnimatingString_KnobHelper* isAnimatingString = dynamic_cast<AnimatingString_KnobHelper*>( internalKnob.get() );
-    boost::shared_ptr<Parametric_Knob> isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(internalKnob);
+    AnimatingKnobStringHelper* isAnimatingString = dynamic_cast<AnimatingKnobStringHelper*>( internalKnob.get() );
+    boost::shared_ptr<KnobParametric> isParametric = boost::dynamic_pointer_cast<KnobParametric>(internalKnob);
 
 
     for (int i = 0; i < internalKnob->getDimension(); ++i) {
@@ -84,8 +99,8 @@ PasteUndoCommand::undo()
     Knob<bool>* isBool = dynamic_cast<Knob<bool>*>( internalKnob.get() );
     Knob<double>* isDouble = dynamic_cast<Knob<double>*>( internalKnob.get() );
     Knob<std::string>* isString = dynamic_cast<Knob<std::string>*>( internalKnob.get() );
-    AnimatingString_KnobHelper* isAnimatingString = dynamic_cast<AnimatingString_KnobHelper*>( internalKnob.get() );
-    boost::shared_ptr<Parametric_Knob> isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(internalKnob);
+    AnimatingKnobStringHelper* isAnimatingString = dynamic_cast<AnimatingKnobStringHelper*>( internalKnob.get() );
+    boost::shared_ptr<KnobParametric> isParametric = boost::dynamic_pointer_cast<KnobParametric>(internalKnob);
     if (_copyAnimation) {
         bool hasKeyframes = false;
         _knob->removeAllKeyframeMarkersOnTimeline(-1);
@@ -156,8 +171,8 @@ PasteUndoCommand::redo()
     Knob<bool>* isBool = dynamic_cast<Knob<bool>*>( internalKnob.get() );
     Knob<double>* isDouble = dynamic_cast<Knob<double>*>( internalKnob.get() );
     Knob<std::string>* isString = dynamic_cast<Knob<std::string>*>( internalKnob.get() );
-    AnimatingString_KnobHelper* isAnimatingString = dynamic_cast<AnimatingString_KnobHelper*>( internalKnob.get() );
-    boost::shared_ptr<Parametric_Knob> isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(internalKnob);
+    AnimatingKnobStringHelper* isAnimatingString = dynamic_cast<AnimatingKnobStringHelper*>( internalKnob.get() );
+    boost::shared_ptr<KnobParametric> isParametric = boost::dynamic_pointer_cast<KnobParametric>(internalKnob);
     bool hasKeyframeData = false;
     if ( !newCurves.empty() ) {
         _knob->removeAllKeyframeMarkersOnTimeline(-1);
@@ -254,26 +269,26 @@ boost::shared_ptr<KnobI> MultipleKnobEditsUndoCommand::createCopyForKnob(const b
     boost::shared_ptr<KnobI> copy;
     int dimension = originalKnob->getDimension();
 
-    if ( typeName == Int_Knob::typeNameStatic() ) {
-        copy.reset( new Int_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Bool_Knob::typeNameStatic() ) {
-        copy.reset( new Bool_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Double_Knob::typeNameStatic() ) {
-        copy.reset( new Double_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Choice_Knob::typeNameStatic() ) {
-        copy.reset( new Choice_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == String_Knob::typeNameStatic() ) {
-        copy.reset( new String_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Parametric_Knob::typeNameStatic() ) {
-        copy.reset( new Parametric_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Color_Knob::typeNameStatic() ) {
-        copy.reset( new Color_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Path_Knob::typeNameStatic() ) {
-        copy.reset( new Path_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == File_Knob::typeNameStatic() ) {
-        copy.reset( new File_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == OutputFile_Knob::typeNameStatic() ) {
-        copy.reset( new OutputFile_Knob(NULL,"",dimension,false) );
+    if ( typeName == KnobInt::typeNameStatic() ) {
+        copy.reset( new KnobInt(NULL,"",dimension,false) );
+    } else if ( typeName == KnobBool::typeNameStatic() ) {
+        copy.reset( new KnobBool(NULL,"",dimension,false) );
+    } else if ( typeName == KnobDouble::typeNameStatic() ) {
+        copy.reset( new KnobDouble(NULL,"",dimension,false) );
+    } else if ( typeName == KnobChoice::typeNameStatic() ) {
+        copy.reset( new KnobChoice(NULL,"",dimension,false) );
+    } else if ( typeName == KnobString::typeNameStatic() ) {
+        copy.reset( new KnobString(NULL,"",dimension,false) );
+    } else if ( typeName == KnobParametric::typeNameStatic() ) {
+        copy.reset( new KnobParametric(NULL,"",dimension,false) );
+    } else if ( typeName == KnobColor::typeNameStatic() ) {
+        copy.reset( new KnobColor(NULL,"",dimension,false) );
+    } else if ( typeName == KnobPath::typeNameStatic() ) {
+        copy.reset( new KnobPath(NULL,"",dimension,false) );
+    } else if ( typeName == KnobFile::typeNameStatic() ) {
+        copy.reset( new KnobFile(NULL,"",dimension,false) );
+    } else if ( typeName == KnobOutputFile::typeNameStatic() ) {
+        copy.reset( new KnobOutputFile(NULL,"",dimension,false) );
     }
 
     ///If this is another type of knob this is wrong since they do not hold any value

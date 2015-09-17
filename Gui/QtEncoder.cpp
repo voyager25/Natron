@@ -1,17 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "QtEncoder.h"
 
@@ -125,14 +134,14 @@ QtWriter::initializeKnobs()
                                                   ". You cannot use it to render a project.").arg(NATRON_APPLICATION_NAME).toStdString() );
 
 
-    _premultKnob = getNode()->createKnob<Bool_Knob>( QObject::tr("Premultiply by alpha").toStdString() );
+    _premultKnob = getNode()->createKnob<KnobBool>( QObject::tr("Premultiply by alpha").toStdString() );
     _premultKnob->setAnimationEnabled(false);
     _premultKnob->setDefaultValue(false,0);
 
-    _fileKnob = getNode()->createKnob<OutputFile_Knob>("File");
+    _fileKnob = getNode()->createKnob<KnobOutputFile>("File");
     _fileKnob->setAsOutputImageFile();
 
-    _frameRangeChoosal = getNode()->createKnob<Choice_Knob>( QObject::tr("Frame range").toStdString() );
+    _frameRangeChoosal = getNode()->createKnob<KnobChoice>( QObject::tr("Frame range").toStdString() );
     _frameRangeChoosal->setAnimationEnabled(false);
     std::vector<std::string> frameRangeChoosalEntries;
     frameRangeChoosalEntries.push_back( QObject::tr("Union of input ranges").toStdString() );
@@ -141,15 +150,15 @@ QtWriter::initializeKnobs()
     _frameRangeChoosal->populateChoices(frameRangeChoosalEntries);
     _frameRangeChoosal->setDefaultValue(1,0);
 
-    _firstFrameKnob = getNode()->createKnob<Int_Knob>( QObject::tr("First frame").toStdString() );
+    _firstFrameKnob = getNode()->createKnob<KnobInt>( QObject::tr("First frame").toStdString() );
     _firstFrameKnob->setAnimationEnabled(false);
     _firstFrameKnob->setSecret(true);
 
-    _lastFrameKnob = getNode()->createKnob<Int_Knob>( QObject::tr("Last frame").toStdString() );
+    _lastFrameKnob = getNode()->createKnob<KnobInt>( QObject::tr("Last frame").toStdString() );
     _lastFrameKnob->setAnimationEnabled(false);
     _lastFrameKnob->setSecret(true);
 
-    _renderKnob = getNode()->createKnob<Button_Knob>( QObject::tr("Render").toStdString() );
+    _renderKnob = getNode()->createKnob<KnobButton>( QObject::tr("Render").toStdString() );
     _renderKnob->setAsRenderButton();
 }
 

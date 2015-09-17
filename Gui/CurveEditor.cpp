@@ -1,21 +1,31 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "CurveEditor.h"
 
 #include <utility>
+#include <stdexcept>
 
 #include <QApplication>
 #include <QHBoxLayout>
@@ -25,20 +35,23 @@
 #include <QHeaderView>
 #include <QUndoStack> // in QtGui on Qt4, in QtWidgets on Qt5
 #include <QAction>
-CLANG_DIAG_OFF(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QMouseEvent>
-CLANG_DIAG_ON(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 
+#include "Engine/Bezier.h"
 #include "Engine/Knob.h"
 #include "Engine/Curve.h"
 #include "Engine/Node.h"
 #include "Engine/KnobFile.h"
 #include "Engine/RotoContext.h"
+#include "Engine/RotoDrawableItem.h"
+#include "Engine/RotoStrokeItem.h"
 #include "Engine/EffectInstance.h"
 #include "Engine/TimeLine.h"
 
-#include "Gui/CurveWidget.h"
+#include "Gui/CurveGui.h"
 #include "Gui/NodeGui.h"
 #include "Gui/KnobGui.h"
 #include "Gui/LineEdit.h"
@@ -49,6 +62,7 @@ CLANG_DIAG_ON(unused-private-field)
 #include "Gui/GuiAppInstance.h"
 #include "Gui/KnobUndoCommand.h"
 #include "Gui/Label.h"
+#include "Gui/NodeSettingsPanel.h"
 
 using std::make_pair;
 using std::cout;
@@ -193,6 +207,7 @@ CurveEditor::CurveEditor(Gui* gui,
     _imp->tree->setColumnCount(1);
     _imp->tree->header()->close();
     _imp->tree->setSizePolicy(QSizePolicy::Minimum,QSizePolicy::Expanding);
+    _imp->tree->setAttribute(Qt::WA_MacShowFocusRect,0);
 
     _imp->leftPaneLayout->addWidget(_imp->tree);
 

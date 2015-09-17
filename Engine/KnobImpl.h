@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef KNOBIMPL_H
 #define KNOBIMPL_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "Knob.h"
 
@@ -24,7 +33,9 @@
 #include <algorithm> // min, max
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
 #include <boost/math/special_functions/fpclassify.hpp>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #endif
 
 #include <QString>
@@ -42,7 +53,6 @@ GCC_DIAG_ON(unused-parameter)
 #include "Engine/Curve.h"
 #include "Engine/AppInstance.h"
 #include "Engine/Project.h"
-#include "Engine/TimeLine.h"
 #include "Engine/EffectInstance.h"
 #include "Engine/KnobTypes.h"
 
@@ -347,7 +357,7 @@ Knob<std::string>::pyObjectToType(PyObject* o) const
         index = 1;
     }
     
-    const AnimatingString_KnobHelper* isStringAnimated = dynamic_cast<const AnimatingString_KnobHelper* >(this);
+    const AnimatingKnobStringHelper* isStringAnimated = dynamic_cast<const AnimatingKnobStringHelper* >(this);
     if (!isStringAnimated) {
         return std::string();
     }
@@ -660,7 +670,7 @@ template <>
 bool Knob<std::string>::getValueFromCurve(double time, int dimension, bool byPassMaster, bool /*clamp*/, std::string* ret) const
 {
     
-    const AnimatingString_KnobHelper* isStringAnimated = dynamic_cast<const AnimatingString_KnobHelper* >(this);
+    const AnimatingKnobStringHelper* isStringAnimated = dynamic_cast<const AnimatingKnobStringHelper* >(this);
     if (isStringAnimated) {
         *ret = isStringAnimated->getStringAtTime(time,dimension);
         ///ret is not empty if the animated string knob has a custom interpolation
@@ -1136,7 +1146,7 @@ void
 Knob<std::string>::makeKeyFrame(Curve* /*curve*/,double time,const std::string& v,KeyFrame* key)
 {
     double keyFrameValue = 0.;
-    AnimatingString_KnobHelper* isStringAnimatedKnob = dynamic_cast<AnimatingString_KnobHelper*>(this);
+    AnimatingKnobStringHelper* isStringAnimatedKnob = dynamic_cast<AnimatingKnobStringHelper*>(this);
     assert(isStringAnimatedKnob);
     if (isStringAnimatedKnob) {
         isStringAnimatedKnob->stringToKeyFrameValue(time,v,&keyFrameValue);
@@ -1245,7 +1255,7 @@ Knob<T>::setValueAtTime(int time,
     if (holder) {
         holder->setHasAnimation(true);
     }
-    guiCurveCloneInternalCurve(dimension, reason);
+    guiCurveCloneInternalCurve(Natron::eCurveChangeReasonInternal, dimension, reason);
     
     if (_signalSlotHandler && ret) {
         _signalSlotHandler->s_keyFrameSet(time,dimension,(int)reason,ret);
@@ -1365,8 +1375,8 @@ Knob<T>::unSlave(int dimension,
     boost::shared_ptr<KnobHelper> helper = boost::dynamic_pointer_cast<KnobHelper>(master.second);
 
     if (helper->getSignalSlotHandler() && _signalSlotHandler) {
-        QObject::disconnect( helper->getSignalSlotHandler().get(), SIGNAL( updateSlaves(int) ), _signalSlotHandler.get(),
-                             SLOT( onMasterChanged(int) ) );
+        QObject::disconnect( helper->getSignalSlotHandler().get(), SIGNAL( updateSlaves(int,int) ), _signalSlotHandler.get(),
+                             SLOT( onMasterChanged(int,int) ) );
         QObject::disconnect( helper->getSignalSlotHandler().get(), SIGNAL( keyFrameSet(SequenceTime,int,int,bool) ),
                          _signalSlotHandler.get(), SLOT( onMasterKeyFrameSet(SequenceTime,int,int,bool) ) );
         QObject::disconnect( helper->getSignalSlotHandler().get(), SIGNAL( keyFrameRemoved(SequenceTime,int,int) ),
@@ -1431,9 +1441,9 @@ Knob<std::string>::unSlave(int dimension,
     assert(helper);
     if (helper) {
         QObject::disconnect( helper->getSignalSlotHandler().get(),
-                            SIGNAL( updateSlaves(int) ),
+                            SIGNAL( updateSlaves(int,int) ),
                             _signalSlotHandler.get(),
-                            SLOT( onMasterChanged(int) ) );
+                            SLOT( onMasterChanged(int,int) ) );
         QObject::disconnect( helper->getSignalSlotHandler().get(),
                             SIGNAL( keyFrameSet(SequenceTime,int,int,bool) ),
                             _signalSlotHandler.get(),
@@ -1585,7 +1595,7 @@ Knob<std::string>::getKeyFrameValueByIndex(int dimension,
 
     std::string value;
 
-    const AnimatingString_KnobHelper* animatedString = dynamic_cast<const AnimatingString_KnobHelper*>(this);
+    const AnimatingKnobStringHelper* animatedString = dynamic_cast<const AnimatingKnobStringHelper*>(this);
     assert(animatedString);
     if (animatedString) {
         boost::shared_ptr<Curve> curve = getCurve(dimension);
@@ -1737,7 +1747,7 @@ Knob<T>::onKeyFrameSet(SequenceTime time,
     bool ret = curve->addKeyFrame(k);
     
     if (!useGuiCurve) {
-        guiCurveCloneInternalCurve(dimension, Natron::eValueChangedReasonUserEdited);
+        guiCurveCloneInternalCurve(Natron::eCurveChangeReasonInternal,dimension, Natron::eValueChangedReasonUserEdited);
         evaluateValueChange(dimension, Natron::eValueChangedReasonUserEdited);
     }
     return ret;
@@ -1765,7 +1775,7 @@ Knob<T>::onKeyFrameSet(SequenceTime /*time*/,const KeyFrame& key,int dimension)
     bool ret = curve->addKeyFrame(key);
     
     if (!useGuiCurve) {
-        guiCurveCloneInternalCurve(dimension, Natron::eValueChangedReasonUserEdited);
+        guiCurveCloneInternalCurve(Natron::eCurveChangeReasonInternal,dimension, Natron::eValueChangedReasonUserEdited);
         evaluateValueChange(dimension, Natron::eValueChangedReasonUserEdited);
     }
     return ret;
@@ -1961,8 +1971,8 @@ Knob<double>::resetToDefaultValue(int dimension)
 {
     KnobI::removeAnimation(dimension);
 
-    ///A Knob<double> is not always a Double_Knob (it can also be a Color_Knob)
-    Double_Knob* isDouble = dynamic_cast<Double_Knob*>(this);
+    ///A Knob<double> is not always a KnobDouble (it can also be a KnobColor)
+    KnobDouble* isDouble = dynamic_cast<KnobDouble*>(this);
     double def;
     
     clearExpression(dimension,true);
@@ -2442,7 +2452,10 @@ Knob<T>::cloneAndUpdateGui(KnobI* other,int dimension)
             }
             if (_signalSlotHandler) {
                 std::list<SequenceTime> keysList;
-                KeyFrameSet keys = curve->getKeyFrames_mt_safe();
+                KeyFrameSet keys;
+                if (curve) {
+                    keys = curve->getKeyFrames_mt_safe();
+                }
                 for (KeyFrameSet::iterator it = keys.begin(); it!=keys.end(); ++it) {
                     keysList.push_back(it->getTime());
                 }
@@ -2457,6 +2470,7 @@ Knob<T>::cloneAndUpdateGui(KnobI* other,int dimension)
     cloneExtraData(other,dimension);
     if (getHolder()) {
         getHolder()->updateHasAnimation();
+        computeHasModifications();
     }
 }
 

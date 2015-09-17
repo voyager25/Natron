@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "ProjectGuiSerialization.h"
 
@@ -24,26 +34,26 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-#include "Engine/Project.h"
 #include "Engine/Node.h"
 #include "Engine/ParameterWrapper.h"
+#include "Engine/Project.h"
 #include "Engine/ViewerInstance.h"
 
-
-#include "Gui/NodeGui.h"
-#include "Gui/Gui.h"
-#include "Gui/TabWidget.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ViewerGL.h"
-#include "Gui/ProjectGui.h"
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/Histogram.h"
-#include "Gui/Splitter.h"
 #include "Gui/DockablePanel.h"
-#include "Gui/ScriptEditor.h"
+#include "Gui/FloatingWidget.h"
+#include "Gui/Gui.h"
+#include "Gui/GuiAppInstance.h"
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/Histogram.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGui.h"
+#include "Gui/ProjectGui.h"
 #include "Gui/PythonPanels.h"
+#include "Gui/ScriptEditor.h"
+#include "Gui/Splitter.h"
+#include "Gui/TabWidget.h"
+#include "Gui/ViewerGL.h"
+#include "Gui/ViewerTab.h"
 
 void
 ProjectGuiSerialization::initialize(const ProjectGui* projectGui)
@@ -153,7 +163,7 @@ void
 SplitterSerialization::initialize(Splitter* splitter)
 {
     sizes = splitter->serializeNatron().toStdString();
-    Natron::OrientationEnum nO;
+    Natron::OrientationEnum nO = Natron::eOrientationHorizontal;
     Qt::Orientation qO = splitter->orientation();
     switch (qO) {
     case Qt::Horizontal:
@@ -265,10 +275,10 @@ PythonPanelSerialization::initialize(PyPanel* tab,const std::string& func)
     for (std::list<Param*>::iterator it = parameters.begin(); it != parameters.end(); ++it) {
         
         boost::shared_ptr<KnobI> knob = (*it)->getInternalKnob();
-        Group_Knob* isGroup = dynamic_cast<Group_Knob*>( knob.get() );
-        Page_Knob* isPage = dynamic_cast<Page_Knob*>( knob.get() );
-        Button_Knob* isButton = dynamic_cast<Button_Knob*>( knob.get() );
-        //Choice_Knob* isChoice = dynamic_cast<Choice_Knob*>( knob.get() );
+        KnobGroup* isGroup = dynamic_cast<KnobGroup*>( knob.get() );
+        KnobPage* isPage = dynamic_cast<KnobPage*>( knob.get() );
+        KnobButton* isButton = dynamic_cast<KnobButton*>( knob.get() );
+        //KnobChoice* isChoice = dynamic_cast<KnobChoice*>( knob.get() );
         
         if (!isGroup && !isPage && !isButton) {
             boost::shared_ptr<KnobSerialization> k(new KnobSerialization(knob));

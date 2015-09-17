@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "NodeGraphUndoRedo.h"
 
@@ -22,13 +32,16 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
+#include "Engine/GroupInput.h"
+#include "Engine/GroupOutput.h"
 #include "Engine/Node.h"
+#include "Engine/NodeSerialization.h"
 #include "Engine/Project.h"
+#include "Engine/RotoLayer.h"
 #include "Engine/TimeLine.h"
 #include "Engine/ViewerInstance.h"
-#include "Engine/NodeSerialization.h"
-#include "Engine/NoOp.h"
 
+#include "Gui/NodeClipBoard.h"
 #include "Gui/NodeGui.h"
 #include "Gui/NodeGraph.h"
 #include "Gui/Gui.h"
@@ -222,7 +235,7 @@ RemoveMultipleNodesCommand::RemoveMultipleNodesCommand(NodeGraph* graph,
         n.node = *it;
 
         ///find all outputs to restore
-        const std::list<Natron::Node*> & outputs = (*it)->getNode()->getOutputs();
+        const std::list<Natron::Node*> & outputs = (*it)->getNode()->getGuiOutputs();
         for (std::list<Natron::Node* >::const_iterator it2 = outputs.begin(); it2 != outputs.end(); ++it2) {
             bool restore = true;
             for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it3 = nodes.begin(); it3 != nodes.end(); ++it3) {
@@ -311,7 +324,7 @@ RemoveMultipleNodesCommand::redo()
         
         NodeGuiPtr node = it->node.lock();
         ///Make a copy before calling deactivate which will modify the list
-        std::list<Natron::Node* > outputs = node->getNode()->getOutputs();
+        std::list<Natron::Node* > outputs = node->getNode()->getGuiOutputs();
         
         std::list<ViewerInstance* > viewers;
         node->getNode()->hasViewersConnected(&viewers);
@@ -338,11 +351,11 @@ RemoveMultipleNodesCommand::redo()
                     InspectorNode* inspector = dynamic_cast<InspectorNode*>( *it2 );
                     ///if the node is an inspector, when disconnecting the active input just activate another input instead
                     if (inspector) {
-                        const std::vector<boost::shared_ptr<Natron::Node> > & inputs = inspector->getInputs_mt_safe();
+                        const std::vector<boost::shared_ptr<Natron::Node> > & inputs = inspector->getGuiInputs();
                         ///set as active input the first non null input
                         for (U32 i = 0; i < inputs.size(); ++i) {
                             if (inputs[i]) {
-                                inspector->setActiveInputAndRefresh(i);
+                                inspector->setActiveInputAndRefresh(i, false);
                                 ///make sure we don't refresh it a second time
                                 std::list<ViewerInstance*>::iterator foundViewer =
                                     std::find( viewersToRefresh.begin(), viewersToRefresh.end(),
@@ -490,6 +503,7 @@ ConnectCommand::doConnect(const boost::shared_ptr<Natron::Node> &oldSrc,
     if (!isDstAViewer) {
         _graph->getGui()->getApp()->triggerAutoSave();
     }
+    _graph->update();
 
 }
 
@@ -791,7 +805,7 @@ Tree::buildTreeInternal(const std::list<NodeGuiPtr>& selectedNodes,
     
     static bool hasNodeOutputsInList(const std::list<boost::shared_ptr<NodeGui> >& nodes,const boost::shared_ptr<NodeGui>& node)
     {
-        const std::list<Natron::Node*>& outputs = node->getNode()->getOutputs();
+        const std::list<Natron::Node*>& outputs = node->getNode()->getGuiOutputs();
         
         bool foundOutput = false;
         for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
@@ -810,7 +824,7 @@ Tree::buildTreeInternal(const std::list<NodeGuiPtr>& selectedNodes,
     
     static bool hasNodeInputsInList(const std::list<boost::shared_ptr<NodeGui> >& nodes,const boost::shared_ptr<NodeGui>& node)
     {
-        const std::vector<boost::shared_ptr<Natron::Node> >& inputs = node->getNode()->getInputs_mt_safe();
+        const std::vector<boost::shared_ptr<Natron::Node> >& inputs = node->getNode()->getGuiInputs();
         
         bool foundInput = false;
         for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
@@ -1088,7 +1102,8 @@ RenameNodeUndoRedoCommand::RenameNodeUndoRedoCommand(const boost::shared_ptr<Nod
 , _newName(newName)
 {
     assert(node);
-   
+    setText(QObject::tr("Rename node"));
+
 }
 
 RenameNodeUndoRedoCommand::~RenameNodeUndoRedoCommand()
@@ -1101,14 +1116,12 @@ RenameNodeUndoRedoCommand::undo()
 {
     NodeGuiPtr node = _node.lock();
     node->setName(_oldName);
-    setText(QObject::tr("Rename node"));
 }
 
 void RenameNodeUndoRedoCommand::redo()
 {
     NodeGuiPtr node = _node.lock();
     node->setName(_newName);
-    setText(QObject::tr("Rename node"));
 }
 
 static void
@@ -1135,7 +1148,7 @@ static void addTreeInputs(const std::list<boost::shared_ptr<NodeGui> >& nodes,co
     if (!hasNodeInputsInList(nodes,node)) {
         ExtractedInput input;
         input.node = node;
-        sharedToWeak(node->getNode()->getInputs_mt_safe(),input.inputs);
+        sharedToWeak(node->getNode()->getGuiInputs(),input.inputs);
         tree.inputs.push_back(input);
         markedNodes.push_back(node);
     } else {
@@ -1161,7 +1174,7 @@ static void extractTreesFromNodes(const std::list<boost::shared_ptr<NodeGui> >& 
             ExtractedTree tree;
             tree.output.node = *it;
             boost::shared_ptr<Natron::Node> n = (*it)->getNode();
-            const std::list<Natron::Node* >& outputs = n->getOutputs();
+            const std::list<Natron::Node* >& outputs = n->getGuiOutputs();
             for (std::list<Natron::Node*>::const_iterator it2 = outputs.begin(); it2!=outputs.end(); ++it2) {
                 int idx = (*it2)->inputIndex(n.get());
                 tree.output.outputs.push_back(std::make_pair(idx,*it2));
@@ -1178,7 +1191,7 @@ static void extractTreesFromNodes(const std::list<boost::shared_ptr<NodeGui> >& 
             if (tree.inputs.empty()) {
                 ExtractedInput input;
                 input.node = *it;
-                sharedToWeak(n->getInputs_mt_safe(),input.inputs);
+                sharedToWeak(n->getGuiInputs(),input.inputs);
                 tree.inputs.push_back(input);
             }
             
@@ -1462,7 +1475,7 @@ InlineGroupCommand::InlineGroupCommand(NodeGraph* graph,const std::list<boost::s
         NodeList nodes = group->getNodes();
         std::vector<NodePtr> groupInputs;
         
-        NodePtr groupOutput = group->getOutputNode();
+        NodePtr groupOutput = group->getOutputNode(true);
         group->getInputs(&groupInputs);
         
         std::list<boost::shared_ptr<NodeGui> > nodesToCopy;

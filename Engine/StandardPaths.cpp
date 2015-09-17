@@ -1,6 +1,26 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "StandardPaths.h"
 
@@ -13,7 +33,11 @@
 #include <QStandardPaths>
 #endif
 
-#include "Global/Macros.h"
+#include "Global/GlobalDefines.h"
+
+#ifdef __NATRON_WIN32__
+#include <ofxhUtilities.h> // for wideStringToString
+#endif
 
 #ifdef __NATRON_OSX__
 #include <CoreServices/CoreServices.h>
@@ -152,7 +176,7 @@ macLocation(StandardPaths::StandardLocationEnum type,
     if ( (type == Natron::StandardPaths::eStandardLocationData) || (type == Natron::StandardPaths::eStandardLocationCache) ) {
         appendOrganizationAndApp(path);
     }
-
+    
     return path;
 }
 
@@ -160,16 +184,21 @@ macLocation(StandardPaths::StandardLocationEnum type,
 static QString
 qSystemDirectory()
 {
-    QVarLengthArray<char, MAX_PATH> fullPath;
 
+    QVarLengthArray<TCHAR, MAX_PATH> fullPath;
     UINT retLen = ::GetSystemDirectory(fullPath.data(), MAX_PATH);
     if (retLen > MAX_PATH) {
         fullPath.resize(retLen);
         retLen = ::GetSystemDirectory(fullPath.data(), retLen);
     }
-
+#ifdef UNICODE
+	std::wstring ws(fullPath.constData(), retLen);
+	std::string str = OFX::wideStringToString(ws);
+#else
+	std::string str (fullPath.constData(), retLen);
+#endif
     // in some rare cases retLen might be 0
-    return QString::fromLatin1( fullPath.constData(), int(retLen) );
+    return QString(str.c_str());
 }
 
 static HINSTANCE
@@ -199,7 +228,13 @@ load(const wchar_t *libraryName,
             fullPathAttempt.append( QLatin1Char('\\') );
         }
         fullPathAttempt.append(fileName);
-        HINSTANCE inst = ::LoadLibrary( (LPCSTR)fullPathAttempt.toStdString().c_str() );
+        
+#ifdef UNICODE
+        std::wstring ws = Natron::s2ws(fullPathAttempt.toStdString());
+        HINSTANCE inst = ::LoadLibrary( ws.c_str() );
+#else
+        HINSTANCE inst = ::LoadLibrary( fullPathAttempt.toStdString().c_str() );
+#endif
         if (inst != 0) {
             return inst;
         }
@@ -575,40 +610,40 @@ StandardPaths::writableLocation(StandardLocationEnum type)
 #endif // ifdef __NATRON_OSX__
 
 #else // QT_VERSION >= 0x050000
-    QStandardPaths::StandardLocationEnum path;
+    QStandardPaths::StandardLocation path;
     switch (type) {
     case Natron::StandardPaths::eStandardLocationDesktop:
-        path = QStandardPaths::eStandardLocationDesktop;
+        path = QStandardPaths::DesktopLocation;
         break;
     case Natron::StandardPaths::eStandardLocationDocuments:
-        path = QStandardPaths::eStandardLocationDocuments;
+        path = QStandardPaths::DocumentsLocation;
         break;
     case Natron::StandardPaths::eStandardLocationFonts:
-        path = QStandardPaths::eStandardLocationFonts;
+        path = QStandardPaths::FontsLocation;
         break;
     case Natron::StandardPaths::eStandardLocationApplications:
-        path = QStandardPaths::eStandardLocationApplications;
+        path = QStandardPaths::ApplicationsLocation;
         break;
     case Natron::StandardPaths::eStandardLocationMusic:
-        path = QStandardPaths::eStandardLocationMusic;
+        path = QStandardPaths::MusicLocation;
         break;
     case Natron::StandardPaths::eStandardLocationMovies:
-        path = QStandardPaths::eStandardLocationMovies;
+        path = QStandardPaths::MoviesLocation;
         break;
     case Natron::StandardPaths::eStandardLocationPictures:
-        path = QStandardPaths::eStandardLocationPictures;
+        path = QStandardPaths::PicturesLocation;
         break;
     case Natron::StandardPaths::eStandardLocationTemp:
-        path = QStandardPaths::eStandardLocationTemp;
+        path = QStandardPaths::TempLocation;
         break;
     case Natron::StandardPaths::eStandardLocationHome:
-        path = QStandardPaths::eStandardLocationHome;
+        path = QStandardPaths::HomeLocation;
         break;
     case Natron::StandardPaths::eStandardLocationData:
-        path = QStandardPaths::eStandardLocationData;
+        path = QStandardPaths::DataLocation;
         break;
     case Natron::StandardPaths::eStandardLocationCache:
-        path = QStandardPaths::eStandardLocationCache;
+        path = QStandardPaths::CacheLocation;
         break;
     default:
         break;

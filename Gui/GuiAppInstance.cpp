@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "GuiAppInstance.h"
 
@@ -20,15 +30,7 @@
 #include <QMutex>
 #include <QCoreApplication>
 
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/Gui.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/NodeGui.h"
-#include "Gui/MultiInstancePanel.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/SplashScreen.h"
-#include "Gui/ViewerGL.h"
-
+#include "Engine/CLArgs.h"
 #include "Engine/Project.h"
 #include "Engine/EffectInstance.h"
 #include "Engine/Node.h"
@@ -39,6 +41,16 @@
 #include "Engine/DiskCacheNode.h"
 #include "Engine/KnobFile.h"
 #include "Engine/ViewerInstance.h"
+
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/Gui.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGui.h"
+#include "Gui/MultiInstancePanel.h"
+#include "Gui/ViewerTab.h"
+#include "Gui/SplashScreen.h"
+#include "Gui/ViewerGL.h"
+
 using namespace Natron;
 
 struct GuiAppInstancePrivate
@@ -190,10 +202,13 @@ GuiAppInstancePrivate::findOrCreateToolButtonRecursive(const boost::shared_ptr<P
 void
 GuiAppInstance::load(const CLArgs& cl)
 {
-    appPTR->setLoadingStatus( tr("Creating user interface...") );
 
+    if (getAppID() == 0) {
+        appPTR->setLoadingStatus( QObject::tr("Creating user interface...") );
+    }
+    
     declareCurrentAppVariable_Python();
-
+    
     _imp->_gui = new Gui(this);
     _imp->_gui->createGui();
 
@@ -211,6 +226,8 @@ GuiAppInstance::load(const CLArgs& cl)
     ///show the gui
     _imp->_gui->show();
 
+    
+    boost::shared_ptr<Settings> nSettings = appPTR->getCurrentSettings();
 
     QObject::connect(getProject().get(), SIGNAL(formatChanged(Format)), this, SLOT(projectFormatChanged(Format)));
 
@@ -221,12 +238,21 @@ GuiAppInstance::load(const CLArgs& cl)
                                                                       tr("Do you want " NATRON_APPLICATION_NAME " to check for updates "
                                                                       "on launch of the application ?").toStdString(), false);
             bool checkForUpdates = reply == Natron::eStandardButtonYes;
-            appPTR->getCurrentSettings()->setCheckUpdatesEnabled(checkForUpdates);
+            nSettings->setCheckUpdatesEnabled(checkForUpdates);
         }
 
-        if (appPTR->getCurrentSettings()->isCheckForUpdatesEnabled()) {
+        if (nSettings->isCheckForUpdatesEnabled()) {
             appPTR->setLoadingStatus( tr("Checking if updates are available...") );
             checkForNewVersion();
+        }
+    }
+    
+    if (nSettings->isDefaultAppearanceOutdated()) {
+        Natron::StandardButtonEnum reply = Natron::questionDialog(tr("Appearance").toStdString(),
+                                                                  tr(NATRON_APPLICATION_NAME " default appearance changed since last version.\n"
+                                                                     "Would you like to set the new default appearance?").toStdString(), false);
+        if (reply == Natron::eStandardButtonYes) {
+            nSettings->restoreDefaultAppearance();
         }
     }
 
@@ -686,7 +712,7 @@ GuiAppInstance::setViewersCurrentView(int view)
 }
 
 void
-GuiAppInstance::startRenderingFullSequence(const AppInstance::RenderWork& w,bool renderInSeparateProcess,const QString& savePath)
+GuiAppInstance::startRenderingFullSequence(bool enableRenderStats,const AppInstance::RenderWork& w,bool renderInSeparateProcess,const QString& savePath)
 {
 
 
@@ -751,7 +777,7 @@ GuiAppInstance::startRenderingFullSequence(const AppInstance::RenderWork& w,bool
         }
     } else {
         _imp->_gui->onWriterRenderStarted(outputFileSequence, firstFrame, lastFrame, w.writer);
-        w.writer->renderFullSequence(NULL,firstFrame,lastFrame);
+        w.writer->renderFullSequence(enableRenderStats,NULL,firstFrame,lastFrame);
     }
 } // startRenderingFullSequence
 
@@ -789,8 +815,9 @@ GuiAppInstance::setUndoRedoStackLimit(int limit)
 }
 
 void
-GuiAppInstance::startProgress(KnobHolder* effect,
-                              const std::string & message,
+GuiAppInstance::progressStart(KnobHolder* effect,
+                              const std::string &message,
+                              const std::string &messageid,
                               bool canCancel)
 {
     {
@@ -798,13 +825,13 @@ GuiAppInstance::startProgress(KnobHolder* effect,
         _imp->_showingDialog = true;
     }
 
-    _imp->_gui->startProgress(effect, message, canCancel);
+    _imp->_gui->progressStart(effect, message, messageid, canCancel);
 }
 
 void
-GuiAppInstance::endProgress(KnobHolder* effect)
+GuiAppInstance::progressEnd(KnobHolder* effect)
 {
-    _imp->_gui->endProgress(effect);
+    _imp->_gui->progressEnd(effect);
     {
         QMutexLocker l(&_imp->_showingDialogMutex);
         _imp->_showingDialog = false;
@@ -1063,4 +1090,50 @@ GuiAppInstance::getIsUserPainting() const
 {
     QMutexLocker k(&_imp->userIsPaintingMutex);
     return _imp->userIsPainting;
+}
+
+bool
+GuiAppInstance::isRenderStatsActionChecked() const
+{
+    return _imp->_gui->areRenderStatsEnabled();
+}
+
+
+bool
+GuiAppInstance::save(const std::string& /*filename*/)
+{
+    return _imp->_gui->saveProject();
+}
+
+bool
+GuiAppInstance::saveAs(const std::string& /*filename*/)
+{
+    return _imp->_gui->saveProjectAs();
+}
+
+AppInstance*
+GuiAppInstance::loadProject(const std::string& filename)
+{
+    return _imp->_gui->openProject(filename);
+}
+
+///Close the current project but keep the window
+bool
+GuiAppInstance::resetProject()
+{
+    return _imp->_gui->abortProject(false);
+}
+
+///Reset + close window, quit if last window
+bool
+GuiAppInstance::closeProject()
+{
+    return _imp->_gui->abortProject(true);
+}
+
+///Opens a new window
+AppInstance*
+GuiAppInstance::newProject()
+{
+    return _imp->_gui->createNewProject();
 }

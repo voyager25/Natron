@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-#ifndef NATRON_GUI_GUI_H_
-#define NATRON_GUI_GUI_H_
+#ifndef _Gui_Gui_h_
+#define _Gui_Gui_h_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/noncopyable.hpp>
@@ -32,6 +41,9 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Global/GlobalDefines.h"
 #include "Gui/SerializableWindow.h"
+#ifdef __NATRON_WIN32__
+#include "Gui/FileTypeMainWindow_win.h"
+#endif
 #include "Engine/ScriptObject.h"
 
 
@@ -54,8 +66,10 @@ class QVBoxLayout;
 class QMutex;
 
 //Natron gui
+#include "Gui/RegisteredTabs.h"
 class GuiLayoutSerialization;
 class GuiAppInstance;
+class AppInstance;
 class NodeGui;
 class TabWidget;
 class ToolButton;
@@ -71,11 +85,13 @@ class ScriptEditor;
 class PyPanel;
 class RectI;
 class DopeSheetEditor;
+class PropertiesBinWrapper;
+class RenderStatsDialog;
 
 //Natron engine
 class ViewerInstance;
 class PluginGroupNode;
-class Color_Knob;
+class KnobColor;
 class ProcessHandler;
 class NodeCollection;
 class KnobHolder;
@@ -84,28 +100,32 @@ class Node;
 class Image;
 class EffectInstance;
 class OutputEffectInstance;
+    
+    
+#if defined(Q_OS_MAC)
+//Implementation in Gui/QtMac.mm
+bool isHighDPIInternal(const QWidget* w);
+#endif
+    
 }
 
-typedef std::map<std::string,std::pair<QWidget*,ScriptObject*> > RegisteredTabs;
-
-
-class PropertiesBinWrapper : public QWidget, public ScriptObject
-{
-public:
-
-    PropertiesBinWrapper(QWidget* parent)
-    : QWidget(parent)
-    , ScriptObject()
-    {
-
-    }
-};
 
 struct GuiPrivate;
+
 class Gui
-    : public QMainWindow, public SerializableWindow, public boost::noncopyable
+#ifndef __NATRON_WIN32__
+    : public QMainWindow
+#else
+    : public DocumentWindow
+#endif
+    , public SerializableWindow
+    , public boost::noncopyable
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
+
+public:
 
 public:
     explicit Gui(GuiAppInstance* app,
@@ -134,7 +154,7 @@ public:
 
     const std::list<boost::shared_ptr<NodeGui> > & getSelectedNodes() const;
 
-    bool eventFilter(QObject *target, QEvent* e);
+    bool eventFilter(QObject *target, QEvent* e) OVERRIDE;
 
     void createViewerGui(boost::shared_ptr<Natron::Node> viewer);
 
@@ -338,7 +358,7 @@ public:
 
     void startDragPanel(QWidget* panel);
 
-    QWidget* stopDragPanel();
+    QWidget* stopDragPanel(QSize* initialSize);
 
     bool isDraggingPanel() const;
 
@@ -352,9 +372,9 @@ public:
 
     void setColorPickersColor(double r,double g, double b,double a);
 
-    void registerNewColorPicker(boost::shared_ptr<Color_Knob> knob);
+    void registerNewColorPicker(boost::shared_ptr<KnobColor> knob);
 
-    void removeColorPicker(boost::shared_ptr<Color_Knob> knob);
+    void removeColorPicker(boost::shared_ptr<KnobColor> knob);
 
     bool hasPickers() const;
 
@@ -445,9 +465,9 @@ public:
 
     void removeTrackerInterface(NodeGui* n,bool pluginsly);
 
-    void startProgress(KnobHolder* effect,const std::string & message, bool canCancel = true);
+    void progressStart(KnobHolder* effect, const std::string &message, const std::string &messageid, bool canCancel = true);
 
-    void endProgress(KnobHolder* effect);
+    void progressEnd(KnobHolder* effect);
 
     bool progressUpdate(KnobHolder* effect,double t);
 
@@ -474,7 +494,7 @@ public:
 
     void checkNumberOfNonFloatingPanes();
 
-    void openProject(const std::string& filename);
+    AppInstance* openProject(const std::string& filename) WARN_UNUSED_RETURN;
 
     bool isGUIFrozen() const;
 
@@ -538,6 +558,36 @@ public:
 
     bool isAboutToClose() const;
     
+    void setRenderStatsEnabled(bool enabled);
+    bool areRenderStatsEnabled() const;
+    
+    RenderStatsDialog* getRenderStatsDialog() const;
+    RenderStatsDialog* getOrCreateRenderStatsDialog();
+    
+#ifdef __NATRON_WIN32__
+    /**
+     * @param filePath file that was selected in the explorer
+     */
+    virtual void ddeOpenFile(const QString& filePath) OVERRIDE FINAL;
+#endif
+    
+    /**
+     * @brief Returns true on OS X if on a High DPI (Retina) Display.
+     **/
+#ifndef Q_OS_MAC
+    bool isHighDPI() const { return false; }
+#else
+    bool isHighDPI() const { return Natron::isHighDPIInternal(this); }
+#endif
+    
+    AppInstance* createNewProject();
+    
+    /**
+     * @brief Close project right away, without any user interaction.
+     * @param quitApp If true, the application will exit, otherwise the main window will stay active.
+     **/
+    bool abortProject(bool quitApp);
+    
 Q_SIGNALS:
 
 
@@ -555,7 +605,7 @@ public Q_SLOTS:
     ///Close the project instance, asking questions to the user and leaving the main window intact
     void closeProject();
     void toggleFullScreen();
-    void closeEvent(QCloseEvent* e);
+    void closeEvent(QCloseEvent* e) OVERRIDE;
     void newProject();
     void openProject();
     bool saveProject();
@@ -567,16 +617,10 @@ public Q_SLOTS:
 
     void createNewViewer();
 
-    void connectInput1();
-    void connectInput2();
-    void connectInput3();
-    void connectInput4();
-    void connectInput5();
-    void connectInput6();
-    void connectInput7();
-    void connectInput8();
-    void connectInput9();
-    void connectInput10();
+    void connectInput();
+    
+    void connectInput(int inputNb);
+
 
     void showView0();
     void showView1();
@@ -632,6 +676,8 @@ public Q_SLOTS:
     void renderAllWriters();
 
     void renderSelectedNode();
+    
+    void onEnableRenderStatsActionTriggered();
 
     void onRotoSelectedToolChanged(int tool);
 
@@ -665,13 +711,9 @@ public Q_SLOTS:
     
 private:
 
-    /**
-     * @brief Close project right away, without any user interaction.
-     * @param quitApp If true, the application will exit, otherwise the main window will stay active.
-     **/
-    void abortProject(bool quitApp);
+    
 
-    void openProjectInternal(const std::string & absoluteFileName);
+    AppInstance* openProjectInternal(const std::string & absoluteFileName) WARN_UNUSED_RETURN;
 
     void setupUi();
 
@@ -688,50 +730,4 @@ private:
 
     boost::scoped_ptr<GuiPrivate> _imp;
 };
-
-
-/*This class represents a floating pane that embeds a widget*/
-class FloatingWidget
-    : public QWidget, public SerializableWindow
-{
-    Q_OBJECT
-
-public:
-
-    explicit FloatingWidget(Gui* gui,
-                            QWidget* parent = 0);
-
-    virtual ~FloatingWidget();
-
-    /*Set the embedded widget. Only 1 widget can be embedded
-       by FloatingWidget. Once set, this function does nothing
-       for subsequent calls..*/
-    void setWidget(QWidget* w);
-
-    void removeEmbeddedWidget();
-
-    QWidget* getEmbeddedWidget() const
-    {
-        return _embeddedWidget;
-    }
-
-public Q_SLOTS:
-
-    void onProjectNameChanged(const QString& name);
-    
-Q_SIGNALS:
-
-    void closed();
-
-private:
-
-    virtual void moveEvent(QMoveEvent* e) OVERRIDE FINAL;
-    virtual void resizeEvent(QResizeEvent* e) OVERRIDE FINAL;
-    virtual void closeEvent(QCloseEvent* e) OVERRIDE;
-    QWidget* _embeddedWidget;
-    QScrollArea* _scrollArea;
-    QVBoxLayout* _layout;
-    Gui* _gui;
-};
-
-#endif // NATRON_GUI_GUI_H_
+#endif // _Gui_Gui_h_

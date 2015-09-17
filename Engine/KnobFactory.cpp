@@ -1,17 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "KnobFactory.h"
 
@@ -66,20 +75,20 @@ knobFactoryEntry()
 void
 KnobFactory::loadBultinKnobs()
 {
-    _loadedKnobs.insert( knobFactoryEntry<File_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Int_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Double_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Bool_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Button_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<OutputFile_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Choice_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Separator_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Group_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Color_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<String_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Parametric_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Path_Knob>() );
-    _loadedKnobs.insert( knobFactoryEntry<Page_Knob>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobFile>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobInt>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobDouble>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobBool>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobButton>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobOutputFile>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobChoice>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobSeparator>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobGroup>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobColor>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobString>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobParametric>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobPath>() );
+    _loadedKnobs.insert( knobFactoryEntry<KnobPage>() );
 }
 
 boost::shared_ptr<KnobHelper> KnobFactory::createKnob(const std::string &id,

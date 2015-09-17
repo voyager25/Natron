@@ -1,19 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
 #ifndef NATRON_ENGINE_OFXPARAMINSTANCE_H_
 #define NATRON_ENGINE_OFXPARAMINSTANCE_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "Global/Macros.h"
 #include <map>
@@ -47,20 +57,20 @@ CLANG_DIAG_ON(unknown-pragmas)
    never call them. When the user interact with a knob, the onInstanceChanged() slot
    is called. In turn, the plug-in will fetch the value that has changed by calling get(...).
  */
-class Path_Knob;
-class String_Knob;
-class File_Knob;
-class OutputFile_Knob;
-class Button_Knob;
-class Color_Knob;
-class Int_Knob;
-class Double_Knob;
-class Bool_Knob;
-class Choice_Knob;
-class Group_Knob;
+class KnobPath;
+class KnobString;
+class KnobFile;
+class KnobOutputFile;
+class KnobButton;
+class KnobColor;
+class KnobInt;
+class KnobDouble;
+class KnobBool;
+class KnobChoice;
+class KnobGroup;
 class RichText_Knob;
-class Page_Knob;
-class Parametric_Knob;
+class KnobPage;
+class KnobParametric;
 class OfxEffectInstance;
 class OverlaySupport;
 class KnobI;
@@ -108,14 +118,16 @@ public:
     virtual boost::shared_ptr<KnobI> getKnob() const OVERRIDE FINAL;
 
 private:
-    boost::weak_ptr<Button_Knob> _knob;
+    boost::weak_ptr<KnobButton> _knob;
 };
 
 
 class OfxIntegerInstance
     :  public QObject, public OFX::Host::Param::IntegerInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -153,13 +165,15 @@ public Q_SLOTS:
     void onKnobAnimationLevelChanged(int dim,int lvl);
 
 private:
-    boost::weak_ptr<Int_Knob> _knob;
+    boost::weak_ptr<KnobInt> _knob;
 };
 
 class OfxDoubleInstance
     :  public QObject,  public OFX::Host::Param::DoubleInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxDoubleInstance(OfxEffectInstance* node,
@@ -201,14 +215,16 @@ public Q_SLOTS:
     void onKnobAnimationLevelChanged(int,int lvl);
 
 private:
-    boost::weak_ptr<Double_Knob> _knob;
+    boost::weak_ptr<KnobDouble> _knob;
     OfxEffectInstance* _node;
 };
 
 class OfxBooleanInstance
     :  public QObject,  public OFX::Host::Param::BooleanInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxBooleanInstance(OfxEffectInstance* node,
@@ -244,13 +260,15 @@ public Q_SLOTS:
     void onKnobAnimationLevelChanged(int,int lvl);
 
 private:
-    boost::weak_ptr<Bool_Knob> _knob;
+    boost::weak_ptr<KnobBool> _knob;
 };
 
 class OfxChoiceInstance
     : public QObject, public OFX::Host::Param::ChoiceInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxChoiceInstance(OfxEffectInstance* node,
@@ -289,13 +307,15 @@ public Q_SLOTS:
 
 private:
     std::vector<std::string> _entries;
-    boost::weak_ptr<Choice_Knob> _knob;
+    boost::weak_ptr<KnobChoice> _knob;
 };
 
 class OfxRGBAInstance
     :  public QObject, public OFX::Host::Param::RGBAInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxRGBAInstance(OfxEffectInstance* node,
@@ -335,14 +355,16 @@ public Q_SLOTS:
     void onKnobAnimationLevelChanged(int,int lvl);
 
 private:
-    boost::weak_ptr<Color_Knob> _knob;
+    boost::weak_ptr<KnobColor> _knob;
 };
 
 
 class OfxRGBInstance
     :  public QObject,  public OFX::Host::Param::RGBInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxRGBInstance(OfxEffectInstance* node,
@@ -382,13 +404,15 @@ public Q_SLOTS:
     void onKnobAnimationLevelChanged(int,int lvl);
 
 private:
-    boost::weak_ptr<Color_Knob> _knob;
+    boost::weak_ptr<KnobColor> _knob;
 };
 
 class OfxDouble2DInstance
     :  public QObject, public OFX::Host::Param::Double2DInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxDouble2DInstance(OfxEffectInstance* node,
@@ -431,14 +455,16 @@ public Q_SLOTS:
 
 private:
     OfxEffectInstance* _node;
-    boost::weak_ptr<Double_Knob> _knob;
+    boost::weak_ptr<KnobDouble> _knob;
 };
 
 
 class OfxInteger2DInstance
     :  public QObject, public OFX::Host::Param::Integer2DInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxInteger2DInstance(OfxEffectInstance* node,
@@ -477,13 +503,15 @@ public Q_SLOTS:
 
 private:
     OfxEffectInstance* _node;
-    boost::weak_ptr<Int_Knob> _knob;
+    boost::weak_ptr<KnobInt> _knob;
 };
 
 class OfxDouble3DInstance
     :  public QObject, public OFX::Host::Param::Double3DInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxDouble3DInstance(OfxEffectInstance* node,
@@ -527,13 +555,15 @@ public Q_SLOTS:
 
 private:
     OfxEffectInstance* _node;
-    boost::weak_ptr<Double_Knob> _knob;
+    boost::weak_ptr<KnobDouble> _knob;
 };
 
 class OfxInteger3DInstance
     :  public QObject, public OFX::Host::Param::Integer3DInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxInteger3DInstance(OfxEffectInstance* node,
@@ -572,7 +602,7 @@ public Q_SLOTS:
 
 private:
     OfxEffectInstance* _node;
-    boost::weak_ptr<Int_Knob> _knob;
+    boost::weak_ptr<KnobInt> _knob;
 };
 
 class OfxGroupInstance
@@ -600,7 +630,7 @@ public:
     virtual void setSecret() OVERRIDE FINAL;
 
 private:
-    boost::weak_ptr<Group_Knob> _groupKnob;
+    boost::weak_ptr<KnobGroup> _groupKnob;
 };
 
 class OfxPageInstance
@@ -622,14 +652,16 @@ public:
     virtual boost::shared_ptr<KnobI> getKnob() const OVERRIDE FINAL;
 
 private:
-    boost::weak_ptr<Page_Knob> _pageKnob;
+    boost::weak_ptr<KnobPage> _pageKnob;
 };
 
 
 class OfxStringInstance
     : public QObject, public OFX::Host::Param::StringInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxStringInstance(OfxEffectInstance* node,
@@ -692,10 +724,10 @@ private:
     void projectEnvVar_setProxy(std::string& str) const;
     
     OfxEffectInstance* _node;
-    boost::weak_ptr<File_Knob> _fileKnob;
-    boost::weak_ptr<OutputFile_Knob> _outputFileKnob;
-    boost::weak_ptr<String_Knob> _stringKnob;
-    boost::weak_ptr<Path_Knob> _pathKnob;
+    boost::weak_ptr<KnobFile> _fileKnob;
+    boost::weak_ptr<KnobOutputFile> _outputFileKnob;
+    boost::weak_ptr<KnobString> _stringKnob;
+    boost::weak_ptr<KnobPath> _pathKnob;
     Natron::ThreadStorage<std::string> _localString;
 };
 
@@ -703,7 +735,9 @@ private:
 class OfxCustomInstance
     : public QObject, public OFX::Host::Param::CustomInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxCustomInstance(OfxEffectInstance* node,
@@ -762,7 +796,7 @@ private:
                                                            OfxPropertySetHandle outArgsRaw);
 
     OfxEffectInstance* _node;
-    boost::weak_ptr<String_Knob> _knob;
+    boost::weak_ptr<KnobString> _knob;
     customParamInterpolationV1Entry_t _customParamInterpolationV1Entry;
     Natron::ThreadStorage<std::string> _localString;
 };
@@ -771,7 +805,9 @@ private:
 class OfxParametricInstance
     : public QObject, public OFX::Host::ParametricParam::ParametricInstance, public OfxParamToKnob
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -834,7 +870,7 @@ private:
     OFX::Host::Param::Descriptor & _descriptor;
     Natron::OfxOverlayInteract* _overlayInteract;
     OfxEffectInstance* _effect;
-    boost::weak_ptr<Parametric_Knob> _knob;
+    boost::weak_ptr<KnobParametric> _knob;
 };
 
 #endif // NATRON_ENGINE_OFXPARAMINSTANCE_H_

@@ -1,9 +1,11 @@
 #ifndef DOPESHEETEDITOR_H
 #define DOPESHEETEDITOR_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
@@ -59,7 +61,6 @@ class TimeLine;
  */
 class DopeSheetEditor : public QWidget, public ScriptObject
 {
-    Q_OBJECT
 
 public:
     DopeSheetEditor(Gui *gui, boost::shared_ptr<TimeLine> timeline, QWidget *parent = 0);
@@ -92,19 +93,13 @@ public:
     DopeSheetView* getDopesheetView() const;
     
     void setTreeWidgetWidth(int width);
-
-public Q_SLOTS:
-    /**
-     * @brief If 'enabled' is true, enable the triple synchronization,
-     * otherwise disable it.
-     *
-     * The triple sync feature synchronize the timeline navigation
-     * between the dope sheet view, the Curve Editor and the opened
-     * viewers.
-     */
-    void toggleTripleSync(bool enabled);
+    
+    int getTreeWidgetWidth() const;
 
 private:
+    
+    virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
+    
     boost::scoped_ptr<DopeSheetEditorPrivate> _imp;
 };
 

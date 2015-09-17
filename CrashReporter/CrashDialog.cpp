@@ -1,16 +1,27 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #include "CrashDialog.h"
+
+#include <algorithm>
 #include <iostream>
 #include <cassert>
+
 #include <QThread>
 #include <QTextStream>
 #include <QFile>
@@ -27,8 +38,9 @@
 #include <QLocalSocket>
 #include <QFileDialog>
 #include <QTextDocument>
+#include <QMessageBox>
+#include <QStyle>
 
-CallbacksManager* CallbacksManager::_instance = 0;
 
 class PlaceHolderTextEdit: public QTextEdit
 {
@@ -89,6 +101,7 @@ CrashDialog::CrashDialog(const QString &filePath)
 , _sendButton(0)
 , _dontSendButton(0)
 , _saveReportButton(0)
+, _pressedButton(0)
 {
     QFile qss(":/Resources/Stylesheets/mainstyle.qss");
 
@@ -104,8 +117,9 @@ CrashDialog::CrashDialog(const QString &filePath)
                            .arg("rgb(200,200,200)") // %5: text colour
                            .arg("rgb(86,117,156)") // %6: interpolated value color
                            .arg("rgb(21,97,248)") // %7: keyframe value color
-                           .arg("rgb(0,0,0)")  // %8: disabled editable text
-                           .arg("rgb(180, 200, 100)") ); // %9: expression background color
+                           .arg("rgb(200,200,200)")  // %8: disabled editable text
+                           .arg("rgb(180, 200, 100)")  // %9: expression background color
+                           .arg("rgb(150,150,50")); // *10: altered text color
         }
     
     setWindowTitle(tr("Natron Issue Reporter"));
@@ -118,7 +132,9 @@ CrashDialog::CrashDialog(const QString &filePath)
     _gridLayout = new QGridLayout(_mainFrame);
     
     QPixmap pix(":Resources/Images/natronIcon256_linux.png");
-    pix = pix.scaled(64, 64);
+    if (std::max(pix.width(), pix.height()) != 64) {
+        pix = pix.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
 
     _iconLabel = new QLabel(_mainFrame);
     _iconLabel->setPixmap(pix);
@@ -141,6 +157,7 @@ CrashDialog::CrashDialog(const QString &filePath)
     }
     
     _refContent = new QLabel(name,_mainFrame);
+    _refContent->setTextInteractionFlags(Qt::TextInteractionFlags(style()->styleHint(QStyle::SH_MessageBox_TextInteractionFlags, 0, this)));
     _gridLayout->addWidget(_refContent,2 , 1, 1, 1);
     
     _descLabel = new QLabel("Description:",_mainFrame);
@@ -171,6 +188,8 @@ CrashDialog::CrashDialog(const QString &filePath)
     
     _mainLayout->addWidget(_buttonsFrame);
     
+    _sendButton->setFocus();
+    
 }
 
 CrashDialog::~CrashDialog()
@@ -178,123 +197,91 @@ CrashDialog::~CrashDialog()
 
 }
 
+QString CrashDialog::getDescription() const {
+    return _descEdit->toPlainText();
+}
+
+CrashDialog::UserChoice
+CrashDialog::getUserChoice() const {
+    if (_pressedButton == _sendButton) {
+        return eUserChoiceUpload;
+    } else if (_pressedButton == _dontSendButton) {
+        return eUserChoiceIgnore;
+    } else if (_pressedButton == _saveReportButton) {
+        return eUserChoiceSave;
+    } else {
+        return eUserChoiceIgnore;
+    }
+}
+
+
 void
 CrashDialog::onSendClicked()
 {
-    
+    QString description = _descEdit->toPlainText();
+    if (description.isEmpty()) {
+        QMessageBox ques(QMessageBox::Question, tr("Empty description"), tr("The issue report doesn't have any description. "
+                                                                            "Would you like to send it anyway?"),
+                         QMessageBox::Yes | QMessageBox::No,
+                         this, Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
+        ques.setDefaultButton(QMessageBox::No);
+        ques.setWindowFlags(ques.windowFlags() | Qt::WindowStaysOnTopHint);
+        if ( ques.exec() ) {
+            QMessageBox::StandardButton rep = ques.standardButton(ques.clickedButton());
+            if (rep != QMessageBox::Yes) {
+                return;
+            }
+        }
+    }
+    _pressedButton = _sendButton;
+    accept();
 }
 
 void
 CrashDialog::onDontSendClicked()
 {
+    _pressedButton = _dontSendButton;
     reject();
 }
 
 void
 CrashDialog::onSaveClicked()
 {
-    QString filename = QFileDialog::getSaveFileName(this,
-                                                    tr("Save report"),
-                                                    QString(),
-                                                    QString(),
-                                                    0,
-                                                    0);
-    if (!filename.isEmpty()) {
-        QFile::copy(_filePath, filename);
-        accept();
+    _pressedButton = _saveReportButton;
+
+    bool saveOk = false;
+    QString filename ;
+    while (!saveOk) {
+        filename = QFileDialog::getSaveFileName(this,
+                                                        tr("Save report"),
+                                                        QString(),
+                                                        QString(),
+                                                        0,
+                                                        0);
+        if (!filename.isEmpty()) {
+            saveOk = QFile::copy(_filePath, filename);
+
+        }
+
+        if (!saveOk) {
+            QMessageBox ques(QMessageBox::Question, tr("Invalid filename"), tr("The issue could not be saved to ") + filename +
+                                                                                tr("Would you like to continue anyway?"),
+                             QMessageBox::Yes | QMessageBox::No,
+                             this, Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
+            ques.setDefaultButton(QMessageBox::No);
+            ques.setWindowFlags(ques.windowFlags() | Qt::WindowStaysOnTopHint);
+            if ( ques.exec() ) {
+                QMessageBox::StandardButton rep = ques.standardButton(ques.clickedButton());
+                if (rep == QMessageBox::Yes) {
+                    reject();
+                    return;
+                }
+            } else {
+                reject();
+                return;
+            }
+        }
     }
-}
+    accept();
 
-CallbacksManager::CallbacksManager()
-    : QObject()
-#ifdef DEBUG
-    , _dFileMutex()
-    , _dFile(0)
-#endif
-    , _outputPipe(0)
-{
-    _instance = this;
-    QObject::connect(this, SIGNAL(doDumpCallBackOnMainThread(QString)), this, SLOT(onDoDumpOnMainThread(QString)));
-    
-#ifdef DEBUG
-    _dFile = new QFile("debug.txt");
-    _dFile->open(QIODevice::ReadWrite | QIODevice::Truncate | QIODevice::Text);
-#endif
-}
-
-
-CallbacksManager::~CallbacksManager() {
-#ifdef DEBUG
-    delete _dFile;
-#endif
-    
-    delete _outputPipe;
-    _instance = 0;
-    
-}
-
-
-void
-CallbacksManager::onDoDumpOnMainThread(const QString& filePath)
-{
-    assert(QThread::currentThread() == qApp->thread());
-    CrashDialog d(filePath);
-    if (d.exec()) {
-
-    } else {
-
-    }
-
-}
-
-void
-CallbacksManager::s_emitDoCallBackOnMainThread(const QString& filePath)
-{
-    writeDebugMessage("Dump request received, file located at: " + filePath);
-    if (QFile::exists(filePath)) {
-
-        emit doDumpCallBackOnMainThread(filePath);
-        
-    } else {
-        writeDebugMessage("Dump file does not seem to exist...exiting crash reporter now.");
-    }
-}
-
-#ifdef DEBUG
-void
-CallbacksManager::writeDebugMessage(const QString& str)
-{
-    QMutexLocker k(&_dFileMutex);
-    QTextStream ts(_dFile);
-    ts << str << '\n';
-}
-#endif
-
-void
-CallbacksManager::onOutputPipeConnectionMade()
-{
-    writeDebugMessage("Output IPC pipe with Natron successfully connected.");
-    
-    //At this point we're sure that the server is created, so we notify Natron about it so it can create its ExceptionHandler
-    writeToOutputPipe("-i");
-}
-
-void
-CallbacksManager::writeToOutputPipe(const QString& str)
-{
-    assert(_outputPipe);
-    if (!_outputPipe) {
-        return;
-    }
-    _outputPipe->write( (str + '\n').toUtf8() );
-    _outputPipe->flush();
-}
-
-void
-CallbacksManager::initOuptutPipe(const QString& comPipeName)
-{
-    assert(!_outputPipe);
-    _outputPipe = new QLocalSocket;
-    QObject::connect( _outputPipe, SIGNAL( connected() ), this, SLOT( onOutputPipeConnectionMade() ) );
-    _outputPipe->connectToServer(comPipeName,QLocalSocket::ReadWrite);
 }

@@ -1,36 +1,38 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-#ifndef NATRON_ENGINE_FORMAT_H_
-#define NATRON_ENGINE_FORMAT_H_
+#ifndef _Engine_Format_h_
+#define _Engine_Format_h_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <string>
-#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
-#include <boost/serialization/base_object.hpp>
-#include <boost/serialization/export.hpp>
-#include <boost/serialization/version.hpp>
-#endif
+
 CLANG_DIAG_OFF(deprecated)
 #include <QtCore/QMetaType>
 CLANG_DIAG_ON(deprecated)
 
-#include "Engine/Rect.h"
-
-#define FORMAT_SERIALIZATION_CHANGES_TO_RECTD 2
-#define FORMAT_SERIALIZATION_CHANGES_TO_RECTI 3
-#define FORMAT_SERIALIZATION_VERSION FORMAT_SERIALIZATION_CHANGES_TO_RECTI
+#include "Engine/RectD.h"
+#include "Engine/RectI.h"
 
 /*This class is used to hold the format of a frame (its resolution).
  * Some formats have a name , e.g : 1920*1080 is full HD, etc...
@@ -40,36 +42,6 @@ class Format
     : public RectI            //!< project format is in pixel coordinates
 
 {
-    friend class boost::serialization::access;
-    template<class Archive>
-    void serialize(Archive & ar,
-                   const unsigned int version)
-    {
-        if (version < FORMAT_SERIALIZATION_CHANGES_TO_RECTD) {
-            RectI r;
-            ar & boost::serialization::make_nvp("RectI",r);
-            x1 = r.x1;
-            x2 = r.x2;
-            y1 = r.y1;
-            y2 = r.y2;
-        } else if (version < FORMAT_SERIALIZATION_CHANGES_TO_RECTI) {
-            
-            RectD r;
-            ar & boost::serialization::make_nvp("RectD",r);
-            x1 = r.x1;
-            x2 = r.x2;
-            y1 = r.y1;
-            y2 = r.y2;
-
-        } else {
-            boost::serialization::void_cast_register<Format,RectI>( static_cast<Format *>(NULL),
-                                                                    static_cast<RectI *>(NULL) );
-            ar & BOOST_SERIALIZATION_BASE_OBJECT_NVP(RectI);
-        }
-        ar & boost::serialization::make_nvp("Pixel_aspect_ratio",_par);
-        ar & boost::serialization::make_nvp("Name",_name);
-    }
-
 public:
     Format(int l,
            int b,
@@ -161,14 +133,16 @@ public:
                 top() == other.top());
     }
 
+    template<class Archive>
+    void serialize(Archive & ar,
+                   const unsigned int version);
+
 private:
     double _par;
     std::string _name;
 };
 
-BOOST_CLASS_VERSION(Format, FORMAT_SERIALIZATION_VERSION)
-
 Q_DECLARE_METATYPE(Format);
 
 
-#endif // NATRON_ENGINE_FORMAT_H_
+#endif // _Engine_Format_h_

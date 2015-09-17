@@ -1,17 +1,45 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
+
 #include "DopeSheetEditor.h"
 
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSplitter>
+#include <QKeyEvent>
 
+#include "Gui/ActionShortcuts.h"
 #include "Gui/DopeSheet.h"
 #include "Gui/DopeSheetHierarchyView.h"
 #include "Gui/DopeSheetView.h"
 #include "Gui/Gui.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/GuiApplicationManager.h"
+#include "Gui/GuiDefines.h"
 #include "Gui/NodeGui.h"
+#include "Gui/GuiMacros.h"
 #include "Engine/TimeLine.h"
 
 ////////////////////////// DopeSheetEditor //////////////////////////
@@ -26,7 +54,6 @@ public:
     Gui *gui;
 
     QVBoxLayout *mainLayout;
-    QHBoxLayout *helpersLayout;
 
     DopeSheet *model;
 
@@ -34,19 +61,16 @@ public:
     HierarchyView *hierarchyView;
     DopeSheetView *dopeSheetView;
 
-    QPushButton *toggleTripleSyncBtn;
 };
 
 DopeSheetEditorPrivate::DopeSheetEditorPrivate(DopeSheetEditor *qq, Gui *gui)  :
     q_ptr(qq),
     gui(gui),
     mainLayout(0),
-    helpersLayout(0),
     model(0),
     splitter(0),
     hierarchyView(0),
-    dopeSheetView(0),
-    toggleTripleSyncBtn(0)
+    dopeSheetView(0)
 {}
 
 /**
@@ -65,25 +89,6 @@ DopeSheetEditor::DopeSheetEditor(Gui *gui, boost::shared_ptr<TimeLine> timeline,
     _imp->mainLayout->setContentsMargins(0, 0, 0, 0);
     _imp->mainLayout->setSpacing(0);
 
-    _imp->helpersLayout = new QHBoxLayout();
-    _imp->helpersLayout->setContentsMargins(0, 0, 0, 0);
-
-    _imp->toggleTripleSyncBtn = new QPushButton(this);
-
-    QPixmap tripleSyncBtnPix;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_UNLOCKED, &tripleSyncBtnPix);
-
-    _imp->toggleTripleSyncBtn->setIcon(QIcon(tripleSyncBtnPix));
-    _imp->toggleTripleSyncBtn->setToolTip(tr("Toggle triple synchronization"));
-    _imp->toggleTripleSyncBtn->setCheckable(true);
-    _imp->toggleTripleSyncBtn->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    
-    connect(_imp->toggleTripleSyncBtn, SIGNAL(toggled(bool)),
-            this, SLOT(toggleTripleSync(bool)));
-
-    _imp->helpersLayout->addWidget(_imp->toggleTripleSyncBtn);
-    _imp->helpersLayout->addStretch();
-
     _imp->splitter = new QSplitter(Qt::Horizontal, this);
     _imp->splitter->setHandleWidth(1);
 
@@ -100,7 +105,6 @@ DopeSheetEditor::DopeSheetEditor(Gui *gui, boost::shared_ptr<TimeLine> timeline,
     _imp->splitter->setStretchFactor(1, 5);
 
     _imp->mainLayout->addWidget(_imp->splitter);
-    _imp->mainLayout->addLayout(_imp->helpersLayout);
 
     // Main model -> HierarchyView connections
     connect(_imp->model, SIGNAL(nodeAdded(DSNode *)),
@@ -157,25 +161,6 @@ void DopeSheetEditor::centerOn(double xMin, double xMax)
     _imp->dopeSheetView->centerOn(xMin, xMax);
 }
 
-void DopeSheetEditor::toggleTripleSync(bool enabled)
-{
-    Natron::PixmapEnum tripleSyncPixmapValue = (enabled)
-            ? Natron::NATRON_PIXMAP_LOCKED
-            : Natron::NATRON_PIXMAP_UNLOCKED;
-
-    QPixmap tripleSyncBtnPix;
-    appPTR->getIcon(tripleSyncPixmapValue, &tripleSyncBtnPix);
-
-    _imp->toggleTripleSyncBtn->setIcon(QIcon(tripleSyncBtnPix));
-    _imp->toggleTripleSyncBtn->setDown(enabled);
-    _imp->gui->setTripleSyncEnabled(enabled);
-    if (enabled) {
-        QList<int> sizes = _imp->splitter->sizes();
-        assert(sizes.size() > 0);
-        _imp->gui->setCurveEditorTreeWidth(sizes[0]);
-    }
-}
-
 void
 DopeSheetEditor::refreshSelectionBboxAndRedrawView()
 {
@@ -203,3 +188,23 @@ DopeSheetEditor::setTreeWidgetWidth(int width)
     _imp->splitter->setSizes(sizes);
     _imp->hierarchyView->setCanResizeOtherWidget(true);
 }
+
+int
+DopeSheetEditor::getTreeWidgetWidth() const
+{
+    QList<int> sizes = _imp->splitter->sizes();
+    assert(sizes.size() > 0);
+    return sizes.front();
+}
+
+void
+DopeSheetEditor::keyPressEvent(QKeyEvent* e)
+{
+    Qt::Key key = (Qt::Key)e->key();
+    Qt::KeyboardModifiers modifiers = e->modifiers();
+ 
+    if (isKeybind(kShortcutGroupNodegraph, kShortcutIDActionGraphRenameNode, modifiers, key)) {
+        _imp->model->renameSelectedNode();
+    }
+}
+

@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_KNOBFILE_H_
 #define NATRON_ENGINE_KNOBFILE_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <vector>
 #include <map>
@@ -33,12 +42,14 @@ CLANG_DIAG_ON(deprecated)
 namespace SequenceParsing {
 class SequenceFromFiles;
 }
-/******************************FILE_KNOB**************************************/
+/******************************KnobFile**************************************/
 
-class File_Knob
-    : public QObject, public AnimatingString_KnobHelper
+class KnobFile
+    : public QObject, public AnimatingKnobStringHelper
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -47,15 +58,15 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new File_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobFile(holder, description, dimension,declaredByPlugin);
     }
 
-    File_Knob(KnobHolder* holder,
+    KnobFile(KnobHolder* holder,
               const std::string &description,
               int dimension,
               bool declaredByPlugin);
 
-    virtual ~File_Knob();
+    virtual ~KnobFile();
 
     static const std::string & typeNameStatic();
 
@@ -108,12 +119,14 @@ private:
     int _isInputImage;
 };
 
-/******************************OUTPUT_FILE_KNOB**************************************/
+/******************************KnobOutputFile**************************************/
 
-class OutputFile_Knob
+class KnobOutputFile
     :  public QObject, public Knob<std::string>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -122,10 +135,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new OutputFile_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobOutputFile(holder, description, dimension,declaredByPlugin);
     }
 
-    OutputFile_Knob(KnobHolder* holder,
+    KnobOutputFile(KnobHolder* holder,
                     const std::string &description,
                     int dimension,
                     bool declaredByPlugin);
@@ -174,7 +187,7 @@ private:
 };
 
 
-/******************************PATH_KNOB**************************************/
+/******************************KnobPath**************************************/
 
 
 /**
@@ -184,7 +197,7 @@ private:
  * Split all the ';' characters to get all different variables
  * then for each variable split the ':' to get the name and the value of the variable.
  **/
-class Path_Knob
+class KnobPath
     : public Knob<std::string>
 {
 
@@ -195,10 +208,10 @@ public:
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new Path_Knob(holder, description, dimension,declaredByPlugin);
+        return new KnobPath(holder, description, dimension,declaredByPlugin);
     }
 
-    Path_Knob(KnobHolder* holder,
+    KnobPath(KnobHolder* holder,
               const std::string &description,
               int dimension,
               bool declaredByPlugin);

@@ -1,16 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-//
-//  Created by Frédéric Devernay on 03/09/13.
-//
-//
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "OfxImageEffectInstance.h"
 
@@ -18,6 +28,7 @@
 #include <string>
 #include <map>
 #include <locale>
+#include <stdexcept>
 
 #include <QDebug>
 
@@ -28,6 +39,7 @@
 #include <ofxParametricParam.h>
 
 #include "ofxNatron.h"
+#include <ofxhUtilities.h> // for StatStr
 
 #include "Engine/OfxEffectInstance.h"
 #include "Engine/OfxClipInstance.h"
@@ -65,16 +77,19 @@ OfxImageEffectInstance::~OfxImageEffectInstance()
 
 class ThreadIsActionCaller_RAII
 {
+    OfxImageEffectInstance* _self;
+    
 public:
     
-    ThreadIsActionCaller_RAII()
+    ThreadIsActionCaller_RAII(OfxImageEffectInstance* self)
+    : _self(self)
     {
-        appPTR->setThreadAsActionCaller(true);
+        appPTR->setThreadAsActionCaller(_self,true);
     }
     
     ~ThreadIsActionCaller_RAII()
     {
-        appPTR->setThreadAsActionCaller(false);
+        appPTR->setThreadAsActionCaller(_self,false);
     }
 };
 
@@ -84,7 +99,7 @@ OfxImageEffectInstance::mainEntry(const char *action,
                                   OFX::Host::Property::Set *inArgs,
                                   OFX::Host::Property::Set *outArgs)
 {
-    ThreadIsActionCaller_RAII t;
+    ThreadIsActionCaller_RAII t(this);
     return OFX::Host::ImageEffect::Instance::mainEntry(action, handle, inArgs, outArgs);
 }
 
@@ -271,10 +286,9 @@ double
 OfxImageEffectInstance::getFrameRecursive() const
 {
     assert( getOfxEffectInstance() );
-    
-    ///Just return the timeline's current time since we're always on the main thread anyway, no render is going on...
-    return getOfxEffectInstance()->getApp()->getTimeLine()->currentFrame();
+    return getOfxEffectInstance()->getCurrentTime();
 }
+
 
 /// This is called whenever a param is changed by the plugin so that
 /// the recursive instanceChangedAction will be fed the correct
@@ -624,7 +638,7 @@ OfxImageEffectInstance::addParamsToTheirParents()
             int layoutHint = (*it)->getProperties().getIntProperty(kOfxParamPropLayoutHint);
             if (layoutHint == 1) {
                 
-                boost::shared_ptr<Separator_Knob> sep = Natron::createKnob<Separator_Knob>( getOfxEffectInstance(),"");
+                boost::shared_ptr<KnobSeparator> sep = Natron::createKnob<KnobSeparator>( getOfxEffectInstance(),"");
                 sep->setName((*it)->getName() + "_separator");
                 if (grp) {
                     grp->addKnob(sep);
@@ -657,14 +671,14 @@ OfxImageEffectInstance::addParamsToTheirParents()
                     boost::shared_ptr<KnobI> knob_i = knobHolder->getKnob();
                     assert(knob_i);
                     if (knob_i) {
-                        Page_Knob* pageKnob = dynamic_cast<Page_Knob*>(knob_i.get());
+                        KnobPage* pageKnob = dynamic_cast<KnobPage*>(knob_i.get());
                         assert(pageKnob);
                         if (pageKnob) {
                             pageKnob->addKnob(child);
                         
                             if (child->isSeparatorActivated()) {
                     
-                                boost::shared_ptr<Separator_Knob> sep = Natron::createKnob<Separator_Knob>( getOfxEffectInstance(),"");
+                                boost::shared_ptr<KnobSeparator> sep = Natron::createKnob<KnobSeparator>( getOfxEffectInstance(),"");
                                 sep->setName(child->getName() + "_separator");
                                 pageKnob->addKnob(sep);
                             }
@@ -727,16 +741,16 @@ OfxImageEffectInstance::editEnd()
 
 /// Start doing progress.
 void
-OfxImageEffectInstance::progressStart(const std::string & message)
+OfxImageEffectInstance::progressStart(const std::string & message, const std::string &messageid)
 {
-    _ofxEffectInstance->getApp()->startProgress(_ofxEffectInstance, message);
+    _ofxEffectInstance->getApp()->progressStart(_ofxEffectInstance, message, messageid);
 }
 
 /// finish yer progress
 void
 OfxImageEffectInstance::progressEnd()
 {
-    _ofxEffectInstance->getApp()->endProgress(_ofxEffectInstance);
+    _ofxEffectInstance->getApp()->progressEnd(_ofxEffectInstance);
 }
 
 /** @brief Indicate how much of the processing task has been completed and reports on any abort status.
@@ -992,7 +1006,7 @@ OfxImageEffectInstance::getClipPreferences_safe(std::map<OfxClipInstance*, ClipP
                              0,
                              &outArgs);
 #       ifdef OFX_DEBUG_ACTIONS
-    std::cout << "OFX: "<<(void*)this<<"->"<<kOfxImageEffectActionGetClipPreferences<<"()->"<<StatStr(st);
+    std::cout << "OFX: "<<(void*)this<<"->"<<kOfxImageEffectActionGetClipPreferences<<"()->"<<OFX::StatStr(st);
 #       endif
     
     if(st!=kOfxStatOK && st!=kOfxStatReplyDefault) {
@@ -1143,4 +1157,16 @@ OfxImageEffectDescriptor::paramDefine(const char *paramType,
         }
     }
     return ret;
+}
+
+
+void
+OfxImageEffectInstance::paramChangedByPlugin(OFX::Host::Param::Instance */*param*/)
+{
+    /*
+     Do nothing: this is handled by Natron internally already in OfxEffectInstance::knobChanged.
+     The reason for that is that the plug-in instanceChanged action may be called from a render thread if
+     e.g a plug-in decides to violate the spec and set a parameter value in the render action.
+     To prevent that, Natron already checks the current thread and calls the instanceChanged action in the appropriate thread.
+     */
 }

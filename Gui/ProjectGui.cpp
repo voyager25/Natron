@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "ProjectGui.h"
 
@@ -27,37 +37,43 @@ CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 
-#include "Engine/Project.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/KnobTypes.h"
-#include "Engine/EffectInstance.h"
-#include "Engine/Node.h"
-#include "Engine/Settings.h"
 #include "Engine/BackDrop.h"
+#include "Engine/EffectInstance.h"
+#include "Engine/KnobTypes.h"
+#include "Engine/Node.h"
+#include "Engine/ParameterWrapper.h" // Param
+#include "Engine/Project.h"
+#include "Engine/Settings.h"
+#include "Engine/ViewerInstance.h"
 
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/Gui.h"
-#include "Gui/ComboBox.h"
-#include "Gui/Button.h"
-#include "Gui/LineEdit.h"
-#include "Gui/SpinBox.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ViewerGL.h"
-#include "Gui/DockablePanel.h"
-#include "Gui/NodeGui.h"
-#include "Gui/TabWidget.h"
-#include "Gui/ProjectGuiSerialization.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/Splitter.h"
-#include "Gui/Histogram.h"
-#include "Gui/MultiInstancePanel.h"
-#include "Gui/CurveEditor.h"
 #include "Gui/BackDropGui.h"
-#include "Gui/ScriptEditor.h"
-#include "Gui/PythonPanels.h"
+#include "Gui/Button.h"
+#include "Gui/ComboBox.h"
+#include "Gui/CurveEditor.h"
+#include "Gui/DockablePanel.h"
+#include "Gui/Gui.h"
+#include "Gui/GuiAppInstance.h"
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/Histogram.h"
 #include "Gui/Label.h"
+#include "Gui/LineEdit.h"
+#include "Gui/MultiInstancePanel.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGui.h"
+#include "Gui/ProjectGuiSerialization.h"
+#include "Gui/PythonPanels.h"
+#include "Gui/RegisteredTabs.h"
+#include "Gui/ScriptEditor.h"
+#include "Gui/SpinBox.h"
+#include "Gui/Splitter.h"
+#include "Gui/TabWidget.h"
 #include "Gui/Utils.h"
+#include "Gui/ViewerGL.h"
+#include "Gui/ViewerTab.h"
+
+//Remove when serialization is gone from this file
+#include "Engine/RectISerialization.h"
+#include "Engine/RectDSerialization.h"
 
 ProjectGui::ProjectGui(Gui* gui)
     : _gui(gui)
@@ -249,8 +265,11 @@ AddFormatDialog::getFormat() const
     return Format(0,0,w,h,name.toStdString(),pa);
 }
 
+#pragma message WARN("no version in ProjectGui serialization: this is dangerous")
+template<>
 void
-ProjectGui::save(boost::archive::xml_oarchive & archive) const
+ProjectGui::save<boost::archive::xml_oarchive>(boost::archive::xml_oarchive & archive/*,
+                                               const unsigned int version*/) const
 {
     ProjectGuiSerialization projectGuiSerializationObj;
 
@@ -258,8 +277,10 @@ ProjectGui::save(boost::archive::xml_oarchive & archive) const
     archive << boost::serialization::make_nvp("ProjectGui",projectGuiSerializationObj);
 }
 
+template<>
 void
-ProjectGui::load(boost::archive::xml_iarchive & archive)
+ProjectGui::load<boost::archive::xml_iarchive>(boost::archive::xml_iarchive & archive/*,
+                                               const unsigned int version*/)
 {
     ProjectGuiSerialization obj;
 
@@ -441,7 +462,7 @@ ProjectGui::load(boost::archive::xml_iarchive & archive)
         assert(bd);
         bd->setVisibleSettingsPanel(false);
         bd->resize(w,h);
-        String_Knob* iStr = dynamic_cast<String_Knob*>(labelSerialization.get());
+        KnobString* iStr = dynamic_cast<KnobString*>(labelSerialization.get());
         assert(iStr);
         if (iStr) {
             bd->onLabelChanged(iStr->getValue().c_str());
@@ -545,7 +566,7 @@ std::list<boost::shared_ptr<NodeGui> > ProjectGui::getVisibleNodes() const
 }
 
 void
-ProjectGui::registerNewColorPicker(boost::shared_ptr<Color_Knob> knob)
+ProjectGui::registerNewColorPicker(boost::shared_ptr<KnobColor> knob)
 {
     while (!_colorPickersEnabled.empty()) {
         _colorPickersEnabled.front()->setPickingEnabled(false);
@@ -556,9 +577,9 @@ ProjectGui::registerNewColorPicker(boost::shared_ptr<Color_Knob> knob)
 }
 
 void
-ProjectGui::removeColorPicker(boost::shared_ptr<Color_Knob> knob)
+ProjectGui::removeColorPicker(boost::shared_ptr<KnobColor> knob)
 {
-    std::vector<boost::shared_ptr<Color_Knob> >::iterator found = std::find(_colorPickersEnabled.begin(), _colorPickersEnabled.end(), knob);
+    std::vector<boost::shared_ptr<KnobColor> >::iterator found = std::find(_colorPickersEnabled.begin(), _colorPickersEnabled.end(), knob);
 
     if ( found != _colorPickersEnabled.end() ) {
         _colorPickersEnabled.erase(found);
@@ -571,7 +592,7 @@ ProjectGui::setPickersColor(double r,double g, double b,double a)
     if ( _colorPickersEnabled.empty() ) {
         return;
     }
-    boost::shared_ptr<Color_Knob> first = _colorPickersEnabled.front();
+    boost::shared_ptr<KnobColor> first = _colorPickersEnabled.front();
 
     for (U32 i = 0; i < _colorPickersEnabled.size(); ++i) {
         if ( !_colorPickersEnabled[i]->areAllDimensionsEnabled() ) {

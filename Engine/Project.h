@@ -1,19 +1,29 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_PROJECT_H_
 #define NATRON_ENGINE_PROJECT_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <map>
 #include <vector>
@@ -51,7 +61,9 @@ struct ProjectPrivate;
 class Project
     :  public KnobHolder, public NodeCollection,  public boost::noncopyable, public boost::enable_shared_from_this<Natron::Project>
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -64,18 +76,24 @@ public:
      **/
     bool loadProject(const QString & path,const QString & name, bool isUntitledAutosave = false);
 
+    
+    
     /**
      * @brief Saves the project with the given path and name corresponding to a file on disk.
      * @param autoSave If true then it will save the project in a temporary file instead (see autoSave()).
      * @returns The actual filepath of the file saved
      **/
-    QString saveProject(const QString & path,const QString & name,bool autoSave);
-
+    bool saveProject(const QString & path,const QString & name, QString* newFilePath);
+    
+    
+    bool saveProject_imp(const QString & path,const QString & name,bool autoSave, bool updateProjectProperties, QString* newFilePath = 0);
+    
     /**
      * @brief Same as saveProject except that it will save the project in a temporary file
      * so it doesn't overwrite the project.
      **/
     void autoSave();
+    
 
     /**
      * @brief Same as autoSave() but the auto-save is run in a separate thread instead.
@@ -169,7 +187,7 @@ public:
     void removeLockFile();
     bool getLockFileInfos(const QString& projectPath,const QString& projectName,QString* authorName,QString* lastSaveDate,qint64* appPID) const;
     
-    virtual bool isProject() const
+    virtual bool isProject() const OVERRIDE
     {
         return true;
     }
@@ -233,7 +251,7 @@ public:
     
     double getProjectFrameRate() const;
     
-    boost::shared_ptr<Path_Knob> getEnvVarKnob() const;
+    boost::shared_ptr<KnobPath> getEnvVarKnob() const;
     
     std::string getOnProjectLoadCB() const;
     std::string getOnProjectSaveCB() const;
@@ -322,7 +340,7 @@ private:
     bool loadProjectInternal(const QString & path,const QString & name,bool isAutoSave,
                              bool isUntitledAutosave, bool* mustSave);
 
-    QString saveProjectInternal(const QString & path,const QString & name,bool autosave = false);
+    QString saveProjectInternal(const QString & path,const QString & name,bool autosave, bool updateProjectProperties);
 
     
     

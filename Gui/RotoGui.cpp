@@ -1,21 +1,32 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "RotoGui.h"
 
 #include <algorithm> // min, max
+
+#include "Global/GLIncludes.h"
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -30,42 +41,48 @@ CLANG_DIAG_OFF(uninitialized)
 #include <QStyle>
 #include <QDialogButtonBox>
 #include <QColorDialog>
+#include <QCheckBox>
 #include <QTimer>
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
+#include <ofxNatron.h>
+
+#include "Engine/Bezier.h"
+#include "Engine/KnobTypes.h"
+#include "Engine/Lut.h"
 #include "Engine/Node.h"
 #include "Engine/NodeGroup.h"
 #include "Engine/RotoContext.h"
-#include "Engine/TimeLine.h"
-#include "Engine/KnobTypes.h"
-#include "Engine/Lut.h"
 #include "Engine/RotoContextPrivate.h"
-#include "Engine/Transform.h"
+#include "Engine/RotoLayer.h"
 #include "Engine/RotoPaint.h"
+#include "Engine/RotoPoint.h"
+#include "Engine/RotoStrokeItem.h"
+#include "Engine/TimeLine.h"
+#include "Engine/Transform.h"
 
-#include <ofxNatron.h>
-
-#include "Gui/FromQtEnums.h"
-#include "Gui/NodeGui.h"
-#include "Gui/DockablePanel.h"
-#include "Gui/Button.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ViewerGL.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/RotoUndoCommand.h"
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/ComboBox.h"
-#include "Gui/Gui.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/GuiMacros.h"
 #include "Gui/ActionShortcuts.h"
+#include "Gui/Button.h"
+#include "Gui/ComboBox.h"
+#include "Gui/DockablePanel.h"
+#include "Gui/QtEnumConvert.h"
+#include "Gui/Gui.h"
+#include "Gui/GuiAppInstance.h"
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/GuiDefines.h"
+#include "Gui/GuiMacros.h"
+#include "Gui/KnobGuiColor.h" // ColorPickerLabel
 #include "Gui/Menu.h"
-#include "Gui/KnobGuiTypes.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGui.h"
+#include "Gui/NodeSettingsPanel.h"
+#include "Gui/RotoUndoCommand.h"
 #include "Gui/SpinBox.h"
 #include "Gui/Utils.h"
+#include "Gui/ViewerGL.h"
+#include "Gui/ViewerTab.h"
 
-#include "Global/GLIncludes.h"
 
 #define kControlPointMidSize 3
 #define kBezierSelectionTolerance 8
@@ -218,6 +235,8 @@ struct RotoGui::RotoGuiPrivate
     ComboBox* timeOffsetMode;
     ComboBox* sourceTypeCombobox;
     Button* resetCloneOffset;
+    Natron::Label* multiStrokeEnabledLabel;
+    QCheckBox* multiStrokeEnabled;
     
     
     RotoToolButton* selectTool;
@@ -288,6 +307,8 @@ struct RotoGui::RotoGuiPrivate
     , timeOffsetMode(0)
     , sourceTypeCombobox(0)
     , resetCloneOffset(0)
+    , multiStrokeEnabledLabel(0)
+    , multiStrokeEnabled(0)
     , selectTool(0)
     , pointsEditionTool(0)
     , bezierEditionTool(0)
@@ -478,6 +499,7 @@ RotoGui::createToolAction(QToolButton* toolGroup,
 {
     QAction *action = new QAction(icon,text,toolGroup);
 
+    
     action->setToolTip("<p>" + text + ": " + tooltip + "</p><p><b>" + tr("Keyboard shortcut:") + " " + shortcut.toString(QKeySequence::NativeText) + "</b></p>");
 
     QPoint data;
@@ -526,43 +548,43 @@ RotoGui::RotoGui(NodeGui* node,
     QPixmap pixBboxClickEnabled,pixBboxClickDisabled;
     QPixmap pixPaintBrush,pixEraser,pixBlur,pixSmear,pixSharpen,pixDodge,pixBurn,pixClone,pixReveal,pixPencil;
 
-    appPTR->getIcon(Natron::NATRON_PIXMAP_BEZIER_32, &pixBezier);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ELLIPSE,&pixEllipse);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_RECTANGLE,&pixRectangle);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_POINTS,&pixAddPts);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_POINTS,&pixRemovePts);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_CUSP_POINTS,&pixCuspPts);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_SMOOTH_POINTS,&pixSmoothPts);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_OPEN_CLOSE_CURVE,&pixOpenCloseCurve);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_FEATHER,&pixRemoveFeather);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_ALL,&pixSelectAll);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_POINTS,&pixSelectPoints);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_FEATHER,&pixSelectFeather);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_CURVES,&pixSelectCurves);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_AUTO_KEYING_ENABLED,&pixAutoKeyingEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_AUTO_KEYING_DISABLED,&pixAutoKeyingDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_STICKY_SELECTION_ENABLED,&pixStickySelEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_STICKY_SELECTION_DISABLED,&pixStickySelDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_LINK_ENABLED,&pixFeatherLinkEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_LINK_DISABLED,&pixFeatherLinkDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_KEYFRAME,&pixAddKey);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_KEYFRAME,&pixRemoveKey);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_RIPPLE_EDIT_ENABLED,&pixRippleEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_RIPPLE_EDIT_DISABLED,&pixRippleDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_VISIBLE, &pixFeatherEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_UNVISIBLE, &pixFeatherDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_ROI_ENABLED, &pixBboxClickEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_ROI_DISABLED, &pixBboxClickDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SOLID, &pixPaintBrush);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_ERASER, &pixEraser);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BLUR, &pixBlur);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SMEAR, &pixSmear);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SHARPEN, &pixSharpen);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_DODGE, &pixDodge);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BURN, &pixBurn);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_CLONE, &pixClone);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_REVEAL, &pixReveal);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PENCIL, &pixPencil);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_BEZIER_32, NATRON_LARGE_BUTTON_ICON_SIZE, &pixBezier);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ELLIPSE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixEllipse);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_RECTANGLE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixRectangle);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_POINTS, NATRON_LARGE_BUTTON_ICON_SIZE, &pixAddPts);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_POINTS, NATRON_LARGE_BUTTON_ICON_SIZE, &pixRemovePts);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CUSP_POINTS, NATRON_LARGE_BUTTON_ICON_SIZE, &pixCuspPts);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_SMOOTH_POINTS, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSmoothPts);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_OPEN_CLOSE_CURVE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixOpenCloseCurve);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_FEATHER, NATRON_LARGE_BUTTON_ICON_SIZE, &pixRemoveFeather);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_ALL, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSelectAll);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_POINTS, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSelectPoints);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_FEATHER, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSelectFeather);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_SELECT_CURVES, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSelectCurves);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_AUTO_KEYING_ENABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixAutoKeyingEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_AUTO_KEYING_DISABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixAutoKeyingDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_STICKY_SELECTION_ENABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixStickySelEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_STICKY_SELECTION_DISABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixStickySelDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_LINK_ENABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixFeatherLinkEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_LINK_DISABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixFeatherLinkDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_KEYFRAME, NATRON_LARGE_BUTTON_ICON_SIZE, &pixAddKey);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_KEYFRAME, NATRON_LARGE_BUTTON_ICON_SIZE, &pixRemoveKey);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_RIPPLE_EDIT_ENABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixRippleEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_RIPPLE_EDIT_DISABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixRippleDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_VISIBLE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixFeatherEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_FEATHER_UNVISIBLE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixFeatherDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_ROI_ENABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixBboxClickEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_ROI_DISABLED, NATRON_LARGE_BUTTON_ICON_SIZE, &pixBboxClickDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SOLID, NATRON_LARGE_BUTTON_ICON_SIZE, &pixPaintBrush);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_ERASER, NATRON_LARGE_BUTTON_ICON_SIZE, &pixEraser);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BLUR, NATRON_LARGE_BUTTON_ICON_SIZE, &pixBlur);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SMEAR, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSmear);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SHARPEN, NATRON_LARGE_BUTTON_ICON_SIZE, &pixSharpen);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_DODGE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixDodge);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BURN, NATRON_LARGE_BUTTON_ICON_SIZE, &pixBurn);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_CLONE, NATRON_LARGE_BUTTON_ICON_SIZE, &pixClone);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_REVEAL, NATRON_LARGE_BUTTON_ICON_SIZE, &pixReveal);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PENCIL, NATRON_LARGE_BUTTON_ICON_SIZE, &pixPencil);
     
     _imp->toolbar = new QToolBar(parent);
     _imp->toolbar->setOrientation(Qt::Vertical);
@@ -577,6 +599,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->autoKeyingEnabled = new Button(autoKeyIc,"",_imp->selectionButtonsBar);
     _imp->autoKeyingEnabled->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->autoKeyingEnabled->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->autoKeyingEnabled->setCheckable(true);
     _imp->autoKeyingEnabled->setChecked( _imp->context->isAutoKeyingEnabled() );
     _imp->autoKeyingEnabled->setDown( _imp->context->isAutoKeyingEnabled() );
@@ -589,6 +612,7 @@ RotoGui::RotoGui(NodeGui* node,
     featherLinkIc.addPixmap(pixFeatherLinkDisabled,QIcon::Normal,QIcon::Off);
     _imp->featherLinkEnabled = new Button(featherLinkIc,"",_imp->selectionButtonsBar);
     _imp->featherLinkEnabled->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->featherLinkEnabled->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->featherLinkEnabled->setCheckable(true);
     _imp->featherLinkEnabled->setChecked( _imp->context->isFeatherLinkEnabled() );
     _imp->featherLinkEnabled->setDown( _imp->context->isFeatherLinkEnabled() );
@@ -602,6 +626,7 @@ RotoGui::RotoGui(NodeGui* node,
     enableFeatherIC.addPixmap(pixFeatherDisabled,QIcon::Normal,QIcon::Off);
     _imp->displayFeatherEnabled = new Button(enableFeatherIC,"",_imp->selectionButtonsBar);
     _imp->displayFeatherEnabled->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->displayFeatherEnabled->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->displayFeatherEnabled->setCheckable(true);
     _imp->displayFeatherEnabled->setChecked(true);
     _imp->displayFeatherEnabled->setDown(true);
@@ -614,6 +639,7 @@ RotoGui::RotoGui(NodeGui* node,
     stickSelIc.addPixmap(pixStickySelDisabled,QIcon::Normal,QIcon::Off);
     _imp->stickySelectionEnabled = new Button(stickSelIc,"",_imp->selectionButtonsBar);
     _imp->stickySelectionEnabled->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->stickySelectionEnabled->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->stickySelectionEnabled->setCheckable(true);
     _imp->stickySelectionEnabled->setChecked(false);
     _imp->stickySelectionEnabled->setDown(false);
@@ -627,6 +653,7 @@ RotoGui::RotoGui(NodeGui* node,
     bboxClickIc.addPixmap(pixBboxClickDisabled,QIcon::Normal,QIcon::Off);
     _imp->bboxClickAnywhere = new Button(bboxClickIc,"",_imp->selectionButtonsBar);
     _imp->bboxClickAnywhere->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->bboxClickAnywhere->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->bboxClickAnywhere->setCheckable(true);
     _imp->bboxClickAnywhere->setChecked(true);
     _imp->bboxClickAnywhere->setDown(true);
@@ -642,6 +669,7 @@ RotoGui::RotoGui(NodeGui* node,
     rippleEditIc.addPixmap(pixRippleDisabled,QIcon::Normal,QIcon::Off);
     _imp->rippleEditEnabled = new Button(rippleEditIc,"",_imp->selectionButtonsBar);
     _imp->rippleEditEnabled->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->rippleEditEnabled->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->rippleEditEnabled->setCheckable(true);
     _imp->rippleEditEnabled->setChecked( _imp->context->isRippleEditEnabled() );
     _imp->rippleEditEnabled->setDown( _imp->context->isRippleEditEnabled() );
@@ -653,12 +681,14 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->addKeyframeButton = new Button(QIcon(pixAddKey),"",_imp->selectionButtonsBar);
     _imp->addKeyframeButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->addKeyframeButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     QObject::connect( _imp->addKeyframeButton, SIGNAL( clicked(bool) ), this, SLOT( onAddKeyFrameClicked() ) );
     _imp->addKeyframeButton->setToolTip(Natron::convertFromPlainText(tr("Set a keyframe at the current time for the selected shape(s), if any."), Qt::WhiteSpaceNormal));
     _imp->selectionButtonsBarLayout->addWidget(_imp->addKeyframeButton);
     
     _imp->removeKeyframeButton = new Button(QIcon(pixRemoveKey),"",_imp->selectionButtonsBar);
     _imp->removeKeyframeButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->removeKeyframeButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     QObject::connect( _imp->removeKeyframeButton, SIGNAL( clicked(bool) ), this, SLOT( onRemoveKeyFrameClicked() ) );
     _imp->removeKeyframeButton->setToolTip(Natron::convertFromPlainText(tr("Remove a keyframe at the current time for the selected shape(s), if any."), Qt::WhiteSpaceNormal));
     _imp->selectionButtonsBarLayout->addWidget(_imp->removeKeyframeButton);
@@ -671,7 +701,23 @@ RotoGui::RotoGui(NodeGui* node,
     _imp->brushButtonsBarLayout->setContentsMargins(3, 2, 0, 0);
     _imp->brushButtonsBarLayout->setSpacing(1);
     
-    _imp->brushButtonsBarLayout->addSpacing(5);
+    
+    
+    QString multiTt = Natron::convertFromPlainText(tr("When checked, strokes will be appended to the same item "
+                                                      "in the hierarchy as long as the same tool is selected.\n"
+                                                      "Select another tool to make a new item."),Qt::WhiteSpaceNormal);
+    _imp->multiStrokeEnabledLabel = new Natron::Label(QObject::tr("Multi-stroke:"),_imp->brushButtonsBar);
+    _imp->multiStrokeEnabledLabel->setToolTip(multiTt);
+    _imp->brushButtonsBarLayout->addWidget(_imp->multiStrokeEnabledLabel);
+    
+    _imp->brushButtonsBarLayout->addSpacing(3);
+    
+    _imp->multiStrokeEnabled = new QCheckBox(_imp->brushButtonsBar);
+    _imp->multiStrokeEnabled->setToolTip(multiTt);
+    _imp->multiStrokeEnabled->setChecked(true);
+    _imp->brushButtonsBarLayout->addWidget(_imp->multiStrokeEnabled);
+    
+    _imp->brushButtonsBarLayout->addSpacing(10);
     
     _imp->colorPickerLabel = new ColorPickerLabel(0,_imp->brushButtonsBar);
     _imp->colorPickerLabel->setColor(Qt::white);
@@ -679,10 +725,11 @@ RotoGui::RotoGui(NodeGui* node,
     _imp->colorPickerLabel->setToolTip(Natron::convertFromPlainText(tr("The color of the next paint brush stroke to be painted."), Qt::WhiteSpaceNormal));
     _imp->brushButtonsBarLayout->addWidget(_imp->colorPickerLabel);
     QPixmap colorWheelPix;
-    appPTR->getIcon(NATRON_PIXMAP_COLORWHEEL,&colorWheelPix);
+    appPTR->getIcon(NATRON_PIXMAP_COLORWHEEL, NATRON_MEDIUM_BUTTON_ICON_SIZE, &colorWheelPix);
     _imp->colorWheelButton = new Button(QIcon(colorWheelPix),"",_imp->brushButtonsBar);
     _imp->colorWheelButton->setToolTip(Natron::convertFromPlainText(tr("Open the color dialog."), Qt::WhiteSpaceNormal));
     _imp->colorWheelButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->colorWheelButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     QObject::connect(_imp->colorWheelButton, SIGNAL(clicked(bool)), this, SLOT(onColorWheelButtonClicked()));
     _imp->brushButtonsBarLayout->addWidget(_imp->colorWheelButton);
     
@@ -717,10 +764,10 @@ RotoGui::RotoGui(NodeGui* node,
     _imp->brushButtonsBarLayout->addWidget(_imp->opacitySpinbox);
     
     QPixmap pressureOnPix,pressureOffPix,buildupOnPix,buildupOffPix;
-    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_PRESSURE_ENABLED,&pressureOnPix);
-    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_PRESSURE_DISABLED,&pressureOffPix);
-    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_BUILDUP_ENABLED,&buildupOnPix);
-    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_BUILDUP_DISABLED,&buildupOffPix);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_PRESSURE_ENABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pressureOnPix);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_PRESSURE_DISABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pressureOffPix);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_BUILDUP_ENABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &buildupOnPix);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_BUILDUP_DISABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &buildupOffPix);
     
     QIcon pressureIc;
     pressureIc.addPixmap(pressureOnPix,QIcon::Normal,QIcon::On);
@@ -732,6 +779,7 @@ RotoGui::RotoGui(NodeGui* node,
     QObject::connect(_imp->pressureOpacityButton, SIGNAL(clicked(bool)), this, SLOT(onPressureOpacityClicked(bool)));
     _imp->pressureOpacityButton->setToolTip(pressOpatt);
     _imp->pressureOpacityButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->pressureOpacityButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->pressureOpacityButton->setCheckable(true);
     _imp->pressureOpacityButton->setChecked(true);
     _imp->pressureOpacityButton->setDown(true);
@@ -758,6 +806,7 @@ RotoGui::RotoGui(NodeGui* node,
     QObject::connect(_imp->pressureSizeButton, SIGNAL(clicked(bool)), this, SLOT(onPressureSizeClicked(bool)));
     _imp->pressureSizeButton->setToolTip(pressSizett);
     _imp->pressureSizeButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->pressureSizeButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->pressureSizeButton->setCheckable(true);
     _imp->pressureSizeButton->setChecked(false);
     _imp->pressureSizeButton->setDown(false);
@@ -783,6 +832,7 @@ RotoGui::RotoGui(NodeGui* node,
     QObject::connect(_imp->pressureHardnessButton, SIGNAL(clicked(bool)), this, SLOT(onPressureHardnessClicked(bool)));
     _imp->pressureHardnessButton->setToolTip(pressHardnesstt);
     _imp->pressureHardnessButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->pressureHardnessButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->pressureHardnessButton->setCheckable(true);
     _imp->pressureHardnessButton->setChecked(false);
     _imp->pressureHardnessButton->setDown(false);
@@ -804,6 +854,7 @@ RotoGui::RotoGui(NodeGui* node,
     QObject::connect(_imp->buildUpButton, SIGNAL(clicked(bool)), this, SLOT(onBuildupClicked(bool)));
     _imp->buildUpButton->setToolTip(builduptt);
     _imp->buildUpButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->buildUpButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->buildUpButton->setCheckable(true);
     _imp->buildUpButton->setChecked(true);
     _imp->buildUpButton->setDown(true);
@@ -867,10 +918,11 @@ RotoGui::RotoGui(NodeGui* node,
     
     ////////////////////////////////////// CREATING VIEWER LEFT TOOLBAR //////////////////////////////////////
     
-    QSize rotoToolSize(NATRON_LARGE_BUTTON_SIZE,NATRON_LARGE_BUTTON_SIZE);
-    
+    QSize rotoToolSize(NATRON_LARGE_BUTTON_SIZE, NATRON_LARGE_BUTTON_SIZE);
+
     _imp->selectTool = new RotoToolButton(_imp->toolbar);
     _imp->selectTool->setFixedSize(rotoToolSize);
+    _imp->selectTool->setIconSize(rotoToolSize);
     _imp->selectTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->selectTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     QKeySequence selectShortCut(Qt::Key_Q);
@@ -896,6 +948,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->pointsEditionTool = new RotoToolButton(_imp->toolbar);
     _imp->pointsEditionTool->setFixedSize(rotoToolSize);
+    _imp->pointsEditionTool->setIconSize(rotoToolSize);
     _imp->pointsEditionTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->pointsEditionTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     _imp->pointsEditionTool->setText( tr("Add points") );
@@ -914,6 +967,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->bezierEditionTool = new RotoToolButton(_imp->toolbar);
     _imp->bezierEditionTool->setFixedSize(rotoToolSize);
+    _imp->bezierEditionTool->setIconSize(rotoToolSize);
     _imp->bezierEditionTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->bezierEditionTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     _imp->bezierEditionTool->setText("Bezier");
@@ -940,6 +994,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->paintBrushTool = new RotoToolButton(_imp->toolbar);
     _imp->paintBrushTool->setFixedSize(rotoToolSize);
+    _imp->paintBrushTool->setIconSize(rotoToolSize);
     _imp->paintBrushTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->paintBrushTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     _imp->paintBrushTool->setText("Brush");
@@ -954,6 +1009,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->cloneBrushTool = new RotoToolButton(_imp->toolbar);
     _imp->cloneBrushTool->setFixedSize(rotoToolSize);
+    _imp->cloneBrushTool->setIconSize(rotoToolSize);
     _imp->cloneBrushTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->cloneBrushTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     _imp->cloneBrushTool->setText("Clone");
@@ -967,6 +1023,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->effectBrushTool = new RotoToolButton(_imp->toolbar);
     _imp->effectBrushTool->setFixedSize(rotoToolSize);
+    _imp->effectBrushTool->setIconSize(rotoToolSize);
     _imp->effectBrushTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->effectBrushTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     _imp->effectBrushTool->setText("Blur");
@@ -981,6 +1038,7 @@ RotoGui::RotoGui(NodeGui* node,
     
     _imp->mergeBrushTool = new RotoToolButton(_imp->toolbar);
     _imp->mergeBrushTool->setFixedSize(rotoToolSize);
+    _imp->mergeBrushTool->setIconSize(rotoToolSize);
     _imp->mergeBrushTool->setPopupMode(QToolButton::InstantPopup);
     QObject::connect( _imp->mergeBrushTool, SIGNAL( triggered(QAction*) ), this, SLOT( onToolActionTriggered(QAction*) ) );
     _imp->mergeBrushTool->setText("Dodge");
@@ -1005,6 +1063,7 @@ RotoGui::RotoGui(NodeGui* node,
     QObject::connect( _imp->context.get(), SIGNAL( refreshViewerOverlays() ), this, SLOT( onRefreshAsked() ) );
     QObject::connect( _imp->context.get(), SIGNAL( selectionChanged(int) ), this, SLOT( onSelectionChanged(int) ) );
     QObject::connect( _imp->context.get(), SIGNAL( itemLockedChanged(int) ), this, SLOT( onCurveLockedChanged(int) ) );
+    QObject::connect( _imp->context.get(), SIGNAL( breakMultiStroke() ), this, SLOT( onBreakMultiStrokeTriggered() ) );
     restoreSelectionFromContext();
 }
 
@@ -1036,10 +1095,9 @@ RotoGui::getButtonsBar(RotoGui::RotoRoleEnum role) const
             return _imp->brushButtonsBar;
         case eRotoRoleMergeBrush:
             return _imp->brushButtonsBar;
-        default:
-            assert(false);
-            break;
     }
+    assert(false);
+    return NULL;
 }
 
 GuiAppInstance*
@@ -1281,6 +1339,7 @@ RotoGui::getCurrentRole() const
         return eRotoRoleMergeBrush;
     }
     assert(false);
+    return eRotoRoleSelection;
 }
 
 void
@@ -1303,8 +1362,8 @@ RotoGui::RotoGuiPrivate::drawSelectedCp(int time,
 
     Transform::Point3D leftDeriv,rightDeriv;
     leftDeriv.z = rightDeriv.z = 1.;
-    cp->getLeftBezierPointAtTime(time, &leftDeriv.x, &leftDeriv.y);
-    cp->getRightBezierPointAtTime(time, &rightDeriv.x, &rightDeriv.y);
+    cp->getLeftBezierPointAtTime(true ,time, &leftDeriv.x, &leftDeriv.y);
+    cp->getRightBezierPointAtTime(true ,time, &rightDeriv.x, &rightDeriv.y);
     leftDeriv = Transform::matApply(transform, leftDeriv);
     rightDeriv = Transform::matApply(transform, rightDeriv);
 
@@ -1412,8 +1471,8 @@ RotoGui::drawOverlays(double time,
                     continue;
                 }
 
-                std::list<std::pair<Point,double> > points;
-                isStroke->evaluateStroke(0, time, &points);
+                std::list<std::list<std::pair<Point,double> > > strokes;
+                isStroke->evaluateStroke(0, time, &strokes);
                 bool locked = (*it)->isLockedRecursive();
                 double curveColor[4];
                 if (!locked) {
@@ -1422,59 +1481,69 @@ RotoGui::drawOverlays(double time,
                     curveColor[0] = 0.8; curveColor[1] = 0.8; curveColor[2] = 0.8; curveColor[3] = 1.;
                 }
                 glColor4dv(curveColor);
-                glBegin(GL_LINE_STRIP);
-                for (std::list<std::pair<Point,double> >::const_iterator it2 = points.begin(); it2 != points.end(); ++it2) {
-                    glVertex2f(it2->first.x, it2->first.y);
+                
+                for (std::list<std::list<std::pair<Point,double> > >::iterator itStroke = strokes.begin(); itStroke != strokes.end(); ++itStroke) {
+                    glBegin(GL_LINE_STRIP);
+                    for (std::list<std::pair<Point,double> >::const_iterator it2 = itStroke->begin(); it2 != itStroke->end(); ++it2) {
+                        glVertex2f(it2->first.x, it2->first.y);
+                    }
+                    glEnd();
                 }
-                glEnd();
                 
 #ifdef DEBUG
-                KeyFrameSet xSet = isStroke->getXControlPoints().getKeyFrames_mt_safe();
-                KeyFrameSet ySet = isStroke->getYControlPoints().getKeyFrames_mt_safe();
-                assert(xSet.size() == ySet.size());
-                if (xSet.size() > 2) {
-                    KeyFrameSet::iterator xIt = xSet.begin();
-                    ++xIt;
-                    KeyFrameSet::iterator yIt = ySet.begin();
-                    ++yIt;
-                    KeyFrameSet::iterator xNext = xIt;
-                    ++xNext;
-                    KeyFrameSet::iterator yNext = yIt;
-                    ++yNext;
-                    KeyFrameSet::iterator xPrev = xSet.begin();
-                    KeyFrameSet::iterator yPrev = ySet.begin();
-                    for (; xNext != xSet.end(); ++xIt, ++yIt, ++xPrev, ++yPrev,++xNext, ++yNext) {
-                        
-                        double x = xIt->getValue();
-                        double y = yIt->getValue();
-                        
-                        double dtr = xNext->getTime() - xIt->getTime();
-                        double dtl = xIt->getTime() - xPrev->getTime();
-                        assert(dtr >= 0 && dtl >= 0);
-                        
-                        double lx = x - dtl * xIt->getLeftDerivative() / 3.;
-                        double ly = y - dtl * yIt->getLeftDerivative() / 3.;
-                        double rx = x + dtr * xIt->getRightDerivative() / 3.;
-                        double ry = y + dtr * yIt->getRightDerivative() / 3.;
-                        
-                        
-                        glBegin(GL_LINE_STRIP);
-                        glColor3f(0., 0.8, 0.8);
-                        glVertex2d(lx,ly);
-                        glVertex2d(x,y);
-                        glVertex2d(rx,ry);
-                        glEnd();
-                        glBegin(GL_POINTS);
-                        glColor3f(1., 1., 0.);
-                        glVertex2d(lx, ly);
-                        glColor3f(1., 0., 0.);
-                        glVertex2d(x,y);
-                        glColor3f(1., 1., 0.);
-                        glVertex2d(rx,ry);
-                        glEnd();
-                        
+                std::list<boost::shared_ptr<Curve> > xCurves = isStroke->getXControlPoints();
+                std::list<boost::shared_ptr<Curve> > yCurves = isStroke->getYControlPoints();
+                assert(xCurves.size() == yCurves.size());
+                std::list<boost::shared_ptr<Curve> >::iterator itY = yCurves.begin();
+                for (std::list<boost::shared_ptr<Curve> >::iterator itX = xCurves.begin() ;itX!=xCurves.end(); ++itX,++itY) {
+                    KeyFrameSet xSet = (*itX)->getKeyFrames_mt_safe();
+                    KeyFrameSet ySet = (*itY)->getKeyFrames_mt_safe();
+                    assert(xSet.size() == ySet.size());
+                    if (xSet.size() > 2) {
+                        KeyFrameSet::iterator xIt = xSet.begin();
+                        ++xIt;
+                        KeyFrameSet::iterator yIt = ySet.begin();
+                        ++yIt;
+                        KeyFrameSet::iterator xNext = xIt;
+                        ++xNext;
+                        KeyFrameSet::iterator yNext = yIt;
+                        ++yNext;
+                        KeyFrameSet::iterator xPrev = xSet.begin();
+                        KeyFrameSet::iterator yPrev = ySet.begin();
+                        for (; xNext != xSet.end(); ++xIt, ++yIt, ++xPrev, ++yPrev,++xNext, ++yNext) {
+                            
+                            double x = xIt->getValue();
+                            double y = yIt->getValue();
+                            
+                            double dtr = xNext->getTime() - xIt->getTime();
+                            double dtl = xIt->getTime() - xPrev->getTime();
+                            assert(dtr >= 0 && dtl >= 0);
+                            
+                            double lx = x - dtl * xIt->getLeftDerivative() / 3.;
+                            double ly = y - dtl * yIt->getLeftDerivative() / 3.;
+                            double rx = x + dtr * xIt->getRightDerivative() / 3.;
+                            double ry = y + dtr * yIt->getRightDerivative() / 3.;
+                            
+                            
+                            glBegin(GL_LINE_STRIP);
+                            glColor3f(0., 0.8, 0.8);
+                            glVertex2d(lx,ly);
+                            glVertex2d(x,y);
+                            glVertex2d(rx,ry);
+                            glEnd();
+                            glBegin(GL_POINTS);
+                            glColor3f(1., 1., 0.);
+                            glVertex2d(lx, ly);
+                            glColor3f(1., 0., 0.);
+                            glVertex2d(x,y);
+                            glColor3f(1., 1., 0.);
+                            glVertex2d(rx,ry);
+                            glEnd();
+                            
+                        }
                     }
                 }
+                
 #endif
                 
                 
@@ -1490,7 +1559,7 @@ RotoGui::drawOverlays(double time,
                 }
                 
                 std::list< Point > points;
-                isBezier->evaluateAtTime_DeCasteljau(time,0, 100, &points, NULL);
+                isBezier->evaluateAtTime_DeCasteljau(true,time,0, 100, &points, NULL);
                 
                 bool locked = (*it)->isLockedRecursive();
                 double curveColor[4];
@@ -1514,12 +1583,12 @@ RotoGui::drawOverlays(double time,
                                   -std::numeric_limits<double>::infinity(),
                                   -std::numeric_limits<double>::infinity() );
                 
-                bool clockWise = isBezier->isFeatherPolygonClockwiseOriented(time);
+                bool clockWise = isBezier->isFeatherPolygonClockwiseOriented(true,time);
                 
                 
                 if ( isFeatherVisible() ) {
                     ///Draw feather only if visible (button is toggled in the user interface)
-                    isBezier->evaluateFeatherPointsAtTime_DeCasteljau(time,0, 100, true, &featherPoints, &featherBBox);
+                    isBezier->evaluateFeatherPointsAtTime_DeCasteljau(true,time,0, 100, true, &featherPoints, &featherBBox);
                     
                     if ( !featherPoints.empty() ) {
                         glLineStipple(2, 0xAAAA);
@@ -1583,11 +1652,11 @@ RotoGui::drawOverlays(double time,
 
                         double x,y;
                         Transform::Point3D p,pF;
-                        (*it2)->getPositionAtTime(time, &p.x, &p.y);
+                        (*it2)->getPositionAtTime(true, time, &p.x, &p.y);
                         p.z = 1.;
 
                         double xF,yF;
-                        (*itF)->getPositionAtTime(time, &pF.x, &pF.y);
+                        (*itF)->getPositionAtTime(true, time, &pF.x, &pF.y);
                         pF.z = 1.;
                         
                         p = Transform::matApply(transform, p);
@@ -1601,7 +1670,7 @@ RotoGui::drawOverlays(double time,
                         ///draw the feather point only if it is distinct from the associated point
                         bool drawFeather = isFeatherVisible();
                         if (drawFeather) {
-                            drawFeather = !(*it2)->equalsAtTime(time, **itF);
+                            drawFeather = !(*it2)->equalsAtTime(true, time, **itF);
                         }
                         
                         
@@ -1720,7 +1789,7 @@ RotoGui::drawOverlays(double time,
                                     featherPoint.y = yF;
                                     
                                     
-                                    Bezier::expandToFeatherDistance(controlPoint, &featherPoint, distFeatherX, time, clockWise, transform, prevCp, it2, nextCp);
+                                    Bezier::expandToFeatherDistance(true,controlPoint, &featherPoint, distFeatherX, time, clockWise, transform, prevCp, it2, nextCp);
                                     
                                     if ( ( (_imp->state == eEventStateDraggingFeatherBar) &&
                                           ( ( *itF == _imp->rotoData->featherBarBeingDragged.first) ||
@@ -2173,9 +2242,9 @@ handleControlPointMaximum(int time,
 {
     double x,y,xLeft,yLeft,xRight,yRight;
 
-    p.getPositionAtTime(time, &x, &y);
-    p.getLeftBezierPointAtTime(time, &xLeft, &yLeft);
-    p.getRightBezierPointAtTime(time, &xRight, &yRight);
+    p.getPositionAtTime(true, time, &x, &y);
+    p.getLeftBezierPointAtTime(true, time, &xLeft, &yLeft);
+    p.getRightBezierPointAtTime(true, time, &xRight, &yRight);
 
     *r = std::max(x, *r);
     *l = std::min(x, *l);
@@ -2325,7 +2394,7 @@ RotoGui::penDown(double time,
         for (SelectedCPs::iterator it = _imp->rotoData->selectedCps.begin(); it != _imp->rotoData->selectedCps.end(); ++it) {
             if ( (_imp->selectedTool == eRotoToolSelectAll) ||
                 ( _imp->selectedTool == eRotoToolDrawBezier) ) {
-                int ret = it->first->isNearbyTangent(time, pos.x(), pos.y(), tangentSelectionTol);
+                int ret = it->first->isNearbyTangent(true, time, pos.x(), pos.y(), tangentSelectionTol);
                 if (ret >= 0) {
                     _imp->rotoData->tangentBeingDragged = it->first;
                     _imp->state = ret == 0 ? eEventStateDraggingLeftTangent : eEventStateDraggingRightTangent;
@@ -2333,7 +2402,7 @@ RotoGui::penDown(double time,
                 } else {
                     ///try with the counter part point
                     if (it->second) {
-                        ret = it->second->isNearbyTangent(time, pos.x(), pos.y(), tangentSelectionTol);
+                        ret = it->second->isNearbyTangent(true, time, pos.x(), pos.y(), tangentSelectionTol);
                     }
                     if (ret >= 0) {
                         _imp->rotoData->tangentBeingDragged = it->second;
@@ -2343,7 +2412,7 @@ RotoGui::penDown(double time,
                 }
             } else if (_imp->selectedTool == eRotoToolSelectFeatherPoints) {
                 const boost::shared_ptr<BezierCP> & fp = it->first->isFeatherPoint() ? it->first : it->second;
-                int ret = fp->isNearbyTangent(time, pos.x(), pos.y(), tangentSelectionTol);
+                int ret = fp->isNearbyTangent(true, time, pos.x(), pos.y(), tangentSelectionTol);
                 if (ret >= 0) {
                     _imp->rotoData->tangentBeingDragged = fp;
                     _imp->state = ret == 0 ? eEventStateDraggingLeftTangent : eEventStateDraggingRightTangent;
@@ -2351,7 +2420,7 @@ RotoGui::penDown(double time,
                 }
             } else if (_imp->selectedTool == eRotoToolSelectPoints) {
                 const boost::shared_ptr<BezierCP> & cp = it->first->isFeatherPoint() ? it->second : it->first;
-                int ret = cp->isNearbyTangent(time, pos.x(), pos.y(), tangentSelectionTol);
+                int ret = cp->isNearbyTangent(true, time, pos.x(), pos.y(), tangentSelectionTol);
                 if (ret >= 0) {
                     _imp->rotoData->tangentBeingDragged = cp;
                     _imp->state = ret == 0 ? eEventStateDraggingLeftTangent : eEventStateDraggingRightTangent;
@@ -2595,7 +2664,7 @@ RotoGui::penDown(double time,
                 int i = 0;
                 for (std::list<boost::shared_ptr<BezierCP> >::const_iterator it = cps.begin(); it != cps.end(); ++it, ++i) {
                     double x,y;
-                    (*it)->getPositionAtTime(time, &x, &y);
+                    (*it)->getPositionAtTime(true, time, &x, &y);
                     if ( ( x >= (pos.x() - cpSelectionTolerance) ) && ( x <= (pos.x() + cpSelectionTolerance) ) &&
                         ( y >= (pos.y() - cpSelectionTolerance) ) && ( y <= (pos.y() + cpSelectionTolerance) ) ) {
                         if ( it == cps.begin() ) {
@@ -2663,7 +2732,33 @@ RotoGui::penDown(double time,
                 _imp->mouseCenterOnSizeChange = pos;
             } else {
                 _imp->context->getNode()->getApp()->setUserIsPainting(_imp->context->getNode());
-                _imp->makeStroke(false, RotoPoint(pos.x(), pos.y(), pressure, timestamp));
+                if (_imp->rotoData->strokeBeingPaint &&
+                    _imp->rotoData->strokeBeingPaint->getParentLayer() && 
+                    _imp->multiStrokeEnabled->isChecked()) {
+                    
+                    
+                    boost::shared_ptr<RotoLayer> layer = _imp->rotoData->strokeBeingPaint->getParentLayer();
+                    if (!layer) {
+                        layer = _imp->context->findDeepestSelectedLayer();
+                        if (!layer) {
+                            layer = _imp->context->getOrCreateBaseLayer();
+                        }
+                        assert(layer);
+                        _imp->context->addItem(layer, 0, _imp->rotoData->strokeBeingPaint, RotoItem::eSelectionReasonOther);
+                    }
+                    _imp->context->setStrokeBeingPainted(_imp->rotoData->strokeBeingPaint);
+                    boost::shared_ptr<KnobInt> lifeTimeFrameKnob = _imp->rotoData->strokeBeingPaint->getLifeTimeFrameKnob();
+                    lifeTimeFrameKnob->setValue(_imp->context->getTimelineCurrentTime(), 0);
+                    
+                    _imp->rotoData->strokeBeingPaint->appendPoint(true, RotoPoint(pos.x(), pos.y(), pressure, timestamp));
+                } else {
+                    if (_imp->rotoData->strokeBeingPaint &&
+                        !_imp->rotoData->strokeBeingPaint->getParentLayer() &&
+                        _imp->multiStrokeEnabled->isChecked()) {
+                        _imp->rotoData->strokeBeingPaint.reset();
+                    }
+                    _imp->makeStroke(false, RotoPoint(pos.x(), pos.y(), pressure, timestamp));
+                }
                 _imp->context->evaluateChange();
                 _imp->state = eEventStateBuildingStroke;
                 _imp->viewer->setCursor(Qt::BlankCursor);
@@ -2812,7 +2907,7 @@ RotoGui::penMotion(double time,
         if ( !cursorSet && (_imp->state != eEventStateDraggingLeftTangent) && (_imp->state != eEventStateDraggingRightTangent) ) {
             ///find a nearby tangent
             for (SelectedCPs::const_iterator it = _imp->rotoData->selectedCps.begin(); it != _imp->rotoData->selectedCps.end(); ++it) {
-                if (it->first->isNearbyTangent(time, pos.x(), pos.y(), cpTol) != -1) {
+                if (it->first->isNearbyTangent(true, time, pos.x(), pos.y(), cpTol) != -1) {
                     _imp->viewer->setCursor( QCursor(Qt::CrossCursor) );
                     cursorSet = true;
                     break;
@@ -2993,7 +3088,7 @@ RotoGui::penMotion(double time,
         double skewX = 0.,skewY = 0.;
         double tx = 0., ty = 0.;
         
-        TransformUndoCommand::TransformPointsSelectionEnum type;
+        TransformUndoCommand::TransformPointsSelectionEnum type = TransformUndoCommand::eTransformAllPoints;
         if (!modCASIsShift(e)) {
             type = TransformUndoCommand::eTransformAllPoints;
         } else {
@@ -3066,7 +3161,7 @@ RotoGui::penMotion(double time,
     case eEventStateBuildingStroke: {
         if (_imp->rotoData->strokeBeingPaint) {
             RotoPoint p(pos.x(), pos.y(), pressure, timestamp);
-            if (_imp->rotoData->strokeBeingPaint->appendPoint(p)) {
+            if (_imp->rotoData->strokeBeingPaint->appendPoint(false,p)) {
                 _imp->lastMousePos = pos;
                 _imp->context->evaluateChange_noIncrement();
                 return true;
@@ -3180,9 +3275,20 @@ RotoGui::penUp(double /*time*/,
         assert(_imp->rotoData->strokeBeingPaint);
         _imp->context->getNode()->getApp()->setUserIsPainting(boost::shared_ptr<Node>());
         _imp->rotoData->strokeBeingPaint->setStrokeFinished();
-        pushUndoCommand(new AddStrokeUndoCommand(this,_imp->rotoData->strokeBeingPaint));
-        _imp->makeStroke(true, RotoPoint());
-        _imp->context->evaluateChange();
+        if (!_imp->multiStrokeEnabled->isChecked()) {
+            pushUndoCommand(new AddStrokeUndoCommand(this,_imp->rotoData->strokeBeingPaint));
+            _imp->makeStroke(true, RotoPoint());
+        } else {
+            pushUndoCommand(new AddMultiStrokeUndoCommand(this,_imp->rotoData->strokeBeingPaint));
+        }
+        
+        /**
+         * Do a neat render for the stroke (better interpolation). This call is blocking otherwise the user might
+         * attempt to make a new stroke while the previous stroke is not finished... this would yield artifacts.
+         **/
+        _imp->viewer->setCursor(QCursor(Qt::BusyCursor));
+        _imp->context->evaluateNeatStrokeRender();
+        _imp->viewer->unsetCursor();
     }
     
     _imp->state = eEventStateNone;
@@ -3197,6 +3303,12 @@ RotoGui::penUp(double /*time*/,
     }
     
     return true;
+}
+
+void
+RotoGui::onBreakMultiStrokeTriggered()
+{
+    _imp->makeStroke(true, RotoPoint());
 }
 
 void
@@ -3246,8 +3358,13 @@ RotoGui::RotoGuiPrivate::makeStroke(bool prepareForLater, const RotoPoint& p)
             return;
     }
     
+    if (prepareForLater || !rotoData->strokeBeingPaint) {
+        std::string name = context->generateUniqueName(itemName);
+        rotoData->strokeBeingPaint.reset(new RotoStrokeItem(strokeType, context, name, boost::shared_ptr<RotoLayer>()));
+        rotoData->strokeBeingPaint->createNodes(false);
+    }
     if (!prepareForLater) {
-        assert(rotoData->strokeBeingPaint);
+        
         boost::shared_ptr<RotoLayer> layer = context->findDeepestSelectedLayer();
         if (!layer) {
             layer = context->getOrCreateBaseLayer();
@@ -3261,19 +3378,19 @@ RotoGui::RotoGuiPrivate::makeStroke(bool prepareForLater, const RotoPoint& p)
         rotoData->strokeBeingPaint->createNodes(false);
     }
     assert(rotoData->strokeBeingPaint);
-    boost::shared_ptr<Color_Knob> colorKnob = rotoData->strokeBeingPaint->getColorKnob();
-    boost::shared_ptr<Choice_Knob> operatorKnob = rotoData->strokeBeingPaint->getOperatorKnob();
-    boost::shared_ptr<Double_Knob> opacityKnob = rotoData->strokeBeingPaint->getOpacityKnob();
-    boost::shared_ptr<Double_Knob> sizeKnob = rotoData->strokeBeingPaint->getBrushSizeKnob();
-    boost::shared_ptr<Double_Knob> hardnessKnob = rotoData->strokeBeingPaint->getBrushHardnessKnob();
-    boost::shared_ptr<Bool_Knob> pressureOpaKnob = rotoData->strokeBeingPaint->getPressureOpacityKnob();
-    boost::shared_ptr<Bool_Knob> pressureSizeKnob = rotoData->strokeBeingPaint->getPressureSizeKnob();
-    boost::shared_ptr<Bool_Knob> pressureHardnessKnob = rotoData->strokeBeingPaint->getPressureHardnessKnob();
-    boost::shared_ptr<Bool_Knob> buildUpKnob = rotoData->strokeBeingPaint->getBuildupKnob();
-    boost::shared_ptr<Choice_Knob> timeOffsetModeKnob = rotoData->strokeBeingPaint->getTimeOffsetModeKnob();
-    boost::shared_ptr<Choice_Knob> sourceTypeKnob = rotoData->strokeBeingPaint->getBrushSourceTypeKnob();
-    boost::shared_ptr<Int_Knob> timeOffsetKnob = rotoData->strokeBeingPaint->getTimeOffsetKnob();
-    boost::shared_ptr<Double_Knob> translateKnob = rotoData->strokeBeingPaint->getBrushCloneTranslateKnob();
+    boost::shared_ptr<KnobColor> colorKnob = rotoData->strokeBeingPaint->getColorKnob();
+    boost::shared_ptr<KnobChoice> operatorKnob = rotoData->strokeBeingPaint->getOperatorKnob();
+    boost::shared_ptr<KnobDouble> opacityKnob = rotoData->strokeBeingPaint->getOpacityKnob();
+    boost::shared_ptr<KnobDouble> sizeKnob = rotoData->strokeBeingPaint->getBrushSizeKnob();
+    boost::shared_ptr<KnobDouble> hardnessKnob = rotoData->strokeBeingPaint->getBrushHardnessKnob();
+    boost::shared_ptr<KnobBool> pressureOpaKnob = rotoData->strokeBeingPaint->getPressureOpacityKnob();
+    boost::shared_ptr<KnobBool> pressureSizeKnob = rotoData->strokeBeingPaint->getPressureSizeKnob();
+    boost::shared_ptr<KnobBool> pressureHardnessKnob = rotoData->strokeBeingPaint->getPressureHardnessKnob();
+    boost::shared_ptr<KnobBool> buildUpKnob = rotoData->strokeBeingPaint->getBuildupKnob();
+    boost::shared_ptr<KnobChoice> timeOffsetModeKnob = rotoData->strokeBeingPaint->getTimeOffsetModeKnob();
+    boost::shared_ptr<KnobChoice> sourceTypeKnob = rotoData->strokeBeingPaint->getBrushSourceTypeKnob();
+    boost::shared_ptr<KnobInt> timeOffsetKnob = rotoData->strokeBeingPaint->getTimeOffsetKnob();
+    boost::shared_ptr<KnobDouble> translateKnob = rotoData->strokeBeingPaint->getBrushCloneTranslateKnob();
     
     const QColor& color = colorPickerLabel->getCurrentColor();
     MergingFunctionEnum compOp = (MergingFunctionEnum)compositingOperatorButton->activeIndex();
@@ -3303,7 +3420,7 @@ RotoGui::RotoGuiPrivate::makeStroke(bool prepareForLater, const RotoPoint& p)
     pressureHardnessKnob->setValue(pressHarness, 0);
     buildUpKnob->setValue(buildUp, 0);
     if (!prepareForLater) {
-        boost::shared_ptr<Int_Knob> lifeTimeFrameKnob = rotoData->strokeBeingPaint->getLifeTimeFrameKnob();
+        boost::shared_ptr<KnobInt> lifeTimeFrameKnob = rotoData->strokeBeingPaint->getLifeTimeFrameKnob();
         lifeTimeFrameKnob->setValue(context->getTimelineCurrentTime(), 0);
     }
     if (strokeType == Natron::eRotoStrokeTypeClone || strokeType == Natron::eRotoStrokeTypeReveal) {
@@ -3313,7 +3430,7 @@ RotoGui::RotoGuiPrivate::makeStroke(bool prepareForLater, const RotoPoint& p)
         translateKnob->setValues(-rotoData->cloneOffset.first, -rotoData->cloneOffset.second, Natron::eValueChangedReasonNatronGuiEdited);
     }
     if (!prepareForLater) {
-        rotoData->strokeBeingPaint->appendPoint(p);
+        rotoData->strokeBeingPaint->appendPoint(true,p);
     }
     
     //context->clearSelection(RotoItem::eSelectionReasonOther);
@@ -3891,7 +4008,7 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(double time,
         if (prevF != fps.begin()) {
             --prevF;
         }
-        bool isClockWiseOriented = isBezier->isFeatherPolygonClockwiseOriented(time);
+        bool isClockWiseOriented = isBezier->isFeatherPolygonClockwiseOriented(true,time);
         
         for (std::list<boost::shared_ptr<BezierCP> >::const_iterator itCp = cps.begin();
              itCp != cps.end();
@@ -3906,8 +4023,8 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(double time,
 
             Transform::Point3D controlPoint,featherPoint;
             controlPoint.z = featherPoint.z = 1;
-            (*itCp)->getPositionAtTime(time, &controlPoint.x, &controlPoint.y);
-            (*itF)->getPositionAtTime(time, &featherPoint.x, &featherPoint.y);
+            (*itCp)->getPositionAtTime(true, time, &controlPoint.x, &controlPoint.y);
+            (*itF)->getPositionAtTime(true, time, &featherPoint.x, &featherPoint.y);
 
             controlPoint = Transform::matApply(transform, controlPoint);
             featherPoint = Transform::matApply(transform, featherPoint);
@@ -3917,7 +4034,7 @@ RotoGui::RotoGuiPrivate::isNearbyFeatherBar(double time,
                 cp.y = controlPoint.y;
                 fp.x = featherPoint.x;
                 fp.y = featherPoint.y;
-                Bezier::expandToFeatherDistance(cp, &fp, distFeatherX, time, isClockWiseOriented, transform, prevF, itF, nextF);
+                Bezier::expandToFeatherDistance(true,cp, &fp, distFeatherX, time, isClockWiseOriented, transform, prevF, itF, nextF);
                 featherPoint.x = fp.x;
                 featherPoint.y = fp.y;
             }
@@ -4485,7 +4602,7 @@ RotoGui::showMenuForControlPoint(const boost::shared_ptr<Bezier> & curve,
 
     menu.addSeparator();
 
-    boost::shared_ptr<Double_Knob> isSlaved = cp.first->isSlaved();
+    boost::shared_ptr<KnobDouble> isSlaved = cp.first->isSlaved();
     ActionWithShortcut* linkTo = 0,*unLinkFrom = 0;
     if (!isSlaved) {
         linkTo = new ActionWithShortcut(kShortcutGroupRoto,
@@ -4549,7 +4666,7 @@ class LinkToTrackDialog
 
 public:
 
-    LinkToTrackDialog(const std::vector< std::pair<std::string,boost::shared_ptr<Double_Knob> > > & knobs,
+    LinkToTrackDialog(const std::vector< std::pair<std::string,boost::shared_ptr<KnobDouble> > > & knobs,
                       QWidget* parent)
         : QDialog(parent)
     {
@@ -4557,7 +4674,7 @@ public:
 
         _choice = new ComboBox(this);
 
-        for (std::vector< std::pair<std::string,boost::shared_ptr<Double_Knob> > >::const_iterator it = knobs.begin(); it != knobs.end(); ++it) {
+        for (std::vector< std::pair<std::string,boost::shared_ptr<KnobDouble> > >::const_iterator it = knobs.begin(); it != knobs.end(); ++it) {
             _choice->addItem( it->first.c_str() );
         }
 
@@ -4583,7 +4700,7 @@ public:
 void
 RotoGui::linkPointTo(const std::list<std::pair<boost::shared_ptr<BezierCP>,boost::shared_ptr<BezierCP> > > & points)
 {
-    std::vector< std::pair<std::string,boost::shared_ptr<Double_Knob> > > knobs;
+    std::vector< std::pair<std::string,boost::shared_ptr<KnobDouble> > > knobs;
     NodeList activeNodes;
     _imp->node->getNode()->getGroup()->getActiveNodes(&activeNodes);
     for (NodeList::iterator it = activeNodes.begin(); it != activeNodes.end(); ++it) {
@@ -4591,8 +4708,8 @@ RotoGui::linkPointTo(const std::list<std::pair<boost::shared_ptr<BezierCP>,boost
             boost::shared_ptr<KnobI> k = (*it)->getKnobByName("center");
             boost::shared_ptr<KnobI> name = (*it)->getKnobByName(kNatronOfxParamStringSublabelName);
             if (k && name) {
-                boost::shared_ptr<Double_Knob> dk = boost::dynamic_pointer_cast<Double_Knob>(k);
-                String_Knob* nameKnob = dynamic_cast<String_Knob*>( name.get() );
+                boost::shared_ptr<KnobDouble> dk = boost::dynamic_pointer_cast<KnobDouble>(k);
+                KnobString* nameKnob = dynamic_cast<KnobString*>( name.get() );
                 if (dk && nameKnob) {
                     std::string trackName = nameKnob->getValue();
                     trackName += "/";
@@ -4611,7 +4728,7 @@ RotoGui::linkPointTo(const std::list<std::pair<boost::shared_ptr<BezierCP>,boost
     if ( dialog.exec() ) {
         int index = dialog.getSelectedKnob();
         if ( (index >= 0) && ( index < (int)knobs.size() ) ) {
-            const boost::shared_ptr<Double_Knob> & knob = knobs[index].second;
+            const boost::shared_ptr<KnobDouble> & knob = knobs[index].second;
             if ( knob && (knob->getDimension() == 2) ) {
                 pushUndoCommand( new LinkToTrackUndoCommand(this,points,knob) );
             }

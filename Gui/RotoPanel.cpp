@@ -1,12 +1,26 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "RotoPanel.h"
 
@@ -32,25 +46,29 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-#include "Engine/RotoContext.h"
-#include "Engine/TimeLine.h"
-#include "Engine/Node.h"
+#include "Engine/Bezier.h"
 #include "Engine/EffectInstance.h"
-#include "Engine/KnobTypes.h"
 #include "Engine/Image.h"
+#include "Engine/KnobTypes.h"
+#include "Engine/Node.h"
 #include "Engine/RotoContextPrivate.h" // for getCompositingOperators
+#include "Engine/RotoLayer.h"
+#include "Engine/RotoStrokeItem.h"
+#include "Engine/TimeLine.h"
 
 #include "Gui/Button.h"
-#include "Gui/SpinBox.h"
 #include "Gui/ClickableLabel.h"
-#include "Gui/NodeGui.h"
+#include "Gui/ComboBox.h"
 #include "Gui/DockablePanel.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/GuiApplicationManager.h"
-#include "Gui/RotoUndoCommand.h"
-#include "Gui/ComboBox.h"
+#include "Gui/GuiDefines.h"
 #include "Gui/GuiMacros.h"
 #include "Gui/Menu.h"
+#include "Gui/NodeGui.h"
+#include "Gui/NodeSettingsPanel.h"
+#include "Gui/RotoUndoCommand.h"
+#include "Gui/SpinBox.h"
 #include "Gui/Utils.h"
 
 #define COL_LABEL 0
@@ -335,21 +353,23 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
     _imp->splineLayout->addWidget(_imp->totalKeyframes);
 
     QPixmap prevPix,nextPix,addPix,removePix,clearAnimPix;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS_KEY, &prevPix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT_KEY, &nextPix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_KEYFRAME, &addPix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_KEYFRAME, &removePix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION, &clearAnimPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS_KEY, NATRON_MEDIUM_BUTTON_ICON_SIZE, &prevPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT_KEY, NATRON_MEDIUM_BUTTON_ICON_SIZE, &nextPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_KEYFRAME, NATRON_MEDIUM_BUTTON_ICON_SIZE, &addPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_KEYFRAME, NATRON_MEDIUM_BUTTON_ICON_SIZE, &removePix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION, NATRON_MEDIUM_BUTTON_ICON_SIZE, &clearAnimPix);
 
     _imp->prevKeyframe = new Button(QIcon(prevPix),"",_imp->splineContainer);
-    _imp->prevKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->prevKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->prevKeyframe->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->prevKeyframe->setToolTip(Natron::convertFromPlainText(tr("Go to the previous keyframe."), Qt::WhiteSpaceNormal));
     _imp->prevKeyframe->setEnabled(false);
     QObject::connect( _imp->prevKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onGoToPrevKeyframeButtonClicked() ) );
     _imp->splineLayout->addWidget(_imp->prevKeyframe);
 
     _imp->nextKeyframe = new Button(QIcon(nextPix),"",_imp->splineContainer);
-    _imp->nextKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->nextKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->nextKeyframe->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->nextKeyframe->setToolTip(Natron::convertFromPlainText(tr("Go to the next keyframe."), Qt::WhiteSpaceNormal));
     _imp->nextKeyframe->setEnabled(false);
     QObject::connect( _imp->nextKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onGoToNextKeyframeButtonClicked() ) );
@@ -357,6 +377,7 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
 
     _imp->addKeyframe = new Button(QIcon(addPix),"",_imp->splineContainer);
     _imp->addKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->addKeyframe->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->addKeyframe->setToolTip(Natron::convertFromPlainText(tr("Add keyframe at the current timeline's time."), Qt::WhiteSpaceNormal));
     _imp->addKeyframe->setEnabled(false);
     QObject::connect( _imp->addKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onAddKeyframeButtonClicked() ) );
@@ -364,6 +385,7 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
 
     _imp->removeKeyframe = new Button(QIcon(removePix),"",_imp->splineContainer);
     _imp->removeKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->removeKeyframe->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->removeKeyframe->setToolTip(Natron::convertFromPlainText(tr("Remove keyframe at the current timeline's time."), Qt::WhiteSpaceNormal));
     _imp->removeKeyframe->setEnabled(false);
     QObject::connect( _imp->removeKeyframe, SIGNAL( clicked(bool) ), this, SLOT( onRemoveKeyframeButtonClicked() ) );
@@ -371,6 +393,7 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
     
     _imp->clearAnimation = new Button(QIcon(clearAnimPix),"",_imp->splineContainer);
     _imp->clearAnimation->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->clearAnimation->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->clearAnimation->setToolTip(Natron::convertFromPlainText(tr("Remove all animation for the selected shape(s)."), Qt::WhiteSpaceNormal));
     _imp->clearAnimation->setEnabled(false);
     QObject::connect( _imp->clearAnimation, SIGNAL( clicked(bool) ), this, SLOT( onRemoveAnimationButtonClicked() ) );
@@ -414,26 +437,26 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
 
     QPixmap pixLayer,pixBezier,pixVisible,pixUnvisible,pixLocked,pixUnlocked,pixInverted,pixUninverted,pixWheel,pixDefault,pixmerge;
     QPixmap pixPaintBrush,pixEraser,pixBlur,pixSmear,pixSharpen,pixDodge,pixBurn,pixClone,pixReveal;
-    appPTR->getIcon(NATRON_PIXMAP_LAYER, &pixLayer);
-    appPTR->getIcon(NATRON_PIXMAP_BEZIER, &pixBezier);
-    appPTR->getIcon(NATRON_PIXMAP_VISIBLE, &pixVisible);
-    appPTR->getIcon(NATRON_PIXMAP_UNVISIBLE, &pixUnvisible);
-    appPTR->getIcon(NATRON_PIXMAP_LOCKED, &pixLocked);
-    appPTR->getIcon(NATRON_PIXMAP_UNLOCKED, &pixUnlocked);
-    appPTR->getIcon(NATRON_PIXMAP_INVERTED, &pixInverted);
-    appPTR->getIcon(NATRON_PIXMAP_UNINVERTED, &pixUninverted);
-    appPTR->getIcon(NATRON_PIXMAP_COLORWHEEL, &pixWheel);
-    appPTR->getIcon(NATRON_PIXMAP_ROTO_MERGE, &pixmerge);
-    appPTR->getIcon(NATRON_PIXMAP_OVERLAY, &pixDefault);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SOLID, &pixPaintBrush);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_ERASER, &pixEraser);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BLUR, &pixBlur);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SMEAR, &pixSmear);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_SHARPEN, &pixSharpen);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_DODGE, &pixDodge);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_BURN, &pixBurn);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_CLONE, &pixClone);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ROTOPAINT_REVEAL, &pixReveal);
+    appPTR->getIcon(NATRON_PIXMAP_LAYER, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixLayer);
+    appPTR->getIcon(NATRON_PIXMAP_BEZIER, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixBezier);
+    appPTR->getIcon(NATRON_PIXMAP_VISIBLE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixVisible);
+    appPTR->getIcon(NATRON_PIXMAP_UNVISIBLE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixUnvisible);
+    appPTR->getIcon(NATRON_PIXMAP_LOCKED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixLocked);
+    appPTR->getIcon(NATRON_PIXMAP_UNLOCKED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixUnlocked);
+    appPTR->getIcon(NATRON_PIXMAP_INVERTED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixInverted);
+    appPTR->getIcon(NATRON_PIXMAP_UNINVERTED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixUninverted);
+    appPTR->getIcon(NATRON_PIXMAP_COLORWHEEL, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixWheel);
+    appPTR->getIcon(NATRON_PIXMAP_ROTO_MERGE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixmerge);
+    appPTR->getIcon(NATRON_PIXMAP_OVERLAY, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixDefault);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_SOLID, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixPaintBrush);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_ERASER, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixEraser);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_BLUR, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixBlur);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_SMEAR, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixSmear);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_SHARPEN, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixSharpen);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_DODGE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixDodge);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_BURN, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixBurn);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_CLONE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixClone);
+    appPTR->getIcon(NATRON_PIXMAP_ROTOPAINT_REVEAL, NATRON_MEDIUM_BUTTON_ICON_SIZE, &pixReveal);
     
     _imp->iconLayer.addPixmap(pixLayer);
     _imp->iconBezier.addPixmap(pixBezier);
@@ -1159,7 +1182,7 @@ RotoPanel::onCurrentItemCompOperatorChanged(int index)
         if (_imp->tree->itemWidget(it->treeItem,COL_OPERATOR) == comboboxSender) {
             RotoDrawableItem* drawable = dynamic_cast<RotoDrawableItem*>( it->rotoItem.get() );
             assert(drawable);
-            boost::shared_ptr<Choice_Knob> op = drawable->getOperatorKnob();
+            boost::shared_ptr<KnobChoice> op = drawable->getOperatorKnob();
             op->setValue(index, 0);
             _imp->context->clearSelection(RotoItem::eSelectionReasonOther);
             _imp->context->select(it->rotoItem, RotoItem::eSelectionReasonOther);
@@ -1276,7 +1299,7 @@ RotoPanel::onItemClicked(QTreeWidgetItem* item,
                 assert( found != _imp->items.end() );
                 RotoDrawableItem* drawable = dynamic_cast<RotoDrawableItem*>( found->rotoItem.get() );
                 if (drawable) {
-                    boost::shared_ptr<Bool_Knob> invertedKnob = drawable->getInvertedKnob();
+                    boost::shared_ptr<KnobBool> invertedKnob = drawable->getInvertedKnob();
                     bool isOnKeyframe = invertedKnob->getKeyFrameIndex(0, time) != -1;
                     inverted = !drawable->getInverted(time);
                     invertedSet = true;
@@ -1312,7 +1335,7 @@ RotoPanel::onItemColorDialogEdited(const QColor & color)
         RotoDrawableItem* drawable = dynamic_cast<RotoDrawableItem*>( found->rotoItem.get() );
         if (drawable) {
             if (_imp->dialogEdition == eColorDialogEditingShapeColor) {
-                boost::shared_ptr<Color_Knob> colorKnob = drawable->getColorKnob();
+                boost::shared_ptr<KnobColor> colorKnob = drawable->getColorKnob();
                 colorKnob->setValue(color.redF(), 0);
                 colorKnob->setValue(color.greenF(), 1);
                 colorKnob->setValue(color.blueF(), 2);
@@ -1501,7 +1524,7 @@ RotoPanel::onItemDoubleClicked(QTreeWidgetItem* item,
                         assert( found != _imp->items.end() );
                         drawable = dynamic_cast<RotoDrawableItem*>( found->rotoItem.get() );
                         if (drawable) {
-                            boost::shared_ptr<Color_Knob> colorKnob = drawable->getColorKnob();
+                            boost::shared_ptr<KnobColor> colorKnob = drawable->getColorKnob();
                             colorKnob->setValue(shapeColor[0], 0);
                             colorKnob->setValue(shapeColor[1], 1);
                             colorKnob->setValue(shapeColor[2], 2);

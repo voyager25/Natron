@@ -1,3 +1,27 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
+
 #include "DopeSheet.h"
 
 #include <algorithm>
@@ -9,14 +33,16 @@
 #include <QUndoStack>
 
 // Natron includes
+#include "Engine/GroupInput.h"
+#include "Engine/GroupOutput.h"
 #include "Engine/Knob.h"
 #include "Engine/Node.h"
 #include "Engine/NodeGroup.h"
-#include "Engine/NoOp.h"
 #include "Engine/TimeLine.h"
 
 #include "Gui/ActionShortcuts.h"
 #include "Gui/DockablePanel.h"
+#include "Gui/DopeSheetEditor.h"
 #include "Gui/DopeSheetEditorUndoRedo.h"
 #include "Gui/DopeSheetHierarchyView.h"
 #include "Gui/DopeSheetView.h"
@@ -24,6 +50,8 @@
 #include "Gui/KnobGui.h"
 #include "Gui/Menu.h"
 #include "Gui/NodeGui.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGraphUndoRedo.h"
 
 
 typedef std::map<boost::weak_ptr<KnobI>, KnobGui *> KnobsAndGuis;
@@ -73,7 +101,7 @@ bool nodeCanAnimate(const NodePtr &node)
 }
 
 QTreeWidgetItem *createKnobNameItem(const QString &text,
-                                    DopeSheet::ItemType itemType,
+                                    Natron::DopeSheetItemType itemType,
                                     int dimension,
                                     QTreeWidgetItem *parent)
 {
@@ -91,8 +119,8 @@ QTreeWidgetItem *createKnobNameItem(const QString &text,
 
     ret->setText(0, text);
 
-    if (itemType == DopeSheet::ItemTypeKnobRoot
-            || itemType == DopeSheet::ItemTypeKnobDim) {
+    if (itemType == Natron::eDopeSheetItemTypeKnobRoot
+            || itemType == Natron::eDopeSheetItemTypeKnobDim) {
         ret->setFlags(ret->flags() & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsDropEnabled);
     }
 
@@ -151,7 +179,7 @@ DopeSheetPrivate::~DopeSheetPrivate()
 
 Natron::Node *DopeSheetPrivate::getNearestTimeFromOutputs_recursive(Natron::Node *node,std::list<Natron::Node*>& markedNodes) const
 {
-    const std::list<Natron::Node *> &outputs = node->getOutputs();
+    const std::list<Natron::Node *> &outputs = node->getGuiOutputs();
     if (std::find(markedNodes.begin(), markedNodes.end(), node) != markedNodes.end()) {
         return 0;
     }
@@ -179,7 +207,7 @@ Natron::Node *DopeSheetPrivate::getNearestTimeFromOutputs_recursive(Natron::Node
 
 Natron::Node *DopeSheetPrivate::getNearestReaderFromInputs_recursive(Natron::Node *node,std::list<Natron::Node*>& markedNodes) const
 {
-    const std::vector<boost::shared_ptr<Natron::Node> > inputs = node->getInputs_mt_safe();
+    const std::vector<boost::shared_ptr<Natron::Node> > &inputs = node->getGuiInputs();
     if (std::find(markedNodes.begin(), markedNodes.end(), node) != markedNodes.end()) {
         return 0;
     }
@@ -211,7 +239,7 @@ Natron::Node *DopeSheetPrivate::getNearestReaderFromInputs_recursive(Natron::Nod
 
 void DopeSheetPrivate::getInputsConnected_recursive(Natron::Node *node, std::vector<boost::shared_ptr<DSNode> > *result) const
 {
-    const std::vector<boost::shared_ptr<Natron::Node> > &inputs = node->getInputs_mt_safe();
+    const std::vector<boost::shared_ptr<Natron::Node> > &inputs = node->getGuiInputs();
 
     for (std::vector<boost::shared_ptr<Natron::Node> >::const_iterator it = inputs.begin(); it != inputs.end(); ++it) {
         NodePtr input = (*it);
@@ -258,7 +286,7 @@ void DopeSheet::addNode(boost::shared_ptr<NodeGui> nodeGui)
 {
     // Determinate the node type
     // It will be useful to identify and sort tree items
-    DopeSheet::ItemType nodeType = DopeSheet::ItemTypeCommon;
+    Natron::DopeSheetItemType nodeType = Natron::eDopeSheetItemTypeCommon;
 
     NodePtr node = nodeGui->getNode();
     
@@ -275,23 +303,23 @@ void DopeSheet::addNode(boost::shared_ptr<NodeGui> nodeGui)
     if (pluginID == PLUGINID_OFX_READOIIO
             || pluginID == PLUGINID_OFX_READFFMPEG
             || pluginID == PLUGINID_OFX_READPFM) {
-        nodeType = DopeSheet::ItemTypeReader;
+        nodeType = Natron::eDopeSheetItemTypeReader;
     }
     else if (dynamic_cast<NodeGroup *>(effectInstance)) {
-        nodeType = DopeSheet::ItemTypeGroup;
+        nodeType = Natron::eDopeSheetItemTypeGroup;
     }
     else if (pluginID == PLUGINID_OFX_RETIME) {
-        nodeType = DopeSheet::ItemTypeRetime;
+        nodeType = Natron::eDopeSheetItemTypeRetime;
     }
     else if (pluginID == PLUGINID_OFX_TIMEOFFSET) {
-        nodeType = DopeSheet::ItemTypeTimeOffset;
+        nodeType = Natron::eDopeSheetItemTypeTimeOffset;
     }
     else if (pluginID == PLUGINID_OFX_FRAMERANGE) {
-        nodeType = DopeSheet::ItemTypeFrameRange;
+        nodeType = Natron::eDopeSheetItemTypeFrameRange;
     }
 
     // Discard specific nodes
-    if (nodeType == DopeSheet::ItemTypeCommon) {
+    if (nodeType == Natron::eDopeSheetItemTypeCommon) {
         if (dynamic_cast<GroupInput *>(effectInstance) ||
                 dynamic_cast<GroupOutput *>(effectInstance)) {
             return;
@@ -473,9 +501,9 @@ std::vector<boost::shared_ptr<DSNode> > DopeSheet::getImportantNodes(DSNode *dsN
 {
     std::vector<boost::shared_ptr<DSNode> > ret;
 
-    DopeSheet::ItemType nodeType = dsNode->getItemType();
+    Natron::DopeSheetItemType nodeType = dsNode->getItemType();
 
-    if (nodeType == DopeSheet::ItemTypeGroup) {
+    if (nodeType == Natron::eDopeSheetItemTypeGroup) {
         NodeGroup *nodeGroup = dynamic_cast<NodeGroup *>(dsNode->getInternalNode()->getLiveInstance());
         assert(nodeGroup);
 
@@ -750,6 +778,55 @@ void DopeSheet::copySelectedKeys()
     }
 }
 
+void
+DopeSheet::renameSelectedNode()
+{
+    DSKeyPtrList keys;
+    std::vector<boost::shared_ptr<DSNode> > selectedNodes;
+    _imp->selectionModel->getCurrentSelection(&keys, &selectedNodes);
+    if (selectedNodes.empty() || selectedNodes.size() > 1) {
+        Natron::errorDialog(tr("Rename node").toStdString(), tr("You must select exactly 1 node to rename.").toStdString());
+        return;
+    }
+    
+    ;
+    
+
+    EditNodeNameDialog* dialog = new EditNodeNameDialog(selectedNodes.front()->getNodeGui(),_imp->editor);
+    
+    QPoint global = QCursor::pos();
+    QSize sizeH = dialog->sizeHint();
+    global.rx() -= sizeH.width() / 2;
+    global.ry() -= sizeH.height() / 2;
+    QPoint realPos = global;
+    
+    
+    
+    QObject::connect(dialog ,SIGNAL(rejected()), this, SLOT(onNodeNameEditDialogFinished()));
+    QObject::connect(dialog ,SIGNAL(accepted()), this, SLOT(onNodeNameEditDialogFinished()));
+    dialog->move( realPos.x(), realPos.y() );
+    dialog->raise();
+    dialog->show();
+
+}
+
+void
+DopeSheet::onNodeNameEditDialogFinished()
+{
+    EditNodeNameDialog* dialog = qobject_cast<EditNodeNameDialog*>(sender());
+    if (dialog) {
+        QDialog::DialogCode code =  (QDialog::DialogCode)dialog->result();
+        if (code == QDialog::Accepted) {
+            QString newName = dialog->getTypedName();
+            QString oldName = QString(dialog->getNode()->getNode()->getLabel().c_str());
+            _imp->pushUndoCommand(new RenameNodeUndoRedoCommand(dialog->getNode(),oldName,newName));
+            
+        }
+        dialog->deleteLater();
+    }
+
+}
+
 void DopeSheet::pasteKeys()
 {
     std::vector<DopeSheetKey> toPaste;
@@ -759,8 +836,18 @@ void DopeSheet::pasteKeys()
 
         toPaste.push_back(key);
     }
+    if (!toPaste.empty()) {
+        _imp->pushUndoCommand(new DSPasteKeysCommand(toPaste, _imp->editor));
+    }
+}
 
-    _imp->pushUndoCommand(new DSPasteKeysCommand(toPaste, _imp->editor));
+void
+DopeSheet::pasteKeys(const std::vector<DopeSheetKey>& keys)
+{
+    if (!keys.empty()) {
+        _imp->pushUndoCommand(new DSPasteKeysCommand(keys, _imp->editor));
+    }
+    
 }
 
 void DopeSheet::setSelectedKeysInterpolation(Natron::KeyframeTypeEnum keyType)
@@ -815,7 +902,7 @@ SequenceTime DopeSheet::getCurrentFrame() const
     return _imp->timeline->currentFrame();
 }
 
-boost::shared_ptr<DSNode> DopeSheet::createDSNode(const boost::shared_ptr<NodeGui> &nodeGui, DopeSheet::ItemType itemType)
+boost::shared_ptr<DSNode> DopeSheet::createDSNode(const boost::shared_ptr<NodeGui> &nodeGui, Natron::DopeSheetItemType itemType)
 {
     // Determinate the node type
     // It will be useful to identify and sort tree items
@@ -1267,7 +1354,7 @@ public:
     /* attributes */
     DopeSheet *dopeSheetModel;
 
-    DopeSheet::ItemType nodeType;
+    Natron::DopeSheetItemType nodeType;
 
     boost::weak_ptr<NodeGui> nodeGui;
 
@@ -1316,7 +1403,7 @@ void DSNodePrivate::initGroupNode()
 }
 
 DSNode::DSNode(DopeSheet *model,
-               DopeSheet::ItemType itemType,
+               Natron::DopeSheetItemType itemType,
                const boost::shared_ptr<NodeGui> &nodeGui,
                QTreeWidgetItem *nameItem) :
     _imp(new DSNodePrivate)
@@ -1340,7 +1427,7 @@ DSNode::DSNode(DopeSheet *model,
 
         if (knob->getDimension() <= 1) {
             QTreeWidgetItem * nameItem = createKnobNameItem(knob->getDescription().c_str(),
-                                                            DopeSheet::ItemTypeKnobDim,
+                                                            Natron::eDopeSheetItemTypeKnobDim,
                                                             0,
                                                             _imp->nameItem);
 
@@ -1349,7 +1436,7 @@ DSNode::DSNode(DopeSheet *model,
         }
         else {
             QTreeWidgetItem *multiDimRootItem = createKnobNameItem(knob->getDescription().c_str(),
-                                                                   DopeSheet::ItemTypeKnobRoot,
+                                                                   Natron::eDopeSheetItemTypeKnobRoot,
                                                                    -1,
                                                                    _imp->nameItem);
 
@@ -1358,7 +1445,7 @@ DSNode::DSNode(DopeSheet *model,
 
             for (int i = 0; i < knob->getDimension(); ++i) {
                 QTreeWidgetItem *dimItem = createKnobNameItem(knob->getDimensionName(i).c_str(),
-                                                              DopeSheet::ItemTypeKnobDim,
+                                                              Natron::eDopeSheetItemTypeKnobDim,
                                                               i,
                                                               multiDimRootItem);
 
@@ -1372,11 +1459,14 @@ DSNode::DSNode(DopeSheet *model,
 
         QObject::connect(knobGui, SIGNAL(keyFrameRemoved()),
                          _imp->dopeSheetModel, SLOT(onKeyframeSetOrRemoved()));
+        
+        QObject::connect(knobGui, SIGNAL(refreshDopeSheet()),
+                         _imp->dopeSheetModel, SLOT(onKeyframeSetOrRemoved()));
     }
 
     // If some subnodes are already in the dope sheet, the connections must be set to update
     // the group's clip rect
-    if (_imp->nodeType == DopeSheet::ItemTypeGroup) {
+    if (_imp->nodeType == Natron::eDopeSheetItemTypeGroup) {
         _imp->initGroupNode();
     }
 }
@@ -1429,27 +1519,27 @@ const DSTreeItemKnobMap& DSNode::getItemKnobMap() const
     return _imp->itemKnobMap;
 }
 
-DopeSheet::ItemType DSNode::getItemType() const
+Natron::DopeSheetItemType DSNode::getItemType() const
 {
     return _imp->nodeType;
 }
 
 bool DSNode::isTimeNode() const
 {
-    return (_imp->nodeType >= DopeSheet::ItemTypeRetime)
-            && (_imp->nodeType < DopeSheet::ItemTypeGroup);
+    return (_imp->nodeType >= Natron::eDopeSheetItemTypeRetime)
+            && (_imp->nodeType < Natron::eDopeSheetItemTypeGroup);
 }
 
 bool DSNode::isRangeDrawingEnabled() const
 {
-    return (_imp->nodeType >= DopeSheet::ItemTypeReader &&
-            _imp->nodeType <= DopeSheet::ItemTypeGroup);
+    return (_imp->nodeType >= Natron::eDopeSheetItemTypeReader &&
+            _imp->nodeType <= Natron::eDopeSheetItemTypeGroup);
 }
 
 bool DSNode::canContainOtherNodeContexts() const
 {
-    return (_imp->nodeType >= (DopeSheet::ItemTypeReader + 1)
-            && _imp->nodeType <= DopeSheet::ItemTypeGroup);
+    return (_imp->nodeType >= Natron::eDopeSheetItemTypeReader + 1
+            && _imp->nodeType <= Natron::eDopeSheetItemTypeGroup);
 }
 
 bool DSNode::containsNodeContext() const
@@ -1457,8 +1547,8 @@ bool DSNode::containsNodeContext() const
     for (int i = 0; i < _imp->nameItem->childCount(); ++i) {
         int childType = _imp->nameItem->child(i)->data(0, QT_ROLE_CONTEXT_TYPE).toInt();
 
-        if (childType != DopeSheet::ItemTypeKnobDim
-                && childType != DopeSheet::ItemTypeKnobRoot) {
+        if (childType != Natron::eDopeSheetItemTypeKnobDim
+                && childType != Natron::eDopeSheetItemTypeKnobRoot) {
             return true;
         }
 

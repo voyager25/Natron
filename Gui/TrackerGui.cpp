@@ -1,11 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "TrackerGui.h"
 
@@ -26,6 +41,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/EffectInstance.h"
 #include "Engine/KnobTypes.h"
 #include "Engine/Node.h"
+<<<<<<< HEAD
 #include "Engine/TrackerContext.h"
 #include "Engine/TimeLine.h"
 #include "Engine/Curve.h"
@@ -36,12 +52,15 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/Gui.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/GuiApplicationManager.h"
+=======
+
+#include "Gui/ActionShortcuts.h"
+>>>>>>> workshop
 #include "Gui/Button.h"
-#include "Gui/FromQtEnums.h"
-#include "Gui/MultiInstancePanel.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ViewerGL.h"
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/GuiDefines.h"
 #include "Gui/GuiMacros.h"
+<<<<<<< HEAD
 #include "Gui/ActionShortcuts.h"
 #include "Gui/NodeGui.h"
 #include "Gui/Utils.h"
@@ -49,6 +68,13 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/NodeGraph.h"
 #include "Gui/Texture.h"
 #include "Gui/TrackerUndoCommand.h"
+=======
+#include "Gui/MultiInstancePanel.h"
+#include "Gui/QtEnumConvert.h"
+#include "Gui/Utils.h"
+#include "Gui/ViewerGL.h"
+#include "Gui/ViewerTab.h"
+>>>>>>> workshop
 
 #define POINT_SIZE 5
 #define CROSS_SIZE 6
@@ -312,6 +338,7 @@ TrackerGui::createGui()
     _imp->addTrackButton->setCheckable(true);
     _imp->addTrackButton->setChecked(false);
     _imp->addTrackButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->addTrackButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->addTrackButton->setToolTip(Natron::convertFromPlainText(tr("When enabled you can add new tracks "
                                                                      "by clicking on the Viewer. "
                                                                      "Holding the Control + Alt keys is the "
@@ -345,6 +372,7 @@ TrackerGui::createGui()
     
     _imp->trackBwButton = new Button(bwIcon,"",_imp->buttonsBar);
     _imp->trackBwButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->trackBwButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->trackBwButton->setToolTip("<p>" + tr("Track selected tracks backward until left bound of the timeline.") +
                                     "</p><p><b>" + tr("Keyboard shortcut:") + " Z</b></p>");
     _imp->trackBwButton->setCheckable(true);
@@ -354,13 +382,15 @@ TrackerGui::createGui()
     
     _imp->trackPrevButton = new Button(QIcon(pixPrev),"",_imp->buttonsBar);
     _imp->trackPrevButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->trackPrevButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->trackPrevButton->setToolTip("<p>" + tr("Track selected tracks on the previous frame.") +
                                       "</p><p><b>" + tr("Keyboard shortcut:") + " X</b></p>");
     QObject::connect( _imp->trackPrevButton,SIGNAL( clicked(bool) ),this,SLOT( onTrackPrevClicked() ) );
     trackPlayerLayout->addWidget(_imp->trackPrevButton);
     
     _imp->stopTrackingButton = new Button(QIcon(pixStop),"",_imp->buttonsBar);
-    _imp->stopTrackingButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->stopTrackingButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->stopTrackingButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->stopTrackingButton->setToolTip("<p>" + tr("Stop the ongoing tracking if any")  +
                                          "</p><p><b>" + tr("Keyboard shortcut:") + " Escape</b></p>");
     QObject::connect( _imp->stopTrackingButton,SIGNAL( clicked(bool) ),this,SLOT( onStopButtonClicked() ) );
@@ -368,6 +398,7 @@ TrackerGui::createGui()
     
     _imp->trackNextButton = new Button(QIcon(pixNext),"",_imp->buttonsBar);
     _imp->trackNextButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->trackNextButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->trackNextButton->setToolTip("<p>" + tr("Track selected tracks on the next frame.") +
                                       "</p><p><b>" + tr("Keyboard shortcut:") + " C</b></p>");
     QObject::connect( _imp->trackNextButton,SIGNAL( clicked(bool) ),this,SLOT( onTrackNextClicked() ) );
@@ -379,6 +410,7 @@ TrackerGui::createGui()
     fwIcon.addPixmap(fwDisabled,QIcon::Normal,QIcon::Off);
     _imp->trackFwButton = new Button(fwIcon,"",_imp->buttonsBar);
     _imp->trackFwButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->trackFwButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->trackFwButton->setToolTip("<p>" + tr("Track selected tracks forward until right bound of the timeline.") +
                                     "</p><p><b>" + tr("Keyboard shortcut:") + " V</b></p>");
     _imp->trackFwButton->setCheckable(true);
@@ -396,18 +428,21 @@ TrackerGui::createGui()
     
     _imp->clearAllAnimationButton = new Button(QIcon(pixClearAll),"",_imp->buttonsBar);
     _imp->clearAllAnimationButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->clearAllAnimationButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->clearAllAnimationButton->setToolTip(Natron::convertFromPlainText(tr("Clear all animation for selected tracks."), Qt::WhiteSpaceNormal));
     QObject::connect( _imp->clearAllAnimationButton,SIGNAL( clicked(bool) ),this,SLOT( onClearAllAnimationClicked() ) );
     clearAnimationLayout->addWidget(_imp->clearAllAnimationButton);
     
     _imp->clearBwAnimationButton = new Button(QIcon(pixClearBw),"",_imp->buttonsBar);
     _imp->clearBwAnimationButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->clearBwAnimationButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->clearBwAnimationButton->setToolTip(Natron::convertFromPlainText(tr("Clear animation backward from the current frame."), Qt::WhiteSpaceNormal));
     QObject::connect( _imp->clearBwAnimationButton,SIGNAL( clicked(bool) ),this,SLOT( onClearBwAnimationClicked() ) );
     clearAnimationLayout->addWidget(_imp->clearBwAnimationButton);
     
     _imp->clearFwAnimationButton = new Button(QIcon(pixClearFw),"",_imp->buttonsBar);
     _imp->clearFwAnimationButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->clearFwAnimationButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->clearFwAnimationButton->setToolTip(Natron::convertFromPlainText(tr("Clear animation forward from the current frame."), Qt::WhiteSpaceNormal));
     QObject::connect( _imp->clearFwAnimationButton,SIGNAL( clicked(bool) ),this,SLOT( onClearFwAnimationClicked() ) );
     clearAnimationLayout->addWidget(_imp->clearFwAnimationButton);
@@ -419,6 +454,7 @@ TrackerGui::createGui()
     updateViewerIC.addPixmap(pixUpdateViewerDisabled,QIcon::Normal,QIcon::Off);
     _imp->updateViewerButton = new Button(updateViewerIC,"",_imp->buttonsBar);
     _imp->updateViewerButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->updateViewerButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->updateViewerButton->setCheckable(true);
     _imp->updateViewerButton->setChecked(true);
     _imp->updateViewerButton->setDown(true);
@@ -661,6 +697,7 @@ TrackerGui::drawOverlays(double time,
             if (!_imp->panel->getNode()->getOverlayColor(&markerColor[0], &markerColor[1], &markerColor[2])) {
                 markerColor[0] = markerColor[1] = markerColor[2] = 0.8;
             }
+<<<<<<< HEAD
             
             std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
             std::list<boost::shared_ptr<TrackMarker> > selectedMarkers;
@@ -849,6 +886,34 @@ TrackerGui::drawOverlays(double time,
                                 p.second = k.getValue();
                             }
                         }
+=======
+            if (it->second) {
+                ///The track is selected, use the plug-ins interact
+                Natron::EffectInstance* effect = instance->getLiveInstance();
+                assert(effect);
+                effect->setCurrentViewportForOverlays_public( _imp->viewer->getViewer() );
+                effect->drawOverlay_public(time, scaleX,scaleY);
+            } else {
+                ///Draw a custom interact, indicating the track isn't selected
+                boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
+                assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
+                KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
+                assert(dblKnob);
+
+                //GLProtectMatrix p(GL_PROJECTION); // useless (we do two glTranslate in opposite directions)
+                for (int l = 0; l < 2; ++l) {
+                    // shadow (uses GL_PROJECTION)
+                    glMatrixMode(GL_PROJECTION);
+                    int direction = (l == 0) ? 1 : -1;
+                    // translate (1,-1) pixels
+                    glTranslated(direction * pixelScaleX / 256, -direction * pixelScaleY / 256, 0);
+                    glMatrixMode(GL_MODELVIEW);
+
+                    if (l == 0) {
+                        glColor4d(0., 0., 0., 1.);
+                    } else {
+                        glColor4f(1., 1., 1., 1.);
+>>>>>>> workshop
                     }
 
                   
@@ -1218,6 +1283,7 @@ drawEllipse(double x, double y, double radiusX, double radiusY, int l, double r,
     glPopMatrix();
 }
 
+<<<<<<< HEAD
 void
 TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pixelScale,
                                              const Natron::Point& ptnCenter,
@@ -1235,6 +1301,19 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
     
     RectD textureRectCanonical;
     computeSelectedMarkerCanonicalRect(&textureRectCanonical);
+=======
+    double selectionTol = pixelScale.first * 10.;
+    for (std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> >::const_iterator it = instances.begin(); it != instances.end(); ++it) {
+        
+        boost::shared_ptr<Node> instance = it->first.lock();
+        boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
+        assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
+        KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
+        assert(dblKnob);
+        double x,y;
+        x = dblKnob->getValueAtTime(time, 0);
+        y = dblKnob->getValueAtTime(time, 1);
+>>>>>>> workshop
 
     
     const TextureRect& texRect = selectedMarkerTexture->getTextureRect();
@@ -1348,6 +1427,7 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
     
 }
 
+<<<<<<< HEAD
 static bool isNearbyPoint(const boost::shared_ptr<Double_Knob>& knob,
                           ViewerGL* viewer,
                           double xWidget, double yWidget,
@@ -1361,6 +1441,21 @@ static bool isNearbyPoint(const boost::shared_ptr<Double_Knob>& knob,
     if (p.x() <= (xWidget + toleranceWidget) && p.x() >= (xWidget - toleranceWidget) &&
         p.y() <= (yWidget + toleranceWidget) && p.y() >= (yWidget - toleranceWidget)) {
         return true;
+=======
+    if (_imp->clickToAddTrackEnabled && !didSomething) {
+        boost::shared_ptr<Node> newInstance = _imp->panel->createNewInstance(true);
+        boost::shared_ptr<KnobI> newInstanceKnob = newInstance->getKnobByName("center");
+        assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
+        KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
+        assert(dblKnob);
+        dblKnob->beginChanges();
+        dblKnob->blockValueChanges();
+        dblKnob->setValueAtTime(time, pos.x(), 0);
+        dblKnob->setValueAtTime(time, pos.y(), 1);
+        dblKnob->unblockValueChanges();
+        dblKnob->endChanges();
+        didSomething = true;
+>>>>>>> workshop
     }
     return false;
 }
@@ -2801,6 +2896,7 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
     }
     double l,r,b,t;
     _imp->viewer->getViewer()->getSelectionRectangle(l, r, b, t);
+<<<<<<< HEAD
     
     if (_imp->panelv1) {
         std::list<Natron::Node*> currentSelection;
@@ -2820,6 +2916,25 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
                 assert( std::find( currentSelection.begin(),currentSelection.end(),instance.get() ) == currentSelection.end() );
                 currentSelection.push_back( instance.get() );
             }
+=======
+
+    std::list<Natron::Node*> currentSelection;
+    const std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> > & instances = _imp->panel->getInstances();
+    for (std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> >::const_iterator it = instances.begin(); it != instances.end(); ++it) {
+        
+        boost::shared_ptr<Node> instance = it->first.lock();
+        boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
+        assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
+        KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
+        assert(dblKnob);
+        double x,y;
+        x = dblKnob->getValue(0);
+        y = dblKnob->getValue(1);
+        if ( (x >= l) && (x <= r) && (y >= b) && (y <= t) ) {
+            ///assert that the node is really not part of the selection
+            assert( std::find( currentSelection.begin(),currentSelection.end(),instance.get() ) == currentSelection.end() );
+            currentSelection.push_back( instance.get() );
+>>>>>>> workshop
         }
         _imp->panelv1->selectNodes( currentSelection, (_imp->controlDown > 0) );
     } else {

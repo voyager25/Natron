@@ -1,30 +1,40 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "OfxClipInstance.h"
 
 #include <cfloat>
 #include <limits>
+#include <stdexcept>
+
 #include <QDebug>
-//#include <QDateTime>
+
 #include "Global/Macros.h"
 
 #include "Engine/OfxEffectInstance.h"
 #include "Engine/OfxImageEffectInstance.h"
 #include "Engine/Settings.h"
-#include "Engine/ImageFetcher.h"
 #include "Engine/Image.h"
 #include "Engine/ImageParams.h"
 #include "Engine/TimeLine.h"
@@ -66,6 +76,7 @@ OfxClipInstance::getUnmappedBitDepth() const
     
     static const std::string byteStr(kOfxBitDepthByte);
     static const std::string shortStr(kOfxBitDepthShort);
+    static const std::string halfStr(kOfxBitDepthHalf);
     static const std::string floatStr(kOfxBitDepthFloat);
     static const std::string noneStr(kOfxBitDepthNone);
     EffectInstance* inputNode = getAssociatedNode();
@@ -84,6 +95,9 @@ OfxClipInstance::getUnmappedBitDepth() const
                 break;
             case Natron::eImageBitDepthShort:
                 return shortStr;
+                break;
+            case Natron::eImageBitDepthHalf:
+                return halfStr;
                 break;
             case Natron::eImageBitDepthFloat:
                 return floatStr;
@@ -425,22 +439,24 @@ OfxClipInstance::getConnected() const
             int inputNb = getInputNb();
             
             Natron::EffectInstance* input = 0;
-            if (isMask()) {
-                
-                if (!_nodeInstance->getNode()->isMaskEnabled(inputNb)) {
-                    return false;
-                }
-                ImageComponents comps;
-                boost::shared_ptr<Natron::Node> maskInput;
-                _nodeInstance->getNode()->getMaskChannel(inputNb, &comps, &maskInput);
-                if (maskInput) {
-                    input = maskInput->getLiveInstance();
-                }
-                
-            } else {
+            // if (isMask()) {
+            
+            if (!_nodeInstance->getNode()->isMaskEnabled(inputNb)) {
+                return false;
+            }
+            ImageComponents comps;
+            boost::shared_ptr<Natron::Node> maskInput;
+            _nodeInstance->getNode()->getMaskChannel(inputNb, &comps, &maskInput);
+            if (maskInput) {
+                input = maskInput->getLiveInstance();
+            }
+            
+            //} else {
+            if (!input) {
                 input = _nodeInstance->getInput(inputNb);
             }
-
+            //}
+            
             return input != NULL;
         }
     }
@@ -961,41 +977,54 @@ OfxClipInstance::getImageInternal(OfxTime time,
         
         unsigned int mipMapLevel = Image::getLevelFromScale(renderScale.x);
         
-        EffectInstance::RoIMap regionsOfInterests;
-        bool gotit = _nodeInstance->getThreadLocalRegionsOfInterests(regionsOfInterests);
-        
-        
-        if (!gotit) {
-            qDebug() << "Bug in transform concatenations: thread-storage has not been set on the new upstream input.";
-            
-            RectD rod;
-            if (optionalBounds) {
-                rod = bounds;
-            } else {
-                bool isProjectFormat;
-                StatusEnum stat = node->getRegionOfDefinition_public(node->getHash(), time, renderScale, view, &rod, &isProjectFormat);
-                assert(stat == Natron::eStatusOK);
-                Q_UNUSED(stat);
-            }
-            node->getRegionsOfInterest_public(time, renderScale, rod, rod, 0,&regionsOfInterests);
-        }
-        
         EffectInstance* inputNode = node->getInput(rerouteInputNb);
         if (!inputNode) {
             return NULL;
         }
-        
         RectD roi;
-        if (!optionalBounds) {
+        bool roiWasInRequestPass = false;
+        
+        const ParallelRenderArgs* frameArgs = inputNode->getParallelRenderArgsTLS();
+        if (frameArgs && frameArgs->request) {
+            const FrameViewRequest* request =  frameArgs->request->getFrameViewRequest(time, view);
+            if (request) {
+                roi = request->finalData.finalRoi;
+                roiWasInRequestPass = true;
+            }
+        }
+        
+        if (optionalBounds) {
+            roi = bounds;
+        } else if (!roiWasInRequestPass) {
+            RoIMap regionsOfInterests;
+            bool gotit = _nodeInstance->getThreadLocalRegionsOfInterests(regionsOfInterests);
             
-            EffectInstance::RoIMap::iterator found = regionsOfInterests.find(inputNode);
+            
+            if (!gotit) {
+                qDebug() << "Bug in transform concatenations: thread-storage has not been set on the new upstream input.";
+                
+                RectD rod;
+                if (optionalBounds) {
+                    rod = bounds;
+                } else {
+                    bool isProjectFormat;
+                    StatusEnum stat = node->getRegionOfDefinition_public(node->getHash(), time, renderScale, view, &rod, &isProjectFormat);
+                    assert(stat == Natron::eStatusOK);
+                    Q_UNUSED(stat);
+                }
+                node->getRegionsOfInterest_public(time, renderScale, rod, rod, 0,&regionsOfInterests);
+            }
+            
+            
+            
+            RoIMap::iterator found = regionsOfInterests.find(inputNode);
             assert(found != regionsOfInterests.end());
             ///RoI is in canonical coordinates since the results of getRegionsOfInterest is in canonical coords.
             roi = found->second;
             
-        } else {
-            roi = bounds;
         }
+        
+       
         
         RectI pixelRoI;
         roi.toPixelEnclosing(mipMapLevel, par, &pixelRoI);
@@ -1133,6 +1162,8 @@ OfxClipInstance::ofxDepthToNatronDepth(const std::string & depth)
         return Natron::eImageBitDepthByte;
     } else if (depth == kOfxBitDepthShort) {
         return Natron::eImageBitDepthShort;
+    } else if (depth == kOfxBitDepthHalf) {
+        return Natron::eImageBitDepthHalf;
     } else if (depth == kOfxBitDepthFloat) {
         return Natron::eImageBitDepthFloat;
     } else if (depth == kOfxBitDepthNone) {
@@ -1152,6 +1183,9 @@ OfxClipInstance::natronsDepthToOfxDepth(Natron::ImageBitDepthEnum depth)
     case Natron::eImageBitDepthShort:
 
         return kOfxBitDepthShort;
+    case Natron::eImageBitDepthHalf:
+
+        return kOfxBitDepthHalf;
     case Natron::eImageBitDepthFloat:
 
         return kOfxBitDepthFloat;
@@ -1290,18 +1324,23 @@ OfxClipInstance::getAssociatedNode() const
     if (_isOutput) {
         return _nodeInstance;
     } else {
-        if (isMask()) {
-            ImageComponents comps;
-            boost::shared_ptr<Natron::Node> maskInput;
-            int inputNb = getInputNb();
-            _nodeInstance->getNode()->getMaskChannel(inputNb, &comps, &maskInput);
-            if (maskInput) {
-                return maskInput->getLiveInstance();
-            }
-            return 0;
-        } else {
-            return _nodeInstance->getInput( getInputNb() );
+        //if (isMask()) {
+        ImageComponents comps;
+        boost::shared_ptr<Natron::Node> maskInput;
+        int inputNb = getInputNb();
+        _nodeInstance->getNode()->getMaskChannel(inputNb, &comps, &maskInput);
+        if (maskInput) {
+            return maskInput->getLiveInstance();
         }
+        
+        //} else {
+        if (!maskInput) {
+            return  _nodeInstance->getInput( getInputNb() );
+        } else {
+            return maskInput->getLiveInstance();
+        }
+       // }
+
     }
 }
 

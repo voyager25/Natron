@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "ParameterWrapper.h"
 #include "Engine/EffectInstance.h"
@@ -169,8 +179,8 @@ Param::setAddNewLine(bool a)
     
     boost::shared_ptr<KnobI> parentKnob = knob->getParentKnob();
     if (parentKnob) {
-        Group_Knob* parentIsGrp = dynamic_cast<Group_Knob*>(parentKnob.get());
-        Page_Knob* parentIsPage = dynamic_cast<Page_Knob*>(parentKnob.get());
+        KnobGroup* parentIsGrp = dynamic_cast<KnobGroup*>(parentKnob.get());
+        KnobPage* parentIsPage = dynamic_cast<KnobPage*>(parentKnob.get());
         assert(parentIsGrp || parentIsPage);
         std::vector<boost::shared_ptr<KnobI> > children;
         if (parentIsGrp) {
@@ -285,7 +295,7 @@ AnimatedParam::getKeyTime(int index,int dimension,double* time) const
 void
 AnimatedParam::deleteValueAtTime(int time,int dimension)
 {
-    getInternalKnob()->deleteValueAtTime(time, dimension);
+    getInternalKnob()->deleteValueAtTime(Natron::eCurveChangeReasonInternal,time, dimension);
 }
 
 void
@@ -313,14 +323,14 @@ AnimatedParam::getCurrentTime() const
 }
 
 void
-Param::_addAsDependencyOf(int fromExprDimension,Param* param)
+Param::_addAsDependencyOf(int fromExprDimension,Param* param,int thisDimension)
 {
     boost::shared_ptr<KnobI> otherKnob = param->_knob.lock();
     boost::shared_ptr<KnobI> thisKnob = _knob.lock();
     if (otherKnob == thisKnob) {
         return;
     }
-    thisKnob->addListener(true,fromExprDimension, otherKnob);
+    thisKnob->addListener(true,fromExprDimension, thisDimension, otherKnob);
 }
 
 bool
@@ -344,7 +354,7 @@ AnimatedParam::getExpression(int dimension,bool* hasRetVariable) const
 
 ///////////// IntParam
 
-IntParam::IntParam(const boost::shared_ptr<Int_Knob>& knob)
+IntParam::IntParam(const boost::shared_ptr<KnobInt>& knob)
 : AnimatedParam(boost::dynamic_pointer_cast<KnobI>(knob))
 , _intKnob(knob)
 {
@@ -366,7 +376,7 @@ Int2DTuple
 Int2DParam::get() const
 {
     Int2DTuple ret;
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     ret.x = knob->getValue(0);
     ret.y = knob->getValue(1);
     return ret;
@@ -375,7 +385,7 @@ Int2DParam::get() const
 Int3DTuple
 Int3DParam::get() const
 {
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     Int3DTuple ret;
     ret.x = knob->getValue(0);
     ret.y = knob->getValue(1);
@@ -386,7 +396,7 @@ Int3DParam::get() const
 int
 IntParam::get(int frame) const
 {
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     return knob->getValueAtTime(frame,0);
 }
 
@@ -394,7 +404,7 @@ Int2DTuple
 Int2DParam::get(int frame) const
 {
     Int2DTuple ret;
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     ret.x = knob->getValueAtTime(frame,0);
     ret.y = knob->getValueAtTime(frame,1);
     return ret;
@@ -405,7 +415,7 @@ Int3DTuple
 Int3DParam::get(int frame) const
 {
     Int3DTuple ret;
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     ret.x = knob->getValueAtTime(frame,0);
     ret.y = knob->getValueAtTime(frame,1);
     ret.z = knob->getValueAtTime(frame,2);
@@ -422,7 +432,7 @@ IntParam::set(int x)
 void
 Int2DParam::set(int x, int y)
 {
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     knob->beginChanges();
     knob->setValue(x, 0);
     knob->setValue(y, 1);
@@ -432,7 +442,7 @@ Int2DParam::set(int x, int y)
 void
 Int3DParam::set(int x, int y, int z)
 {
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     knob->beginChanges();
     knob->setValue(x, 0);
     knob->setValue(y, 1);
@@ -449,7 +459,7 @@ IntParam::set(int x, int frame)
 void
 Int2DParam::set(int x, int y, int frame)
 {
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     knob->beginChanges();
     knob->setValueAtTime(frame,x, 0);
     knob->setValueAtTime(frame,y, 1);
@@ -459,7 +469,7 @@ Int2DParam::set(int x, int y, int frame)
 void
 Int3DParam::set(int x, int y, int z, int frame)
 {
-    boost::shared_ptr<Int_Knob> knob = _intKnob.lock();
+    boost::shared_ptr<KnobInt> knob = _intKnob.lock();
     knob->beginChanges();
     knob->setValueAtTime(frame,x, 0);
     knob->setValueAtTime(frame,y, 1);
@@ -565,15 +575,15 @@ IntParam::getDisplayMaximum(int dimension) const
 }
 
 int
-IntParam::addAsDependencyOf(int fromExprDimension,Param* param)
+IntParam::addAsDependencyOf(int fromExprDimension,Param* param, int thisDimension)
 {
-    _addAsDependencyOf(fromExprDimension, param);
+    _addAsDependencyOf(fromExprDimension, param, thisDimension);
     return _intKnob.lock()->getValue();
 }
 
 //////////// DoubleParam
 
-DoubleParam::DoubleParam(const boost::shared_ptr<Double_Knob>& knob)
+DoubleParam::DoubleParam(const boost::shared_ptr<KnobDouble>& knob)
 : AnimatedParam(boost::dynamic_pointer_cast<KnobI>(knob))
 , _doubleKnob(knob)
 {
@@ -594,7 +604,7 @@ DoubleParam::get() const
 Double2DTuple
 Double2DParam::get() const
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     Double2DTuple ret;
     ret.x = knob->getValue(0);
     ret.y = knob->getValue(1);
@@ -604,7 +614,7 @@ Double2DParam::get() const
 Double3DTuple
 Double3DParam::get() const
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     Double3DTuple ret;
     ret.x = knob->getValue(0);
     ret.y = knob->getValue(1);
@@ -622,7 +632,7 @@ Double2DTuple
 Double2DParam::get(int frame) const
 {
     Double2DTuple ret;
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     ret.x = knob->getValueAtTime(frame, 0);
     ret.y = knob->getValueAtTime(frame, 1);
     return ret;
@@ -631,7 +641,7 @@ Double2DParam::get(int frame) const
 Double3DTuple
 Double3DParam::get(int frame) const
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     Double3DTuple ret;
     ret.x = knob->getValueAtTime(frame, 0);
     ret.y = knob->getValueAtTime(frame, 1);
@@ -648,7 +658,7 @@ DoubleParam::set(double x)
 void
 Double2DParam::set(double x, double y)
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     knob->beginChanges();
     knob->setValue(x, 0);
     knob->setValue(y, 1);
@@ -659,7 +669,7 @@ Double2DParam::set(double x, double y)
 void
 Double3DParam::set(double x, double y, double z)
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     knob->beginChanges();
     knob->setValue(x, 0);
     knob->setValue(y, 1);
@@ -676,7 +686,7 @@ DoubleParam::set(double x, int frame)
 void
 Double2DParam::set(double x, double y, int frame)
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     knob->beginChanges();
     knob->setValueAtTime(frame,x, 0);
     knob->setValueAtTime(frame,y, 1);
@@ -695,7 +705,7 @@ Double2DParam::setUsePointInteract(bool use)
 void
 Double3DParam::set(double x, double y, double z, int frame)
 {
-    boost::shared_ptr<Double_Knob> knob = _doubleKnob.lock();
+    boost::shared_ptr<KnobDouble> knob = _doubleKnob.lock();
     knob->beginChanges();
     knob->setValueAtTime(frame,x, 0);
     knob->setValueAtTime(frame,y, 1);
@@ -802,16 +812,16 @@ DoubleParam::getDisplayMaximum(int dimension) const
 }
 
 double
-DoubleParam::addAsDependencyOf(int fromExprDimension,Param* param)
+DoubleParam::addAsDependencyOf(int fromExprDimension,Param* param,int thisDimension)
 {
-    _addAsDependencyOf(fromExprDimension, param);
+    _addAsDependencyOf(fromExprDimension, param, thisDimension);
     return _doubleKnob.lock()->getValue();
 }
 
 
 ////////ColorParam
 
-ColorParam::ColorParam(const boost::shared_ptr<Color_Knob>& knob)
+ColorParam::ColorParam(const boost::shared_ptr<KnobColor>& knob)
 : AnimatedParam(boost::dynamic_pointer_cast<KnobI>(knob))
 , _colorKnob(knob)
 {
@@ -828,7 +838,7 @@ ColorTuple
 ColorParam::get() const
 {
     ColorTuple ret;
-    boost::shared_ptr<Color_Knob> knob = _colorKnob.lock();
+    boost::shared_ptr<KnobColor> knob = _colorKnob.lock();
     ret.r = knob->getValue(0);
     ret.g = knob->getValue(1);
     ret.b = knob->getValue(2);
@@ -841,7 +851,7 @@ ColorTuple
 ColorParam::get(int frame) const
 {
     ColorTuple ret;
-    boost::shared_ptr<Color_Knob> knob = _colorKnob.lock();
+    boost::shared_ptr<KnobColor> knob = _colorKnob.lock();
     ret.r = knob->getValueAtTime(frame, 0);
     ret.g = knob->getValueAtTime(frame, 1);
     ret.b = knob->getValueAtTime(frame, 2);
@@ -852,7 +862,7 @@ ColorParam::get(int frame) const
 void
 ColorParam::set(double r, double g, double b, double a)
 {
-    boost::shared_ptr<Color_Knob> knob = _colorKnob.lock();
+    boost::shared_ptr<KnobColor> knob = _colorKnob.lock();
     knob->beginChanges();
     knob->setValue(r, 0);
     knob->setValue(g, 1);
@@ -866,7 +876,7 @@ ColorParam::set(double r, double g, double b, double a)
 void
 ColorParam::set(double r, double g, double b, double a, int frame)
 {
-    boost::shared_ptr<Color_Knob> knob = _colorKnob.lock();
+    boost::shared_ptr<KnobColor> knob = _colorKnob.lock();
     knob->beginChanges();
     knob->setValueAtTime(frame, r, 0);
     knob->setValueAtTime(frame,g, 1);
@@ -989,14 +999,14 @@ ColorParam::getDisplayMaximum(int dimension) const
 }
 
 double
-ColorParam::addAsDependencyOf(int fromExprDimension,Param* param)
+ColorParam::addAsDependencyOf(int fromExprDimension,Param* param, int thisDimension)
 {
-    _addAsDependencyOf(fromExprDimension, param);
+    _addAsDependencyOf(fromExprDimension, param, thisDimension);
     return _colorKnob.lock()->getValue();
 }
 
 //////////////// ChoiceParam
-ChoiceParam::ChoiceParam(const boost::shared_ptr<Choice_Knob>& knob)
+ChoiceParam::ChoiceParam(const boost::shared_ptr<KnobChoice>& knob)
 : AnimatedParam(boost::dynamic_pointer_cast<KnobI>(knob))
 , _choiceKnob(knob)
 {
@@ -1091,7 +1101,7 @@ ChoiceParam::restoreDefaultValue()
 void
 ChoiceParam::addOption(const std::string& option,const std::string& help)
 {
-    boost::shared_ptr<Choice_Knob> knob = _choiceKnob.lock();
+    boost::shared_ptr<KnobChoice> knob = _choiceKnob.lock();
     if (!knob->isUserKnob()) {
         return;
     }
@@ -1108,7 +1118,7 @@ ChoiceParam::addOption(const std::string& option,const std::string& help)
 void
 ChoiceParam::setOptions(const std::list<std::pair<std::string,std::string> >& options)
 {
-    boost::shared_ptr<Choice_Knob> knob = _choiceKnob.lock();
+    boost::shared_ptr<KnobChoice> knob = _choiceKnob.lock();
     if (!knob->isUserKnob()) {
         return;
     }
@@ -1145,16 +1155,16 @@ ChoiceParam::getOptions() const
 }
 
 int
-ChoiceParam::addAsDependencyOf(int fromExprDimension,Param* param)
+ChoiceParam::addAsDependencyOf(int fromExprDimension,Param* param,int thisDimension)
 {
-    _addAsDependencyOf(fromExprDimension, param);
+    _addAsDependencyOf(fromExprDimension, param,thisDimension);
     return _choiceKnob.lock()->getValue();
 }
 
 ////////////////BooleanParam
 
 
-BooleanParam::BooleanParam(const boost::shared_ptr<Bool_Knob>& knob)
+BooleanParam::BooleanParam(const boost::shared_ptr<KnobBool>& knob)
 : AnimatedParam(boost::dynamic_pointer_cast<KnobI>(knob))
 , _boolKnob(knob)
 {
@@ -1235,9 +1245,9 @@ BooleanParam::restoreDefaultValue()
 
 
 bool
-BooleanParam::addAsDependencyOf(int fromExprDimension,Param* param)
+BooleanParam::addAsDependencyOf(int fromExprDimension,Param* param,int thisDimension)
 {
-    _addAsDependencyOf(fromExprDimension, param);
+    _addAsDependencyOf(fromExprDimension, param,thisDimension);
     return _boolKnob.lock()->getValue();
 }
 
@@ -1326,16 +1336,16 @@ StringParamBase::restoreDefaultValue()
 
 
 std::string
-StringParamBase::addAsDependencyOf(int fromExprDimension,Param* param)
+StringParamBase::addAsDependencyOf(int fromExprDimension,Param* param,int thisDimension)
 {
-    _addAsDependencyOf(fromExprDimension, param);
+    _addAsDependencyOf(fromExprDimension, param,thisDimension);
     return _stringKnob.lock()->getValue();
 }
 
 
 ////////////////////StringParam
 
-StringParam::StringParam(const boost::shared_ptr<String_Knob>& knob)
+StringParam::StringParam(const boost::shared_ptr<KnobString>& knob)
 : StringParamBase(boost::dynamic_pointer_cast<Knob<std::string> >(knob))
 , _sKnob(knob)
 {
@@ -1350,7 +1360,7 @@ StringParam::~StringParam()
 void
 StringParam::setType(StringParam::TypeEnum type)
 {
-    boost::shared_ptr<String_Knob> knob = _sKnob.lock();
+    boost::shared_ptr<KnobString> knob = _sKnob.lock();
     if (!knob->isUserKnob()) {
         return;
     }
@@ -1376,7 +1386,7 @@ StringParam::setType(StringParam::TypeEnum type)
 
 /////////////////////FileParam
 
-FileParam::FileParam(const boost::shared_ptr<File_Knob>& knob)
+FileParam::FileParam(const boost::shared_ptr<KnobFile>& knob)
 : StringParamBase(boost::dynamic_pointer_cast<Knob<std::string> >(knob))
 , _sKnob(knob)
 {
@@ -1408,7 +1418,7 @@ FileParam::openFile()
 
 /////////////////////OutputFileParam
 
-OutputFileParam::OutputFileParam(const boost::shared_ptr<OutputFile_Knob>& knob)
+OutputFileParam::OutputFileParam(const boost::shared_ptr<KnobOutputFile>& knob)
 : StringParamBase(boost::dynamic_pointer_cast<Knob<std::string> >(knob))
 , _sKnob(knob)
 {
@@ -1423,7 +1433,7 @@ OutputFileParam::~OutputFileParam()
 void
 OutputFileParam::setSequenceEnabled(bool enabled)
 {
-    boost::shared_ptr<OutputFile_Knob> knob = _sKnob.lock();
+    boost::shared_ptr<KnobOutputFile> knob = _sKnob.lock();
     if (!knob->isUserKnob()) {
         return;
     }
@@ -1442,7 +1452,7 @@ OutputFileParam::openFile()
 
 ////////////////////PathParam
 
-PathParam::PathParam(const boost::shared_ptr<Path_Knob>& knob)
+PathParam::PathParam(const boost::shared_ptr<KnobPath>& knob)
 : StringParamBase(boost::dynamic_pointer_cast<Knob<std::string> >(knob))
 , _sKnob(knob)
 {
@@ -1466,9 +1476,9 @@ PathParam::setAsMultiPathTable()
 
 ////////////////////ButtonParam
 
-ButtonParam::ButtonParam(const boost::shared_ptr<Button_Knob>& knob)
+ButtonParam::ButtonParam(const boost::shared_ptr<KnobButton>& knob)
 : Param(knob)
-, _buttonKnob(boost::dynamic_pointer_cast<Button_Knob>(knob))
+, _buttonKnob(boost::dynamic_pointer_cast<KnobButton>(knob))
 {
     
 }
@@ -1486,9 +1496,9 @@ ButtonParam::setIconFilePath(const std::string& icon)
 
 ///////////////////GroupParam
 
-GroupParam::GroupParam(const boost::shared_ptr<Group_Knob>& knob)
+GroupParam::GroupParam(const boost::shared_ptr<KnobGroup>& knob)
 : Param(knob)
-, _groupKnob(boost::dynamic_pointer_cast<Group_Knob>(knob))
+, _groupKnob(boost::dynamic_pointer_cast<KnobGroup>(knob))
 {
     
 }
@@ -1533,9 +1543,9 @@ GroupParam::getIsOpened() const
 
 //////////////////////PageParam
 
-PageParam::PageParam(const boost::shared_ptr<Page_Knob>& knob)
+PageParam::PageParam(const boost::shared_ptr<KnobPage>& knob)
 : Param(knob)
-, _pageKnob(boost::dynamic_pointer_cast<Page_Knob>(knob))
+, _pageKnob(boost::dynamic_pointer_cast<KnobPage>(knob))
 {
     
 }
@@ -1556,7 +1566,7 @@ PageParam::addParam(const Param* param)
 }
 
 ////////////////////ParametricParam
-ParametricParam::ParametricParam(const boost::shared_ptr<Parametric_Knob>& knob)
+ParametricParam::ParametricParam(const boost::shared_ptr<KnobParametric>& knob)
 : Param(boost::dynamic_pointer_cast<KnobI>(knob))
 , _parametricKnob(knob)
 {

@@ -1,3 +1,27 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
+
 #include "DopeSheetEditorUndoRedo.h"
 
 #include <QDebug> //REMOVEME
@@ -5,7 +29,6 @@
 #include "Engine/Knob.h"
 #include "Engine/Node.h"
 #include "Engine/NodeGroup.h"
-#include "Engine/NoOp.h"
 #include <Engine/ViewerInstance.h>
 
 #include "Global/GlobalDefines.h"
@@ -100,7 +123,7 @@ void moveGroupNode(DopeSheetEditor* model, const NodePtr& node, double dt)
                     
                     KeyFrame fake;
                     
-                    knob->moveValueAtTime(kf.getTime(), dim, dt, 0, &fake);
+                    knob->moveValueAtTime(Natron::eCurveChangeReasonDopeSheet,kf.getTime(), dim, dt, 0, &fake);
                 }
             }
         }
@@ -127,11 +150,11 @@ _model(model)
     setText(QObject::tr("Move selected keys"));
     std::set<boost::shared_ptr<Natron::Node> > nodesSet;
     for (std::vector<boost::shared_ptr<DSNode> >::const_iterator it = nodes.begin(); it!=nodes.end(); ++it) {
-        DopeSheet::ItemType type = (*it)->getItemType();
-        if (type != DopeSheet::ItemTypeReader &&
-            type != DopeSheet::ItemTypeGroup &&
-            type != DopeSheet::ItemTypeTimeOffset &&
-            type != DopeSheet::ItemTypeFrameRange) {
+        Natron::DopeSheetItemType type = (*it)->getItemType();
+        if (type != Natron::eDopeSheetItemTypeReader &&
+            type != Natron::eDopeSheetItemTypeGroup &&
+            type != Natron::eDopeSheetItemTypeTimeOffset &&
+            type != Natron::eDopeSheetItemTypeFrameRange) {
             //Note that Retime nodes cannot be moved
             continue;
         }
@@ -200,20 +223,20 @@ void DSMoveKeysAndNodesCommand::moveSelection(double dt)
 
         boost::shared_ptr<KnobI> knob = knobContext->getKnobGui()->getKnob();
 
-        knob->moveValueAtTime(selectedKey->key.getTime(),
+        knob->moveValueAtTime(Natron::eCurveChangeReasonDopeSheet,selectedKey->key.getTime(),
                               knobContext->getDimension(),
                               dt, 0, &selectedKey->key);
     }
     ////////////Handle selected nodes
     for (std::vector<boost::shared_ptr<DSNode> >::iterator it = _nodes.begin(); it != _nodes.end(); ++it) {
-        DopeSheet::ItemType type = (*it)->getItemType();
-        if (type == DopeSheet::ItemTypeReader) {
+        Natron::DopeSheetItemType type = (*it)->getItemType();
+        if (type == Natron::eDopeSheetItemTypeReader) {
             moveReader((*it)->getInternalNode(), dt);
-        } else if (type == DopeSheet::ItemTypeFrameRange)  {
+        } else if (type == Natron::eDopeSheetItemTypeFrameRange)  {
             moveFrameRange((*it)->getInternalNode(), dt);
-        } else if (type == DopeSheet::ItemTypeTimeOffset) {
+        } else if (type == Natron::eDopeSheetItemTypeTimeOffset) {
             moveTimeOffset((*it)->getInternalNode(), dt);
-        } else if (type == DopeSheet::ItemTypeGroup) {
+        } else if (type == Natron::eDopeSheetItemTypeGroup) {
             moveGroupNode(_model, (*it)->getInternalNode(), dt);
         }
     }
@@ -400,7 +423,7 @@ DSTransformKeysCommand::transformKey(const DSKeyPtr& key)
     }
     
     boost::shared_ptr<KnobI> knob = knobContext->getKnobGui()->getKnob();
-    knob->transformValueAtTime(key->key.getTime(), knobContext->getDimension(), _transform, &key->key);
+    knob->transformValueAtTime(Natron::eCurveChangeReasonDopeSheet,key->key.getTime(), knobContext->getDimension(), _transform, &key->key);
 }
 
 int
@@ -802,7 +825,7 @@ void DSSetSelectedKeysInterpolationCommand::setInterpolation(bool undo)
             continue;
         }
 
-        knobContext->getKnobGui()->getKnob()->setInterpolationAtTime(knobContext->getDimension(),
+        knobContext->getKnobGui()->getKnob()->setInterpolationAtTime(Natron::eCurveChangeReasonDopeSheet,knobContext->getDimension(),
                                                                      it->_key->key.getTime(),
                                                                      interp,
                                                                      &it->_key->key);
@@ -837,13 +860,14 @@ void DSPasteKeysCommand::redo()
 void DSPasteKeysCommand::addOrRemoveKeyframe(bool add)
 {
     for (std::vector<DopeSheetKey>::const_iterator it = _keys.begin(); it != _keys.end(); ++it) {
-        DopeSheetKey key = (*it);
+        const DopeSheetKey& key = (*it);
 
         boost::shared_ptr<DSKnob> knobContext = key.context.lock();
         if (!knobContext) {
             continue;
         }
-
+        int dim = knobContext->getDimension();
+        
         boost::shared_ptr<KnobI> knob = knobContext->getInternalKnob();
         knob->beginChanges();
 
@@ -856,19 +880,27 @@ void DSPasteKeysCommand::addOrRemoveKeyframe(bool add)
             Knob<bool>* isBool = dynamic_cast<Knob<bool>*>(knob.get());
             Knob<int>* isInt = dynamic_cast<Knob<int>*>(knob.get());
             Knob<std::string>* isString = dynamic_cast<Knob<std::string>*>(knob.get());
-
-            if (isDouble) {
-                isDouble->setValueAtTime(currentTime, isDouble->getValueAtTime(keyTime), knobContext->getDimension());
-            } else if (isBool) {
-                isBool->setValueAtTime(currentTime, isBool->getValueAtTime(keyTime), knobContext->getDimension());
-            } else if (isInt) {
-                isInt->setValueAtTime(currentTime, isInt->getValueAtTime(keyTime), knobContext->getDimension());
-            } else if (isString) {
-                isString->setValueAtTime(currentTime, isString->getValueAtTime(keyTime), knobContext->getDimension());
+            
+            for (int i = 0; i < knob->getDimension(); ++i) {
+                if (dim == -1 || i == dim) {
+                    if (isDouble) {
+                        isDouble->setValueAtTime(currentTime, isDouble->getValueAtTime(keyTime,i), i);
+                    } else if (isBool) {
+                        isBool->setValueAtTime(currentTime, isBool->getValueAtTime(keyTime,i), i);
+                    } else if (isInt) {
+                        isInt->setValueAtTime(currentTime, isInt->getValueAtTime(keyTime,i), i);
+                    } else if (isString) {
+                        isString->setValueAtTime(currentTime, isString->getValueAtTime(keyTime,i), i);
+                    }
+                }
             }
         }
         else {
-            knob->deleteValueAtTime(currentTime, knobContext->getDimension());
+            for (int i = 0; i < knob->getDimension(); ++i) {
+                if (dim == -1 || i == dim) {
+                    knob->deleteValueAtTime(Natron::eCurveChangeReasonDopeSheet,currentTime, i);
+                }
+            }
         }
 
         knob->endChanges();

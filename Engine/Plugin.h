@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef PLUGIN_H
 #define PLUGIN_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <vector>
 #include <set>
@@ -171,7 +180,12 @@ class Plugin
     OFX::Host::ImageEffect::ImageEffectPlugin* _ofxPlugin;
     OFX::Host::ImageEffect::Descriptor* _ofxDescriptor;
     ContextEnum _ofxContext;
+    
+    //Can be activated/deactivated by the user
     bool _isUserCreatable;
+    
+    //Is not visible by the user, just for internal use
+    bool _isInternalOnly;
     
 public:
 
@@ -194,6 +208,7 @@ public:
     , _ofxDescriptor(0)
     , _ofxContext(eContextNone)
     , _isUserCreatable(true)
+    , _isInternalOnly(false)
     {
     }
 
@@ -209,29 +224,36 @@ public:
            bool isReader,
            bool isWriter,
            bool isUserCreatable)
-        : _binary(binary)
-          , _id(id)
-          , _label(label)
-          , _iconFilePath(iconFilePath)
-          , _groupIconFilePath(groupIconFilePath)
-          , _grouping(grouping)
-          , _labelWithoutSuffix()
-          , _lock(lock)
-          , _majorVersion(majorVersion)
-          , _minorVersion(minorVersion)
-          , _hasShortcutSet(false)
-          , _isReader(isReader)
-          , _isWriter(isWriter)
-          , _ofxPlugin(0)
-          , _ofxDescriptor(0)
-          , _ofxContext(eContextNone)
-          , _isUserCreatable(isUserCreatable)
+    : _binary(binary)
+    , _id(id)
+    , _label(label)
+    , _iconFilePath(iconFilePath)
+    , _groupIconFilePath(groupIconFilePath)
+    , _grouping(grouping)
+    , _labelWithoutSuffix()
+    , _lock(lock)
+    , _majorVersion(majorVersion)
+    , _minorVersion(minorVersion)
+    , _hasShortcutSet(false)
+    , _isReader(isReader)
+    , _isWriter(isWriter)
+    , _ofxPlugin(0)
+    , _ofxDescriptor(0)
+    , _ofxContext(eContextNone)
+    , _isUserCreatable(isUserCreatable)
+    , _isInternalOnly(false)
     {
     }
-
+    
     ~Plugin();
+    
+    bool getIsForInternalUseOnly() const { return _isInternalOnly; }
+    
+    void setForInternalUseOnly(bool b) { _isInternalOnly = b; }
 
-    bool getIsUserCreatable() const { return _isUserCreatable; }
+    bool getIsUserCreatable() const { return _isUserCreatable && !_isInternalOnly ; }
+    
+    void setIsUserCreatable(bool f) { _isUserCreatable = f; }
     
     void setPluginID(const QString & id);
     

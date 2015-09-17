@@ -1,7 +1,20 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 //
 //  Created by Frédéric Devernay on 03/09/13.
 //
@@ -20,16 +33,28 @@
 #define __NATRON_LINUX__
 #endif
 
+#define NATRON_APPLICATION_DESCRIPTION "Open-source, cross-platform, nodal compositing software."
+#define NATRON_COPYRIGHT "Copyright (C) 2015 the Natron developers."
 #define NATRON_ORGANIZATION_NAME "INRIA"
 #define NATRON_ORGANIZATION_DOMAIN_TOPLEVEL "fr"
 #define NATRON_ORGANIZATION_DOMAIN_SUB "inria"
 #define NATRON_ORGANIZATION_DOMAIN NATRON_ORGANIZATION_DOMAIN_SUB "." NATRON_ORGANIZATION_DOMAIN_TOPLEVEL
 #define NATRON_APPLICATION_NAME "Natron"
+// The MIME types for Natron documents are:
+// *.ntp: application/vnd.natron.project
+// *.nps: application/vnd.natron.nodepresets
+// *.nl: application/vnd.natron.layout
+// these MIME types are also used in:
+// - NatronInfo.plist (for OSX)
+// - tools/linux/include/qs/natron.qs
 #define NATRON_PROJECT_FILE_EXT "ntp"
+#define NATRON_PROJECT_FILE_MIME_TYPE "application/vnd.natron.project"
 #define NATRON_PROJECT_UNTITLED "Untitled." NATRON_PROJECT_FILE_EXT
 #define NATRON_CACHE_FILE_EXT "ntc"
 #define NATRON_LAYOUT_FILE_EXT "nl"
+#define NATRON_LAYOUT_FILE_MIME_TYPE "application/vnd.natron.layout"
 #define NATRON_PRESETS_FILE_EXT "nps"
+#define NATRON_PRESETS_FILE_MIME_TYPE "application/vnd.natron.nodepresets"
 #define NATRON_PROJECT_ENV_VAR_NAME "Project"
 #define NATRON_OCIO_ENV_VAR_NAME "OCIO"
 #define NATRON_DEFAULT_OCIO_CONFIG_NAME "blender"
@@ -138,25 +163,6 @@ NATRON_VERSION_REVISION)
 #define PLUGIN_GROUP_OTHER "Other"
 #define PLUGIN_GROUP_DEFAULT "Misc"
 #define PLUGIN_GROUP_OFX "OFX"
-
-#define NATRON_SMALL_BUTTON_SIZE 15
-#define NATRON_MEDIUM_BUTTON_SIZE 22
-#define NATRON_LARGE_BUTTON_SIZE 30
-
-#define NATRON_PREVIEW_WIDTH 64
-#define NATRON_PREVIEW_HEIGHT 48
-#define NATRON_WHEEL_ZOOM_PER_DELTA 1.00152 // 120 wheel deltas (one click on a standard wheel mouse) is x1.2
-//#define NATRON_FONT "Helvetica"
-//#define NATRON_FONT_ALT "Times"
-#define NATRON_FONT "Droid Sans"
-#define NATRON_FONT_ALT "Droid Sans"
-#define NATRON_FONT_SIZE_6 6
-#define NATRON_FONT_SIZE_8 8
-#define NATRON_FONT_SIZE_10 10
-#define NATRON_FONT_SIZE_11 11
-#define NATRON_FONT_SIZE_12 12
-#define NATRON_FONT_SIZE_13 13
-#define NATRON_MAX_RECENT_FILES 5
 
 //Use this to use trimap instead of bitmap to avoid several threads computing the same area of an image at the same time.
 //When enabled the value of 2 is a code for a pixel being rendered but not yet available.
@@ -438,6 +444,13 @@ inline T ignore_result(T x)
 #endif
 #endif
 
+/* https://code.google.com/p/address-sanitizer/wiki/AddressSanitizer#Turning_off_instrumentation */
+#if defined(__clang__) || defined (__GNUC__)
+# define ATTRIBUTE_NO_SANITIZE_ADDRESS __attribute__((no_sanitize_address))
+#else
+# define ATTRIBUTE_NO_SANITIZE_ADDRESS
+#endif
+
 /* ABI */
 #if defined(__ARM_EABI__) || defined(__EABI__)
 #define NATRON_COMPILER_SUPPORTS_EABI 1
@@ -481,20 +494,62 @@ inline T ignore_result(T x)
 #  define CLANG_DIAG_PRAGMA(x)
 #endif
 
-#if ( ( __GNUC__ * 100) + __GNUC_MINOR__) >= 408
-//  -Wunused-private-field appeared with GCC 4.8
-# define GCC_DIAG_OFF_48(x) GCC_DIAG_OFF(x)
-# define GCC_DIAG_ON_48(x) GCC_DIAG_ON(x)
-#else
-# define GCC_DIAG_OFF_48(x)
-# define GCC_DIAG_ON_48(x)
-#endif
 
 /* Usage:
-   CLANG_DIAG_OFF(unused-variable)
-   CLANG_DIAG_OFF(unused-parameter)
-   CLANG_DIAG_OFF(uninitialized)
+ CLANG_DIAG_OFF(unused-variable)
+ CLANG_DIAG_OFF(unused-parameter)
+ CLANG_DIAG_OFF(uninitialized)
  */
+
+
+#ifndef __has_warning         // Optional of course.
+#define __has_warning(x) 0  // Compatibility with non-clang compilers.
+#endif
+
+#if ( ( __GNUC__ * 100) + __GNUC_MINOR__) >= 408
+//  -Wunused-local-typedefs appeared with GCC 4.8
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF GCC_DIAG_OFF(unused-local-typedefs)
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON GCC_DIAG_ON(unused-local-typedefs)
+#else
+#if __has_warning("-Wunused-local-typedef") // both unused-local-typedefs and unused-local-typedef should be available
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF CLANG_DIAG_OFF(unused-local-typedef)
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON CLANG_DIAG_ON(unused-local-typedef)
+#elif __has_warning("-Wunused-local-typedefs")
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF CLANG_DIAG_OFF(unused-local-typedefs)
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON CLANG_DIAG_ON(unused-local-typedefs)
+#else
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
+# define GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
+#endif
+#endif
+
+//#if ( ( __GNUC__ * 100) + __GNUC_MINOR__) >= 408
+////  -Wunused-private-field appeared with GCC 4.8
+//# define GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF GCC_DIAG_OFF(unused-private-field)
+//# define GCC_DIAG_UNUSED_PRIVATE_FIELD_ON GCC_DIAG_ON(unused-private-field)
+//#else
+#if __has_warning("-Wunused-private-field")
+# define GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF CLANG_DIAG_OFF(unused-private-field)
+# define GCC_DIAG_UNUSED_PRIVATE_FIELD_ON CLANG_DIAG_ON(unused-private-field)
+#else
+# define GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
+# define GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
+#endif
+//#endif
+
+#if ( ( __GNUC__ * 100) + __GNUC_MINOR__) >= 510
+//  -Wsuggest-override appeared with GCC 5.1
+# define GCC_DIAG_SUGGEST_OVERRIDE_OFF GCC_DIAG_OFF(suggest-override)
+# define GCC_DIAG_SUGGEST_OVERRIDE_ON GCC_DIAG_ON(suggest-override)
+#else
+#if __has_warning("-Winconsistent-missing-override")
+# define GCC_DIAG_SUGGEST_OVERRIDE_OFF CLANG_DIAG_OFF(inconsistent-missing-override)
+# define GCC_DIAG_SUGGEST_OVERRIDE_ON CLANG_DIAG_ON(inconsistent-missing-override)
+#else
+# define GCC_DIAG_SUGGEST_OVERRIDE_OFF
+# define GCC_DIAG_SUGGEST_OVERRIDE_ON
+#endif
+#endif
 
 #if COMPILER_SUPPORTS(CXX_OVERRIDE_CONTROL)
 // we want to use override & final, and get no warnings even if not compiling in c++11 mode

@@ -1,397 +1,65 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "ViewerTab.h"
+#include "ViewerTabPrivate.h"
 
 #include <cassert>
-#include <QDebug>
-#include <QApplication>
-#include <QSlider>
-#include <QComboBox>
-#include <QHBoxLayout>
-#include <QSpacerItem>
-#include <QGridLayout>
-#include <QGroupBox>
+
+#include <QtCore/QDebug>
+#include <QtCore/QTimer>
+
+#include <QAction>
 #include <QVBoxLayout>
-#include <QAbstractItemView>
 #include <QCheckBox>
-#include <QTimer>
-#include <QCoreApplication>
-#include <QToolBar>
-CLANG_DIAG_OFF(unused-private-field)
-// /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
-#include <QtGui/QKeyEvent>
-CLANG_DIAG_ON(unused-private-field)
-#include <QtGui/QKeySequence>
-#include <QTextDocument>
 
-#include <boost/weak_ptr.hpp>
-
-#include "Engine/ViewerInstance.h"
-#include "Engine/Settings.h"
-#include "Engine/Project.h"
-#include "Engine/TimeLine.h"
 #include "Engine/Node.h"
-#include "Engine/OutputSchedulerThread.h"
-#include "Engine/Transform.h"
+#include "Engine/NodeGroup.h"
+#include "Engine/OutputSchedulerThread.h" // RenderEngine
+#include "Engine/Project.h"
+#include "Engine/ViewerInstance.h"
 
-#include "Gui/ViewerGL.h"
-#include "Gui/InfoViewerWidget.h"
-#include "Gui/SpinBox.h"
-#include "Gui/TimeLineGui.h"
-#include "Gui/ScaleSliderQWidget.h"
-#include "Gui/ComboBox.h"
+#include "Gui/ActionShortcuts.h"
 #include "Gui/Button.h"
+#include "Gui/ChannelsComboBox.h"
+#include "Gui/ClickableLabel.h"
 #include "Gui/Gui.h"
-#include "Gui/TabWidget.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/GuiApplicationManager.h"
-#include "Gui/ClickableLabel.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/NodeGui.h"
-#include "Gui/RotoGui.h"
-#include "Gui/TrackerGui.h"
-#include "Gui/MultiInstancePanel.h"
-#include "Gui/GuiMacros.h"
-#include "Gui/ActionShortcuts.h"
+#include "Gui/GuiDefines.h"
+#include "Gui/InfoViewerWidget.h"
 #include "Gui/Label.h"
+#include "Gui/NodeGui.h"
+#include "Gui/ScaleSliderQWidget.h"
+#include "Gui/SpinBox.h"
+#include "Gui/TimeLineGui.h"
 #include "Gui/Utils.h"
-#include "Gui/DopeSheet.h"
-
-#ifndef M_LN2
-#define M_LN2       0.693147180559945309417232121458176568  /* loge(2)        */
-#endif
-
-#define NATRON_TRANSFORM_AFFECTS_OVERLAYS
+#include "Gui/ViewerGL.h"
 
 
 using namespace Natron;
 
-namespace {
-struct InputName
-{
-    QString name;
-    boost::weak_ptr<Natron::Node> input;
-};
-
-typedef std::map<int,InputName> InputNamesMap;
-}
-
-class ChannelsComboBox : public ComboBox
-{
-    
-public:
-    
-    ChannelsComboBox(QWidget* parent) : ComboBox(parent) {}
-    
-private:
-    
-    virtual void paintEvent(QPaintEvent* event) OVERRIDE FINAL
-    {
-        ComboBox::paintEvent(event);
-        
-        int idx = activeIndex();
-        if (idx != 1) {
-            QColor color;
-            
-            QPainter p(this);
-            QPen pen;
-            
-            switch (idx) {
-                case 0:
-                    //luminance
-                    color.setRgbF(0.5, 0.5, 0.5);
-                    break;
-                case 2:
-                    //r
-                    color.setRgbF(1., 0, 0);
-                    break;
-                case 3:
-                    //g
-                    color.setRgbF(0., 1., 0.);
-                    break;
-                case 4:
-                    //b
-                    color.setRgbF(0., 0. , 1.);
-                    break;
-                case 5:
-                    //a
-                    color.setRgbF(1.,1.,1.);
-                    break;
-            }
-            
-            pen.setColor(color);
-            p.setPen(pen);
-            
-            
-            QRectF bRect = rect();
-            QRectF roundedRect = bRect.adjusted(1., 1., -2., -2.);
-            
-            double roundPixels = 3;
-            
-            
-            QPainterPath path;
-            path.addRoundedRect(roundedRect, roundPixels, roundPixels);
-            p.drawPath(path);
-        }
-    }
-};
-
-struct ViewerTabPrivate
-{
-    /*OpenGL viewer*/
-    ViewerGL* viewer;
-    GuiAppInstance* app;
-    QWidget* viewerContainer;
-    QHBoxLayout* viewerLayout;
-    QWidget* viewerSubContainer;
-    QVBoxLayout* viewerSubContainerLayout;
-    QVBoxLayout* mainLayout;
-
-    /*Viewer Settings*/
-    QWidget* firstSettingsRow, *secondSettingsRow;
-    QHBoxLayout* firstRowLayout, *secondRowLayout;
-
-    /*1st row*/
-    //ComboBox* viewerLayers;
-    ComboBox* layerChoice;
-    ComboBox* alphaChannelChoice;
-    ChannelsComboBox* viewerChannels;
-    ComboBox* zoomCombobox;
-    Button* syncViewerButton;
-    Button* centerViewerButton;
-    Button* clipToProjectFormatButton;
-    Button* enableViewerRoI;
-    Button* refreshButton;
-    QIcon iconRefreshOff, iconRefreshOn;
-    int ongoingRenderCount;
-    
-    Button* activateRenderScale;
-    bool renderScaleActive;
-    ComboBox* renderScaleCombo;
-    Natron::Label* firstInputLabel;
-    ComboBox* firstInputImage;
-    ComboBox* compositingOperator;
-    Natron::Label* secondInputLabel;
-    ComboBox* secondInputImage;
-
-    /*2nd row*/
-    Button* toggleGainButton;
-    SpinBox* gainBox;
-    ScaleSliderQWidget* gainSlider;
-    double lastFstopValue;
-    ClickableLabel* autoConstrastLabel;
-    QCheckBox* autoContrast;
-    SpinBox* gammaBox;
-    double lastGammaValue;
-    Button* toggleGammaButton;
-    ScaleSliderQWidget* gammaSlider;
-    ComboBox* viewerColorSpace;
-    Button* checkerboardButton;
-    ComboBox* viewsComboBox;
-    int currentViewIndex;
-    QMutex currentViewMutex;
-    /*Info*/
-    InfoViewerWidget* infoWidget[2];
-
-
-    /*TimeLine buttons*/
-    QWidget* playerButtonsContainer;
-    QHBoxLayout* playerLayout;
-    SpinBox* currentFrameBox;
-    Button* firstFrame_Button;
-    Button* previousKeyFrame_Button;
-    Button* play_Backward_Button;
-    Button* previousFrame_Button;
-    Button* stop_Button;
-    Button* nextFrame_Button;
-    Button* play_Forward_Button;
-    Button* nextKeyFrame_Button;
-    Button* lastFrame_Button;
-    Button* previousIncrement_Button;
-    SpinBox* incrementSpinBox;
-    Button* nextIncrement_Button;
-    Button* playbackMode_Button;
-    
-    mutable QMutex playbackModeMutex;
-    Natron::PlaybackModeEnum playbackMode;
-    
-    LineEdit* frameRangeEdit;
-
-    ClickableLabel* canEditFrameRangeLabel;
-
-    QCheckBox* canEditFpsBox;
-    ClickableLabel* canEditFpsLabel;
-    mutable QMutex fpsLockedMutex;
-    bool fpsLocked;
-    SpinBox* fpsBox;
-    Button* turboButton;
-
-    /*frame seeker*/
-    TimeLineGui* timeLineGui;
-    std::map<NodeGui*,RotoGui*> rotoNodes;
-    std::pair<NodeGui*,RotoGui*> currentRoto;
-    std::map<NodeGui*,TrackerGui*> trackerNodes;
-    std::pair<NodeGui*,TrackerGui*> currentTracker;
-    InputNamesMap inputNamesMap;
-    mutable QMutex compOperatorMutex;
-    ViewerCompositingOperatorEnum compOperator;
-    Gui* gui;
-    ViewerInstance* viewerNode; // < pointer to the internal node
-    
-    mutable QMutex visibleToolbarsMutex; //< protects the 4 bool below
-    bool infobarVisible;
-    bool playerVisible;
-    bool timelineVisible;
-    bool leftToolbarVisible;
-    bool rightToolbarVisible;
-    bool topToolbarVisible;
-    
-    bool isFileDialogViewer;
-    
-    mutable QMutex checkerboardMutex;
-    bool checkerboardEnabled;
-
-    mutable QMutex fpsMutex;
-    double fps;
-    
-    //The last node that took the penDown/motion/keyDown/keyRelease etc...
-    boost::weak_ptr<Natron::Node> lastOverlayNode;
-    
-    ViewerTabPrivate(Gui* gui,
-                     ViewerInstance* node)
-    : viewer(NULL)
-    , app( gui->getApp() )
-    , viewerContainer(NULL)
-    , viewerLayout(NULL)
-    , viewerSubContainer(NULL)
-    , viewerSubContainerLayout(NULL)
-    , mainLayout(NULL)
-    , firstSettingsRow(NULL)
-    , secondSettingsRow(NULL)
-    , firstRowLayout(NULL)
-    , secondRowLayout(NULL)
-    , layerChoice(NULL)
-    , alphaChannelChoice(NULL)
-    , viewerChannels(NULL)
-    , zoomCombobox(NULL)
-    , syncViewerButton(NULL)
-    , centerViewerButton(NULL)
-    , clipToProjectFormatButton(NULL)
-    , enableViewerRoI(NULL)
-    , refreshButton(NULL)
-    , iconRefreshOff()
-    , iconRefreshOn()
-    , ongoingRenderCount(0)
-    , activateRenderScale(NULL)
-    , renderScaleActive(false)
-    , renderScaleCombo(NULL)
-    , firstInputLabel(NULL)
-    , firstInputImage(NULL)
-    , compositingOperator(NULL)
-    , secondInputLabel(NULL)
-    , secondInputImage(NULL)
-    , toggleGainButton(NULL)
-    , gainBox(NULL)
-    , gainSlider(NULL)
-    , lastFstopValue(0.)
-    , autoConstrastLabel(NULL)
-    , autoContrast(NULL)
-    , gammaBox(NULL)
-    , lastGammaValue(1.)
-    , toggleGammaButton(NULL)
-    , gammaSlider(NULL)
-    , viewerColorSpace(NULL)
-    , checkerboardButton(NULL)
-    , viewsComboBox(NULL)
-    , currentViewIndex(0)
-    , currentViewMutex()
-    , infoWidget()
-    , playerButtonsContainer(0)
-    , playerLayout(NULL)
-    , currentFrameBox(NULL)
-    , firstFrame_Button(NULL)
-    , previousKeyFrame_Button(NULL)
-    , play_Backward_Button(NULL)
-    , previousFrame_Button(NULL)
-    , stop_Button(NULL)
-    , nextFrame_Button(NULL)
-    , play_Forward_Button(NULL)
-    , nextKeyFrame_Button(NULL)
-    , lastFrame_Button(NULL)
-    , previousIncrement_Button(NULL)
-    , incrementSpinBox(NULL)
-    , nextIncrement_Button(NULL)
-    , playbackMode_Button(NULL)
-    , playbackModeMutex()
-    , playbackMode(Natron::ePlaybackModeLoop)
-    , frameRangeEdit(NULL)
-    , canEditFrameRangeLabel(NULL)
-    , canEditFpsBox(NULL)
-    , canEditFpsLabel(NULL)
-    , fpsLockedMutex()
-    , fpsLocked(true)
-    , fpsBox(NULL)
-    , turboButton(NULL)
-    , timeLineGui(NULL)
-    , rotoNodes()
-    , currentRoto()
-    , trackerNodes()
-    , currentTracker()
-    , inputNamesMap()
-    , compOperatorMutex()
-    , compOperator(eViewerCompositingOperatorNone)
-    , gui(gui)
-    , viewerNode(node)
-    , visibleToolbarsMutex()
-    , infobarVisible(true)
-    , playerVisible(true)
-    , timelineVisible(true)
-    , leftToolbarVisible(true)
-    , rightToolbarVisible(true)
-    , topToolbarVisible(true)
-    , isFileDialogViewer(false)
-    , checkerboardMutex()
-    , checkerboardEnabled(false)
-    , fpsMutex()
-    , fps(24.)
-    , lastOverlayNode()
-    {
-        infoWidget[0] = infoWidget[1] = NULL;
-        currentRoto.first = NULL;
-        currentRoto.second = NULL;
-    }
-    
-#ifdef NATRON_TRANSFORM_AFFECTS_OVERLAYS
-    // return the tronsform to apply to the overlay as a 3x3 homography in canonical coordinates
-    bool getOverlayTransform(double time,
-                             int view,
-                             const boost::shared_ptr<Natron::Node>& target,
-                             Natron::EffectInstance* currentNode,
-                             Transform::Matrix3x3* transform) const;
-    
-    bool getTimeTransform(double time,
-                          int view,
-                          const boost::shared_ptr<Natron::Node>& target,
-                          Natron::EffectInstance* currentNode,
-                          double *newTime) const;
-
-#endif
-    
-    void getComponentsAvailabel(std::set<ImageComponents>* comps) const;
-    
-    };
 
 static void makeFullyQualifiedLabel(Natron::Node* node,std::string* ret)
 {
@@ -490,21 +158,21 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->zoomCombobox->setToolTip( "<p><b>" + tr("Zoom:") + "</b></p>"
                                      + tr("The zoom applied to the image on the viewer.") + "</p>");
 
-#pragma message WARN("TODO: add zoom in/zoom out/fit to viewer zoom menu")
-    // Unfortunately, this require a bit of work, because zoomSlot(QString) *parses* the menu entry and thus expects all entries to have the form "xx%".
+   
     // Keyboard shortcuts should be made visible to the user, not only in the shortcut editor, but also at logical places in the GUI.
 
-    //ActionWithShortcut* zoomInAction = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionZoomIn, kShortcutDescActionZoomIn, this);
-    //_imp->zoomCombobox->addAction(zoomInAction);
-    //ActionWithShortcut* zoomOutAction = new ActionWithShortcut(kShortcutGroupGlobal, kShortcutIDActionZoomOut, kShortcutDescActionZoomOut, this);
-    //_imp->zoomCombobox->addAction(zoomOutAction);
-    //ActionWithShortcut* zoomFitAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionFitViewer, kShortcutDescActionFitViewer, this);
-    //_imp->zoomCombobox->addAction(zoomFitAction);
+    ActionWithShortcut* fitAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionFitViewer, "Fit", this);
+    ActionWithShortcut* zoomInAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionZoomIn, "+", this);
+    ActionWithShortcut* zoomOutAction = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionZoomOut, "-", this);
+    ActionWithShortcut* level100Action = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionZoomLevel100, "100%", this);
+    _imp->zoomCombobox->addAction(fitAction);
+    _imp->zoomCombobox->addAction(zoomInAction);
+    _imp->zoomCombobox->addAction(zoomOutAction);
+    _imp->zoomCombobox->addSeparator();
     _imp->zoomCombobox->addItem("10%");
     _imp->zoomCombobox->addItem("25%");
     _imp->zoomCombobox->addItem("50%");
     _imp->zoomCombobox->addItem("75%");
-    ActionWithShortcut* level100Action = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDActionZoomLevel100, "100%", this);
     _imp->zoomCombobox->addAction(level100Action);
     _imp->zoomCombobox->addItem("125%");
     _imp->zoomCombobox->addItem("150%");
@@ -530,6 +198,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->syncViewerButton->setCheckable(true);
     _imp->syncViewerButton->setToolTip(Natron::convertFromPlainText(tr("When enabled, all viewers will be synchronized to the same portion of the image in the viewport."),Qt::WhiteSpaceNormal));
     _imp->syncViewerButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->syncViewerButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->syncViewerButton->setFocusPolicy(Qt::NoFocus);
     QObject::connect(_imp->syncViewerButton, SIGNAL(clicked(bool)), this,SLOT(onSyncViewersButtonPressed(bool)));
     _imp->firstRowLayout->addWidget(_imp->syncViewerButton);
@@ -537,12 +206,14 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->centerViewerButton = new Button(_imp->firstSettingsRow);
     _imp->centerViewerButton->setFocusPolicy(Qt::NoFocus);
     _imp->centerViewerButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->centerViewerButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->firstRowLayout->addWidget(_imp->centerViewerButton);
 
 
     _imp->clipToProjectFormatButton = new Button(_imp->firstSettingsRow);
     _imp->clipToProjectFormatButton->setFocusPolicy(Qt::NoFocus);
     _imp->clipToProjectFormatButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->clipToProjectFormatButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->clipToProjectFormatButton->setCheckable(true);
     _imp->clipToProjectFormatButton->setChecked(true);
     _imp->clipToProjectFormatButton->setDown(true);
@@ -551,6 +222,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->enableViewerRoI = new Button(_imp->firstSettingsRow);
     _imp->enableViewerRoI->setFocusPolicy(Qt::NoFocus);
     _imp->enableViewerRoI->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->enableViewerRoI->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->enableViewerRoI->setCheckable(true);
     _imp->enableViewerRoI->setChecked(false);
     _imp->enableViewerRoI->setDown(false);
@@ -559,19 +231,30 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->refreshButton = new Button(_imp->firstSettingsRow);
     _imp->refreshButton->setFocusPolicy(Qt::NoFocus);
     _imp->refreshButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    _imp->refreshButton->setToolTip("<p>" + tr("Forces a new render of the current frame.") +
-                                     "</p><p><b>" + tr("Keyboard shortcut:") + " U</b></p>");
+    _imp->refreshButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    {
+        QKeySequence seq(Qt::CTRL + Qt::SHIFT);
+        QStringList refreshActions;
+        refreshActions << kShortcutIDActionRefresh;
+        refreshActions << kShortcutIDActionRefreshWithStats;
+        setTooltipWithShortcut2(kShortcutGroupViewer, refreshActions, "<p>" + tr("Forces a new render of the current frame.") +
+                               "</p>" + "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p><p>" +
+                               tr("Press ") + "%2" + tr(" to activate in-depth render statistics useful "
+                                                   "for debugging the composition.") + "</p>", _imp->refreshButton);
+    }
     _imp->firstRowLayout->addWidget(_imp->refreshButton);
-
+    
     _imp->activateRenderScale = new Button(_imp->firstSettingsRow);
     _imp->activateRenderScale->setFocusPolicy(Qt::NoFocus);
     _imp->activateRenderScale->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence rsKs(Qt::CTRL + Qt::Key_P);
-    _imp->activateRenderScale->setToolTip("<p><b>" + tr("Proxy mode:") + "</b></p><p>" + tr(
-                                               "Activates the downscaling by the amount indicated by the value on the right. "
-                                               "The rendered images are degraded and as a result of this the whole rendering pipeline "
-                                               "is much faster.") +
-                                           "</p><p><b>" + tr("Keyboard shortcut:") + " " + rsKs.toString(QKeySequence::NativeText) + "</b></p>");
+    _imp->activateRenderScale->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupViewer, kShortcutIDActionProxyEnabled,
+                           "<p><b>" + tr("Proxy mode:") + "</b></p><p>" +
+                           tr("Activates the downscaling by the amount indicated by the value on the right. "
+                              "The rendered images are degraded and as a result of this the whole rendering pipeline "
+                            "is much faster.") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>",_imp->activateRenderScale);
+
     _imp->activateRenderScale->setCheckable(true);
     _imp->activateRenderScale->setChecked(false);
     _imp->activateRenderScale->setDown(false);
@@ -611,7 +294,9 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->compositingOperator->addItem(tr("Over"), QIcon(), QKeySequence(), tr("A + B(1 - Aalpha)"));
     _imp->compositingOperator->addItem(tr("Under"), QIcon(), QKeySequence(), tr("A(1 - Balpha) + B"));
     _imp->compositingOperator->addItem(tr("Minus"), QIcon(), QKeySequence(), tr("A - B"));
-    _imp->compositingOperator->addItem(tr("Wipe"), QIcon(), QKeySequence(), tr("Wipe between A and B"));
+    ActionWithShortcut* actionWipe = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDToggleWipe, "Wipe", _imp->compositingOperator);
+    actionWipe->setToolTip(tr("Wipe between A and B"));
+    _imp->compositingOperator->addAction(actionWipe);
     _imp->firstRowLayout->addWidget(_imp->compositingOperator);
 
     _imp->secondInputLabel = new Natron::Label("B:",_imp->firstSettingsRow);
@@ -644,6 +329,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->toggleGainButton->setDown(false);
     _imp->toggleGainButton->setFocusPolicy(Qt::NoFocus);
     _imp->toggleGainButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->toggleGainButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->toggleGainButton->setToolTip(Natron::convertFromPlainText(tr("Switch between \"neutral\" 1.0 gain f-stop and the previous setting."), Qt::WhiteSpaceNormal));
     _imp->secondRowLayout->addWidget(_imp->toggleGainButton);
     QObject::connect(_imp->toggleGainButton, SIGNAL(clicked(bool)), this, SLOT(onGainToggled(bool)));
@@ -669,7 +355,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->secondRowLayout->addWidget(_imp->autoConstrastLabel);
 
     _imp->autoContrast = new QCheckBox(_imp->secondSettingsRow);
-    _imp->autoContrast->setAttribute(Qt::WA_LayoutUsesWidgetRect);
+    _imp->autoContrast->setAttribute(Qt::WA_LayoutUsesWidgetRect); // Don't use the layout rect calculated from QMacStyle.
     _imp->autoContrast->setToolTip(autoContrastToolTip);
     _imp->secondRowLayout->addWidget(_imp->autoContrast);
     
@@ -686,6 +372,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->toggleGammaButton->setDown(false);
     _imp->toggleGammaButton->setFocusPolicy(Qt::NoFocus);
     _imp->toggleGammaButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->toggleGammaButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->toggleGammaButton->setToolTip(Natron::convertFromPlainText(tr("Switch between gamma at 1.0 and the previous setting"), Qt::WhiteSpaceNormal));
     _imp->secondRowLayout->addWidget(_imp->toggleGammaButton);
     
@@ -729,6 +416,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->checkerboardButton->setToolTip(Natron::convertFromPlainText(tr("If checked, the viewer draws a checkerboard under the image instead of black "
                                                                      "(within the project window only)."), Qt::WhiteSpaceNormal));
     _imp->checkerboardButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->checkerboardButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     QObject::connect(_imp->checkerboardButton,SIGNAL(clicked(bool)),this,SLOT(onCheckerboardButtonClicked()));
     _imp->secondRowLayout->addWidget(_imp->checkerboardButton);
 
@@ -800,35 +488,26 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->firstFrame_Button = new Button(_imp->playerButtonsContainer);
     _imp->firstFrame_Button->setFocusPolicy(Qt::NoFocus);
     _imp->firstFrame_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence firstFrameKey(Qt::CTRL + Qt::Key_Left);
-    QString tooltip = "<p>" + tr("First frame") + "</p>";
-    tooltip.append("<p><b>" + tr("Keyboard shortcut:") + " ");
-    tooltip.append( firstFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->firstFrame_Button->setToolTip(tooltip);
+    _imp->firstFrame_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerFirst,"<p>" + tr("First frame") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->firstFrame_Button);
     _imp->playerLayout->addWidget(_imp->firstFrame_Button);
 
 
     _imp->previousKeyFrame_Button = new Button(_imp->playerButtonsContainer);
     _imp->previousKeyFrame_Button->setFocusPolicy(Qt::NoFocus);
     _imp->previousKeyFrame_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence previousKeyFrameKey(Qt::CTRL + Qt::SHIFT +  Qt::Key_Left);
-    tooltip = "<p>" + tr("Previous keyframe") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( previousKeyFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->previousKeyFrame_Button->setToolTip(tooltip);
+    _imp->previousKeyFrame_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevKF,"<p>" + tr("Previous Keyframe") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->previousKeyFrame_Button);
 
 
     _imp->play_Backward_Button = new Button(_imp->playerButtonsContainer);
     _imp->play_Backward_Button->setFocusPolicy(Qt::NoFocus);
     _imp->play_Backward_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence playbackFrameKey(Qt::Key_J);
-    tooltip = "<p>" + tr("Play backward") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( playbackFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->play_Backward_Button->setToolTip(tooltip);
+    _imp->play_Backward_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerBackward,"<p>" + tr("Play backward") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->play_Backward_Button);
     _imp->play_Backward_Button->setCheckable(true);
     _imp->play_Backward_Button->setDown(false);
     _imp->playerLayout->addWidget(_imp->play_Backward_Button);
@@ -837,48 +516,37 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->previousFrame_Button = new Button(_imp->playerButtonsContainer);
     _imp->previousFrame_Button->setFocusPolicy(Qt::NoFocus);
     _imp->previousFrame_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence previousFrameKey(Qt::Key_Left);
-    tooltip = "<p>" + tr("Previous frame") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( previousFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->previousFrame_Button->setToolTip(tooltip);
+    _imp->previousFrame_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevious,"<p>" + tr("Previous frame") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->previousFrame_Button);
+    
     _imp->playerLayout->addWidget(_imp->previousFrame_Button);
 
 
     _imp->stop_Button = new Button(_imp->playerButtonsContainer);
     _imp->stop_Button->setFocusPolicy(Qt::NoFocus);
     _imp->stop_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence stopKey(Qt::Key_K);
-    tooltip = "<p>" + tr("Stop") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( stopKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->stop_Button->setToolTip(tooltip);
+    _imp->stop_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerStop,"<p>" + tr("Stop") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->stop_Button);
     _imp->playerLayout->addWidget(_imp->stop_Button);
 
 
     _imp->nextFrame_Button = new Button(_imp->playerButtonsContainer);
     _imp->nextFrame_Button->setFocusPolicy(Qt::NoFocus);
     _imp->nextFrame_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence nextFrameKey(Qt::Key_Right);
-    tooltip = "<p>" + tr("Next frame") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( nextFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->nextFrame_Button->setToolTip(tooltip);
+    _imp->nextFrame_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerNext,"<p>" + tr("Next frame") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->nextFrame_Button);
     _imp->playerLayout->addWidget(_imp->nextFrame_Button);
 
 
     _imp->play_Forward_Button = new Button(_imp->playerButtonsContainer);
     _imp->play_Forward_Button->setFocusPolicy(Qt::NoFocus);
     _imp->play_Forward_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence playKey(Qt::Key_L);
-    tooltip = "<p>" + tr("Play forward") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( playKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->play_Forward_Button->setToolTip(tooltip);
+    _imp->play_Forward_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerForward,"<p>" + tr("Play forward") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->play_Forward_Button);
     _imp->play_Forward_Button->setCheckable(true);
     _imp->play_Forward_Button->setDown(false);
     _imp->playerLayout->addWidget(_imp->play_Forward_Button);
@@ -887,23 +555,17 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->nextKeyFrame_Button = new Button(_imp->playerButtonsContainer);
     _imp->nextKeyFrame_Button->setFocusPolicy(Qt::NoFocus);
     _imp->nextKeyFrame_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence nextKeyFrameKey(Qt::CTRL + Qt::SHIFT +  Qt::Key_Right);
-    tooltip = "<p>" + tr("Next keyframe") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( nextKeyFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->nextKeyFrame_Button->setToolTip(tooltip);
+    _imp->nextKeyFrame_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerNextKF,"<p>" + tr("Next Keyframe") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->nextKeyFrame_Button);
 
 
     _imp->lastFrame_Button = new Button(_imp->playerButtonsContainer);
     _imp->lastFrame_Button->setFocusPolicy(Qt::NoFocus);
     _imp->lastFrame_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence lastFrameKey(Qt::CTRL + Qt::Key_Right);
-    tooltip = "<p>" + tr("Last frame") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( lastFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->lastFrame_Button->setToolTip(tooltip);
+    _imp->lastFrame_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerLast,"<p>" + tr("Last Frame") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->lastFrame_Button);
     _imp->playerLayout->addWidget(_imp->lastFrame_Button);
 
 
@@ -917,12 +579,9 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->previousIncrement_Button = new Button(_imp->playerButtonsContainer);
     _imp->previousIncrement_Button->setFocusPolicy(Qt::NoFocus);
     _imp->previousIncrement_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence previousIncrFrameKey(Qt::SHIFT + Qt::Key_Left);
-    tooltip = "<p>" + tr("Previous increment") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( previousIncrFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->previousIncrement_Button->setToolTip(tooltip);
+    _imp->previousIncrement_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevIncr,"<p>" + tr("Previous Increment") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->previousIncrement_Button);
     _imp->playerLayout->addWidget(_imp->previousIncrement_Button);
 
 
@@ -937,17 +596,15 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->nextIncrement_Button = new Button(_imp->playerButtonsContainer);
     _imp->nextIncrement_Button->setFocusPolicy(Qt::NoFocus);
     _imp->nextIncrement_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QKeySequence nextIncrFrameKey(Qt::SHIFT + Qt::Key_Right);
-    tooltip = "<p>" + tr("Next increment") + "</p>";
-    tooltip.append( "<p><b>" + tr("Keyboard shortcut:") + " " );
-    tooltip.append( nextIncrFrameKey.toString(QKeySequence::NativeText) );
-    tooltip.append("</b></p>");
-    _imp->nextIncrement_Button->setToolTip(tooltip);
+    _imp->nextIncrement_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    setTooltipWithShortcut(kShortcutGroupPlayer, kShortcutIDActionPlayerNextIncr,"<p>" + tr("Next Increment") + "</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->nextIncrement_Button);
     _imp->playerLayout->addWidget(_imp->nextIncrement_Button);
 
     _imp->playbackMode_Button = new Button(_imp->playerButtonsContainer);
     _imp->playbackMode_Button->setFocusPolicy(Qt::NoFocus);
     _imp->playbackMode_Button->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->playbackMode_Button->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->playbackMode_Button->setToolTip(Natron::convertFromPlainText(tr("Behaviour to adopt when the playback hit the end of the range: loop,bounce or stop."), Qt::WhiteSpaceNormal));
     _imp->playerLayout->addWidget(_imp->playbackMode_Button);
 
@@ -974,7 +631,28 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
 
 
     _imp->playerLayout->addStretch();
+    
+    QPixmap tripleSyncUnlockPix,tripleSyncLockedPix;
+    appPTR->getIcon(Natron::NATRON_PIXMAP_UNLOCKED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &tripleSyncUnlockPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_LOCKED, NATRON_MEDIUM_BUTTON_ICON_SIZE, &tripleSyncLockedPix);
+    
+    QIcon tripleSyncIc;
+    tripleSyncIc.addPixmap(tripleSyncUnlockPix, QIcon::Normal, QIcon::Off);
+    tripleSyncIc.addPixmap(tripleSyncLockedPix, QIcon::Normal, QIcon::On);
+    _imp->tripleSyncButton = new Button(tripleSyncIc,"",_imp->playerButtonsContainer);
+    _imp->tripleSyncButton->setToolTip(Natron::convertFromPlainText(tr("When activated, timeline's frame-range will be synchronized with the Dope Sheet and the Curve Editor as well."),Qt::WhiteSpaceNormal));
+    _imp->tripleSyncButton->setCheckable(true);
+    _imp->tripleSyncButton->setChecked(false);
+    _imp->tripleSyncButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->tripleSyncButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE,NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    QObject:: connect(_imp->tripleSyncButton, SIGNAL(toggled(bool)),
+            this, SLOT(toggleTripleSync(bool)));
 
+    _imp->playerLayout->addWidget(_imp->tripleSyncButton);
+
+    
+    _imp->playerLayout->addStretch();
+    
     _imp->canEditFpsBox = new QCheckBox(_imp->playerButtonsContainer);
     
     QString canEditFpsBoxTT = Natron::convertFromPlainText(tr("When unchecked, the frame rate will be automatically set by "
@@ -983,6 +661,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
                                                        , Qt::WhiteSpaceNormal);
     
     _imp->canEditFpsBox->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->canEditFpsBox->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->canEditFpsBox->setToolTip(canEditFpsBoxTT);
     _imp->canEditFpsBox->setChecked(!_imp->fpsLocked);
     QObject::connect( _imp->canEditFpsBox,SIGNAL( clicked(bool) ),this,SLOT( onCanSetFPSClicked(bool) ) );
@@ -1016,6 +695,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     _imp->turboButton->setChecked(false);
     _imp->turboButton->setDown(false);
     _imp->turboButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->turboButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->turboButton->setToolTip("<p><b>" + tr("Turbo mode:") + "</p></b><p>" +
                                   tr("When checked, everything besides the viewer will not be refreshed in the user interface "
                                                                                               "for maximum efficiency during playback.") + "</p>");
@@ -1110,22 +790,28 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     icViewerRs.addPixmap(pixViewerRs,QIcon::Normal,QIcon::Off);
     icViewerRs.addPixmap(pixViewerRsChecked,QIcon::Normal,QIcon::On);
     _imp->activateRenderScale->setIcon(icViewerRs);
+    
+    setTooltipWithShortcut(kShortcutGroupViewer, kShortcutIDActionFitViewer,"<p>" +
+                           tr("Scales the image so it doesn't exceed the size of the viewer and centers it.") +"</p>" +
+                           "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->centerViewerButton);
+   
+    setTooltipWithShortcut(kShortcutGroupViewer, kShortcutIDActionClipEnabled,"<p>" +
+                           tr("Clips the portion of the image displayed "
+                              "on the viewer to the project format. "
+                              "When off, everything in the union of all nodes "
+                              "region of definition will be displayed.") +"</p>" +
+                              "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->clipToProjectFormatButton);
+    
+    QStringList roiActions;
+    roiActions << kShortcutIDActionROIEnabled;
+    roiActions << kShortcutIDActionNewROI;
+    setTooltipWithShortcut2(kShortcutGroupViewer, roiActions,"<p>" +
+                           tr("When active, enables the region of interest that will limit"
+                              " the portion of the viewer that is kept updated.") +"</p>" +
+                            "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>" +
+                            "<p>" + tr("Press ") + " %2 " + tr("to activate and drag a new region.") + "</p>", _imp->enableViewerRoI);
 
 
-    _imp->centerViewerButton->setToolTip("<p>" + tr("Scales the image so it doesn't exceed the size of the viewer and centers it.") +
-                                          "</p><p><b>" + tr("Keyboard shortcut:") + " F</b></p>");
-
-    _imp->clipToProjectFormatButton->setToolTip("<p>" + tr("Clips the portion of the image displayed "
-                                                            "on the viewer to the project format. "
-                                                            "When off, everything in the union of all nodes "
-                                                            "region of definition will be displayed.") +
-                                                 "</p><p><b>" + tr("Keyboard shortcut:") + " " + QKeySequence(Qt::SHIFT + Qt::Key_C).toString() +
-                                                 "</b></p>");
-
-    QKeySequence enableViewerKey(Qt::SHIFT + Qt::Key_W);
-    _imp->enableViewerRoI->setToolTip("<p>" + tr("When active, enables the region of interest that will limit"
-                                                  " the portion of the viewer that is kept updated.") +
-                                       "</p><p><b>" + tr("Keyboard shortcut:") + " " + enableViewerKey.toString() + "</b></p>");
     /*=================================================*/
 
     /*frame seeker*/
@@ -1148,13 +834,15 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     manageTimelineSlot(false,timeline);
     
     boost::shared_ptr<Node> wrapperNode = _imp->viewerNode->getNode();
+    QObject::connect( _imp->viewerNode, SIGNAL(renderStatsAvailable(int,int,double,RenderStatsMap)),
+                     this, SLOT(onRenderStatsAvailable(int,int,double,RenderStatsMap)));
     QObject::connect( wrapperNode.get(),SIGNAL( inputChanged(int) ),this,SLOT( onInputChanged(int) ) );
     QObject::connect( wrapperNode.get(),SIGNAL( inputLabelChanged(int,QString) ),this,SLOT( onInputNameChanged(int,QString) ) );
     QObject::connect( _imp->viewerNode,SIGNAL(clipPreferencesChanged()), this, SLOT(onClipPreferencesChanged()));
     QObject::connect( _imp->viewerNode,SIGNAL( activeInputsChanged() ),this,SLOT( onActiveInputsChanged() ) );
     QObject::connect( _imp->viewerColorSpace, SIGNAL( currentIndexChanged(int) ), this,
                       SLOT( onColorSpaceComboBoxChanged(int) ) );
-    QObject::connect( _imp->zoomCombobox, SIGNAL( currentIndexChanged(QString) ),_imp->viewer, SLOT( zoomSlot(QString) ) );
+    QObject::connect( _imp->zoomCombobox, SIGNAL( currentIndexChanged(int) ),this, SLOT( onZoomComboboxCurrentIndexChanged(int)) );
     QObject::connect( _imp->viewer, SIGNAL( zoomChanged(int) ), this, SLOT( updateZoomComboBox(int) ) );
     QObject::connect( _imp->gainBox, SIGNAL( valueChanged(double) ), this,SLOT( onGainSpinBoxValueChanged(double) ) );
     QObject::connect( _imp->gainSlider, SIGNAL( positionChanged(double) ), this, SLOT( onGainSliderChanged(double) ) );
@@ -1233,6 +921,7 @@ ViewerTab::ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
     }
 
 }
+<<<<<<< HEAD
 
 void
 ViewerTab::onColorSpaceComboBoxChanged(int v)
@@ -4920,3 +4609,5 @@ ViewerTab::onSyncViewersButtonPressed(bool clicked)
         synchronizeOtherViewersProjection();
     }
 }
+=======
+>>>>>>> workshop

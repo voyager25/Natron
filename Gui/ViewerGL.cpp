@@ -1,79 +1,68 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "ViewerGL.h"
+#include "ViewerGLPrivate.h"
 
 #include <cassert>
-#include <map>
 #include <algorithm> // min, max
 
-#include <QtCore/QEvent>
-#include <QtCore/QFile>
-#include <QtCore/QHash>
-#include <QtCore/QMutex>
-#include <QtCore/QWaitCondition>
-#include <QtGui/QPainter>
-#include <QtGui/QImage>
-#include <QToolButton>
-#include <QApplication>
-#include <QTabletEvent>
-#include <QDesktopWidget>
-#include <QScreen>
-#include <QDockWidget> // in QtGui on Qt4, in QtWidgets on Qt5
-#include <QtGui/QPainter>
-CLANG_DIAG_OFF(unused-private-field)
+#include "Global/Macros.h"
+#include "Global/GLIncludes.h" //!<must be included before QGlWidget because of gl.h and glew.h
+#include <QtGui/QMenu>
+#include <QtGui/QToolButton>
+#include <QtGui/QApplication> // qApp
+GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QtGui/QKeyEvent>
-CLANG_DIAG_ON(unused-private-field)
-#include <QtGui/QVector4D>
+#include <QtGui/QMouseEvent>
+GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 #include <QtOpenGL/QGLShaderProgram>
 
-#include "Global/Macros.h"
-
-#include "Engine/Format.h"
-#include "Engine/FrameEntry.h"
-#include "Engine/Image.h"
-#include "Engine/ImageInfo.h"
 #include "Engine/Lut.h"
-#include "Engine/MemoryFile.h"
-#include "Engine/Settings.h"
-#include "Engine/Timer.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/Project.h"
 #include "Engine/Node.h"
+#include "Engine/NodeGuiI.h"
+#include "Engine/Project.h"
+#include "Engine/Settings.h"
+#include "Engine/ViewerInstance.h"
 
-#include "Gui/Menu.h"
-#include "Gui/GuiApplicationManager.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/Gui.h"
-#include "Gui/InfoViewerWidget.h"
-#include "Gui/Texture.h"
-#include "Gui/Shaders.h"
-#include "Gui/SpinBox.h"
-#include "Gui/TabWidget.h"
-#include "Gui/TextRenderer.h"
-#include "Gui/TimeLineGui.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ProjectGui.h"
-#include "Gui/ZoomContext.h"
-#include "Gui/GuiMacros.h"
-#include "Gui/ActionShortcuts.h"
-#include "Gui/NodeGraph.h"
+#include "Gui/ActionShortcuts.h" // kShortcutGroupViewer ...
 #include "Gui/CurveWidget.h"
+#include "Gui/Gui.h"
+#include "Gui/GuiAppInstance.h"
+#include "Gui/GuiApplicationManager.h" // isMouseShortcut
+#include "Gui/GuiDefines.h"
+#include "Gui/GuiMacros.h" // buttonDownIsLeft...
 #include "Gui/Histogram.h"
+#include "Gui/InfoViewerWidget.h"
+#include "Gui/Menu.h"
+#include "Gui/NodeGraph.h"
 #include "Gui/NodeGui.h"
-#include "Gui/DockablePanel.h"
+#include "Gui/NodeSettingsPanel.h"
+#include "Gui/Shaders.h"
+#include "Gui/Texture.h"
+#include "Gui/ViewerTab.h"
 
 // warning: 'gluErrorString' is deprecated: first deprecated in OS X 10.9 [-Wdeprecated-declarations]
 CLANG_DIAG_OFF(deprecated-declarations)
@@ -83,10 +72,6 @@ GCC_DIAG_OFF(deprecated-declarations)
 #define USER_ROI_CROSS_RADIUS 15.f
 #define USER_ROI_SELECTION_POINT_SIZE 8.f
 #define USER_ROI_CLICK_TOLERANCE 8.f
-
-#define WIPE_MIX_HANDLE_LENGTH 50.
-#define WIPE_ROTATE_HANDLE_LENGTH 100.
-#define WIPE_ROTATE_OFFSET 30
 
 #define PERSISTENT_MESSAGE_LEFT_OFFSET_PIXELS 20
 
@@ -105,7 +90,6 @@ GCC_DIAG_OFF(deprecated-declarations)
 #endif
 
 
-#define MAX_MIP_MAP_LEVELS 20
 /*This class is the the core of the viewer : what displays images, overlays, etc...
    Everything related to OpenGL will (almost always) be in this class */
 
@@ -114,48 +98,8 @@ GCC_DIAG_OFF(deprecated-declarations)
 using namespace Natron;
 using std::cout; using std::endl;
 
-namespace {
-/**
- *@enum MouseStateEnum
- *@brief basic state switching for mouse events
- **/
-enum MouseStateEnum
-{
-    eMouseStateSelecting = 0,
-    eMouseStateDraggingImage,
-    eMouseStateDraggingRoiLeftEdge,
-    eMouseStateDraggingRoiRightEdge,
-    eMouseStateDraggingRoiTopEdge,
-    eMouseStateDraggingRoiBottomEdge,
-    eMouseStateDraggingRoiTopLeft,
-    eMouseStateDraggingRoiTopRight,
-    eMouseStateDraggingRoiBottomRight,
-    eMouseStateDraggingRoiBottomLeft,
-    eMouseStateDraggingRoiCross,
-    eMouseStatePickingColor,
-    eMouseStateBuildingPickerRectangle,
-    eMouseStateDraggingWipeCenter,
-    eMouseStateDraggingWipeMixHandle,
-    eMouseStateRotatingWipeHandle,
-    eMouseStateZoomingImage,
-    eMouseStateUndefined
-};
 
-enum HoverStateEnum
-{
-    eHoverStateNothing = 0,
-    eHoverStateWipeMix,
-    eHoverStateWipeRotateHandle
-};
-} // namespace
-
-enum PickerStateEnum
-{
-    ePickerStateInactive = 0,
-    ePickerStatePoint,
-    ePickerStateRectangle
-};
-
+<<<<<<< HEAD
 struct ViewerGL::Implementation
 {
     Implementation(ViewerTab* parent,
@@ -906,11 +850,13 @@ ViewerGL::Implementation::getWipePolygon(const RectD & texRectClipped,
 
     return ViewerGL::Implementation::eWipePolygonPartial;
 } // getWipePolygon
+=======
+>>>>>>> workshop
 
 ViewerGL::ViewerGL(ViewerTab* parent,
                    const QGLWidget* shareWidget)
     : QGLWidget(parent,shareWidget)
-      , _imp( new Implementation(parent, this) )
+      , _imp( new Implementation(this, parent) )
 {
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
@@ -940,29 +886,6 @@ ViewerGL::~ViewerGL()
 {
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
-    makeCurrent();
-
-    if (_imp->shaderRGB) {
-        _imp->shaderRGB->removeAllShaders();
-        delete _imp->shaderRGB;
-    }
-    if (_imp->shaderBlack) {
-        _imp->shaderBlack->removeAllShaders();
-        delete _imp->shaderBlack;
-    }
-    delete _imp->displayTextures[0];
-    delete _imp->displayTextures[1];
-    glCheckError();
-    for (U32 i = 0; i < _imp->pboIds.size(); ++i) {
-        glDeleteBuffers(1,&_imp->pboIds[i]);
-    }
-    glCheckError();
-    glDeleteBuffers(1, &_imp->vboVerticesId);
-    glDeleteBuffers(1, &_imp->vboTexturesId);
-    glDeleteBuffers(1, &_imp->iboTriangleStripId);
-    glCheckError();
-    delete _imp->textFont;
-    glDeleteTextures(1, &_imp->checkerboardTextureID);
 }
 
 QSize
@@ -1180,40 +1103,40 @@ ViewerGL::paintGL()
 
                 if (drawTexture[0]) {
                     BlendSetter b(premultA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
                 }
                 if (drawTexture[1]) {
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
                     glDisable(GL_BLEND);
                 }
             } else if (compOp == eViewerCompositingOperatorMinus) {
                 if (drawTexture[0]) {
                     BlendSetter b(premultA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
                 }
                 if (drawTexture[1]) {
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_CONSTANT_ALPHA, GL_ONE);
                     glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
                     glDisable(GL_BLEND);
                 }
             } else if (compOp == eViewerCompositingOperatorUnder) {
                 if (drawTexture[0]) {
                     BlendSetter b(premultA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
                 }
                 if (drawTexture[1]) {
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_ONE_MINUS_DST_ALPHA, GL_ONE);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
                     glDisable(GL_BLEND);
 
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_CONSTANT_ALPHA,GL_ONE_MINUS_CONSTANT_ALPHA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
                     glDisable(GL_BLEND);
                 }
             } else if (compOp == eViewerCompositingOperatorOver) {
@@ -1225,27 +1148,26 @@ ViewerGL::paintGL()
                         premultB = Natron::eImagePremultiplicationOpaque; ///When no checkerboard, draw opaque
                     }
                     BlendSetter b(premultB);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[1], 1, eDrawPolygonModeWipeRight);
                 }
                 if (drawTexture[0]) {
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWipeRight);
                     glDisable(GL_BLEND);
 
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWipeLeft);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWipeLeft);
 
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_ONE_MINUS_CONSTANT_ALPHA,GL_CONSTANT_ALPHA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWipeRight);
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWipeRight);
                     glDisable(GL_BLEND);
                 }
             } else {
                 if (drawTexture[0]) {
                     glDisable(GL_BLEND);
                     BlendSetter b(premultA);
-                    drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
-
+                    _imp->drawRenderingVAO(_imp->displayingImageMipMapLevel[0], 0, eDrawPolygonModeWhole);
                 }
             }
         } // GLProtectAttrib a(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT | GL_CURRENT_BIT);
@@ -1312,6 +1234,20 @@ ViewerGL::toggleWipe()
     }
 }
 
+void
+ViewerGL::centerWipe()
+{
+    
+    QPoint pos = mapFromGlobal(QCursor::pos());
+    QPointF zoomPos = toZoomCoordinates(QPointF(pos.x(), pos.y()));
+    
+    {
+        QMutexLocker l(&_imp->wipeControlsMutex);
+        _imp->wipeCenter.rx() = zoomPos.x();
+        _imp->wipeCenter.ry() = zoomPos.y();
+    }
+    update();
+}
 
 void
 ViewerGL::drawOverlay(unsigned int mipMapLevel)
@@ -1423,7 +1359,13 @@ ViewerGL::drawOverlay(unsigned int mipMapLevel)
         glCheckError();
         glColor4f(1., 1., 1., 1.);
         double scale = 1. / (1 << mipMapLevel);
-        _imp->viewerTab->drawOverlays(scale,scale);
+        
+        /*
+         Draw the overlays corresponding to the image displayed on the viewer, not the current timeline's time
+         */
+        double time = getCurrentlyDisplayedTime();
+        _imp->viewerTab->drawOverlays(time,scale,scale);
+        
         glCheckErrorIgnoreOSXBug();
 
         if (_imp->pickerState == ePickerStateRectangle) {
@@ -1473,7 +1415,17 @@ ViewerGL::drawUserRoI()
         RectD userRoI;
         {
             QMutexLocker l(&_imp->userRoIMutex);
-            userRoI = _imp->userRoI;
+            if (_imp->ms == eMouseStateBuildingUserRoI ||
+                _imp->buildUserRoIOnNextPress) {
+                userRoI = _imp->draggedUserRoI;
+            } else {
+                userRoI = _imp->userRoI;
+            }
+        }
+        
+        if (_imp->buildUserRoIOnNextPress) {
+            glLineStipple(2, 0xAAAA);
+            glEnable(GL_LINE_STIPPLE);
         }
 
         ///base rect
@@ -1574,6 +1526,10 @@ ViewerGL::drawUserRoI()
         glVertex2f(userRoI.x1 + rectHalfWidth, userRoI.y1 - rectHalfHeight);
         
         glEnd();
+        
+        if (_imp->buildUserRoIOnNextPress) {
+            glDisable(GL_LINE_STIPPLE);
+        }
     } // GLProtectAttrib a(GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT | GL_ENABLE_BIT);
 } // drawUserRoI
 
@@ -1721,7 +1677,9 @@ ViewerGL::drawWipeControl()
             glEnable(GL_POINT_SMOOTH);
             glBegin(GL_POINTS);
             glVertex2d( wipeCenter.x(), wipeCenter.y() );
-            if ( ( (_imp->hs == eHoverStateWipeMix) && (_imp->ms != eMouseStateRotatingWipeHandle) ) || (_imp->ms == eMouseStateDraggingWipeMixHandle) ) {
+            if ( ((_imp->hs == eHoverStateWipeMix) &&
+                  (_imp->ms != eMouseStateRotatingWipeHandle) )
+                || (_imp->ms == eMouseStateDraggingWipeMixHandle) ) {
                 glColor4f(0., 1. * l, 0., 1.);
             }
             glVertex2d( mixPos.x(), mixPos.y() );
@@ -1734,32 +1692,6 @@ ViewerGL::drawWipeControl()
     } // GLProtectAttrib a(GL_ENABLE_BIT | GL_LINE_BIT | GL_CURRENT_BIT | GL_HINT_BIT | GL_TRANSFORM_BIT | GL_COLOR_BUFFER_BIT);
 } // drawWipeControl
 
-void
-ViewerGL::Implementation::drawArcOfCircle(const QPointF & center,
-                                          double radiusX,
-                                          double radiusY,
-                                          double startAngle,
-                                          double endAngle)
-{
-    double alpha = startAngle;
-    double x,y;
-
-    {
-        GLProtectAttrib a(GL_CURRENT_BIT);
-
-        if ( (hs == eHoverStateWipeMix) || (ms == eMouseStateDraggingWipeMixHandle) ) {
-            glColor3f(0, 1, 0);
-        }
-        glBegin(GL_POINTS);
-        while (alpha <= endAngle) {
-            x = center.x()  + radiusX * std::cos(alpha);
-            y = center.y()  + radiusY * std::sin(alpha);
-            glVertex2d(x, y);
-            alpha += 0.01;
-        }
-        glEnd();
-    } // GLProtectAttrib a(GL_CURRENT_BIT);
-}
 
 void
 ViewerGL::drawPickerRectangle()
@@ -1949,86 +1881,6 @@ ViewerGL::drawPersistentMessage()
     } // GLProtectAttrib a(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT);
 } // drawPersistentMessage
 
-void
-ViewerGL::Implementation::drawSelectionRectangle()
-{
-    {
-        GLProtectAttrib a(GL_HINT_BIT | GL_ENABLE_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-        glEnable(GL_LINE_SMOOTH);
-        glHint(GL_LINE_SMOOTH_HINT,GL_DONT_CARE);
-
-        glColor4f(0.5,0.8,1.,0.4);
-        QPointF btmRight = selectionRectangle.bottomRight();
-        QPointF topLeft = selectionRectangle.topLeft();
-
-        glBegin(GL_POLYGON);
-        glVertex2f( topLeft.x(),btmRight.y() );
-        glVertex2f( topLeft.x(),topLeft.y() );
-        glVertex2f( btmRight.x(),topLeft.y() );
-        glVertex2f( btmRight.x(),btmRight.y() );
-        glEnd();
-
-
-        glLineWidth(1.5);
-
-        glBegin(GL_LINE_LOOP);
-        glVertex2f( topLeft.x(),btmRight.y() );
-        glVertex2f( topLeft.x(),topLeft.y() );
-        glVertex2f( btmRight.x(),topLeft.y() );
-        glVertex2f( btmRight.x(),btmRight.y() );
-        glEnd();
-
-        glCheckError();
-    } // GLProtectAttrib a(GL_HINT_BIT | GL_ENABLE_BIT | GL_LINE_BIT | GL_COLOR_BUFFER_BIT | GL_CURRENT_BIT);
-}
-
-void
-ViewerGL::Implementation::drawCheckerboardTexture(const RectD& rod)
-{
-    ///We divide by 2 the tiles count because one texture is 4 tiles actually
-    QPointF topLeft,btmRight;
-    double screenW,screenH;
-    QPointF rodBtmLeft;
-    QPointF rodTopRight;
-    {
-        QMutexLocker l(&zoomCtxMutex);
-        topLeft = zoomCtx.toZoomCoordinates(0, 0);
-        screenW = zoomCtx.screenWidth();
-        screenH = zoomCtx.screenHeight();
-        btmRight = zoomCtx.toZoomCoordinates(screenW - 1, screenH - 1);
-        rodBtmLeft = zoomCtx.toWidgetCoordinates(rod.x1, rod.y1);
-        rodTopRight = zoomCtx.toWidgetCoordinates(rod.x2, rod.y2);
-    }
-    
-    double xTilesCountF = screenW / (checkerboardTileSize * 4); //< 4 because the texture contains 4 tiles
-    double yTilesCountF = screenH / (checkerboardTileSize * 4);
-
-    GLuint savedTexture;
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, (GLint*)&savedTexture);
-    {
-        GLProtectAttrib a(GL_SCISSOR_BIT | GL_ENABLE_BIT);
-
-        glEnable(GL_SCISSOR_TEST);
-        glScissor(rodBtmLeft.x(), screenH - rodBtmLeft.y(), rodTopRight.x() - rodBtmLeft.x(), rodBtmLeft.y() - rodTopRight.y());
-
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, checkerboardTextureID);
-        glBegin(GL_POLYGON);
-        glTexCoord2d(0., 0.); glVertex2d(topLeft.x(),btmRight.y());
-        glTexCoord2d(0., yTilesCountF); glVertex2d(topLeft.x(),topLeft.y());
-        glTexCoord2d(xTilesCountF, yTilesCountF); glVertex2d(btmRight.x(), topLeft.y());
-        glTexCoord2d(xTilesCountF, 0.); glVertex2d(btmRight.x(), btmRight.y());
-        glEnd();
-
-
-        //glDisable(GL_SCISSOR_TEST);
-    } // GLProtectAttrib a(GL_SCISSOR_BIT | GL_ENABLE_BIT);
-    glBindTexture(GL_TEXTURE_2D, savedTexture);
-    glCheckError();
-}
 
 void
 ViewerGL::initializeGL()
@@ -2036,111 +1888,9 @@ ViewerGL::initializeGL()
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
     makeCurrent();
-    initAndCheckGlExtensions();
-    _imp->displayTextures[0] = new Texture(GL_TEXTURE_2D, GL_LINEAR, GL_NEAREST, GL_CLAMP_TO_EDGE);
-    _imp->displayTextures[1] = new Texture(GL_TEXTURE_2D, GL_LINEAR, GL_NEAREST, GL_CLAMP_TO_EDGE);
-
-
-    // glGenVertexArrays(1, &_vaoId);
-    glGenBuffers(1, &_imp->vboVerticesId);
-    glGenBuffers(1, &_imp->vboTexturesId);
-    glGenBuffers(1, &_imp->iboTriangleStripId);
-
-    glBindBuffer(GL_ARRAY_BUFFER, _imp->vboTexturesId);
-    glBufferData(GL_ARRAY_BUFFER, 32 * sizeof(GLfloat), 0, GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, _imp->vboVerticesId);
-    glBufferData(GL_ARRAY_BUFFER, 32 * sizeof(GLfloat), 0, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _imp->iboTriangleStripId);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 28 * sizeof(GLubyte), triangleStrip, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glCheckError();
-
-    _imp->initializeCheckerboardTexture(true);
-    
-    if (_imp->supportsGLSL) {
-        initShaderGLSL();
-        glCheckError();
-    }
-
-    glCheckError();
+    _imp->initializeGL();
 }
 
-void
-ViewerGL::Implementation::initializeCheckerboardTexture(bool mustCreateTexture)
-{
-    if (mustCreateTexture) {
-        glGenTextures(1, &checkerboardTextureID);
-    }
-    GLuint savedTexture;
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, (GLint*)&savedTexture);
-    {
-        GLProtectAttrib a(GL_ENABLE_BIT);
-
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture (GL_TEXTURE_2D,checkerboardTextureID);
-
-        glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-        glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-        double color1[4];
-        double color2[4];
-        appPTR->getCurrentSettings()->getCheckerboardColor1(&color1[0], &color1[1], &color1[2], &color1[3]);
-        appPTR->getCurrentSettings()->getCheckerboardColor2(&color2[0], &color2[1], &color2[2], &color2[3]);
-
-        unsigned char checkerboardTexture[16];
-        ///Fill the first line
-        for (int i = 0; i < 4; ++i) {
-            checkerboardTexture[i] = Color::floatToInt<256>(color1[i]);
-            checkerboardTexture[i + 4] = Color::floatToInt<256>(color2[i]);
-        }
-        ///Copy the first line to the second line
-        memcpy(&checkerboardTexture[8], &checkerboardTexture[4], sizeof(unsigned char) * 4);
-        memcpy(&checkerboardTexture[12], &checkerboardTexture[0], sizeof(unsigned char) * 4);
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 2, 2, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, (void*)checkerboardTexture);
-    } // GLProtectAttrib a(GL_ENABLE_BIT);
-    glBindTexture(GL_TEXTURE_2D, savedTexture);
-    
-    checkerboardTileSize = appPTR->getCurrentSettings()->getCheckerboardTileSize();
-
-    
-   
-}
-
-QString
-ViewerGL::getOpenGLVersionString() const
-{
-    // always running in the main thread
-    assert( qApp && qApp->thread() == QThread::currentThread() );
-    const char* str = (const char*)glGetString(GL_VERSION);
-    QString ret;
-    if (str) {
-        ret.append(str);
-    }
-
-    return ret;
-}
-
-QString
-ViewerGL::getGlewVersionString() const
-{
-    // always running in the main thread
-    assert( qApp && qApp->thread() == QThread::currentThread() );
-    const char* str = reinterpret_cast<const char *>( glewGetString(GLEW_VERSION) );
-    QString ret;
-    if (str) {
-        ret.append(str);
-    }
-
-    return ret;
-}
 
 GLuint
 ViewerGL::getPboID(int index)
@@ -2314,69 +2064,7 @@ ViewerGL::isExtensionSupported(const char *extension)
     return 0;
 }
 
-void
-ViewerGL::initAndCheckGlExtensions()
-{
-    // always running in the main thread
-    assert( qApp && qApp->thread() == QThread::currentThread() );
-    assert( QGLContext::currentContext() == context() );
-    GLenum err = glewInit();
-    if (GLEW_OK != err) {
-        /* Problem: glewInit failed, something is seriously wrong. */
-        Natron::errorDialog( tr("OpenGL/GLEW error").toStdString(),
-                             (const char*)glewGetErrorString(err) );
-    }
-    //fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 
-    // is GL_VERSION_2_0 necessary? note that GL_VERSION_2_0 includes GLSL
-    if ( !glewIsSupported("GL_VERSION_1_5 "
-                          "GL_ARB_texture_non_power_of_two " // or GL_IMG_texture_npot, or GL_OES_texture_npot, core since 2.0
-                          "GL_ARB_shader_objects " // GLSL, Uniform*, core since 2.0
-                          "GL_ARB_vertex_buffer_object " // BindBuffer, MapBuffer, etc.
-                          "GL_ARB_pixel_buffer_object " // BindBuffer(PIXEL_UNPACK_BUFFER,...
-                          //"GL_ARB_vertex_array_object " // BindVertexArray, DeleteVertexArrays, GenVertexArrays, IsVertexArray (VAO), core since 3.0
-                          //"GL_ARB_framebuffer_object " // or GL_EXT_framebuffer_object GenFramebuffers, core since version 3.0
-                          ) ) {
-        Natron::errorDialog( tr("Missing OpenGL requirements").toStdString(),
-                             tr("The viewer may not be fully functional. "
-                                "This software needs at least OpenGL 1.5 with NPOT textures, GLSL, VBO, PBO, vertex arrays. ").toStdString() );
-    }
-
-    _imp->viewerTab->getGui()->setOpenGLVersion( getOpenGLVersionString() );
-    _imp->viewerTab->getGui()->setGlewVersion( getGlewVersionString() );
-
-    if ( !QGLShaderProgram::hasOpenGLShaderPrograms( context() ) ) {
-        // no need to pull out a dialog, it was already presented after the GLEW check above
-
-        //Natron::errorDialog("Viewer error","The viewer is unabgile to work without a proper version of GLSL.");
-        //cout << "Warning : GLSL not present on this hardware, no material acceleration possible." << endl;
-        _imp->supportsGLSL = false;
-    }
-}
-
-void
-ViewerGL::Implementation::activateShaderRGB(int texIndex)
-{
-    // always running in the main thread
-    assert( qApp && qApp->thread() == QThread::currentThread() );
-
-    // we assume that:
-    // - 8-bits textures are stored non-linear and must be displayer as is
-    // - floating-point textures are linear and must be decompressed according to the given lut
-
-    assert(supportsGLSL);
-
-    if ( !shaderRGB->bind() ) {
-        cout << qPrintable( shaderRGB->log() ) << endl;
-    }
-
-    shaderRGB->setUniformValue("Tex", 0);
-    shaderRGB->setUniformValue("gain", (float)displayingImageGain[texIndex]);
-    shaderRGB->setUniformValue("offset", (float)displayingImageOffset[texIndex]);
-    shaderRGB->setUniformValue("lut", (GLint)displayingImageLut);
-    float gamma = (displayingImageGamma[texIndex] == 0.) ? 0.f : 1.f / (float)displayingImageGamma[texIndex];
-    shaderRGB->setUniformValue("gamma", gamma);
-}
 
 void
 ViewerGL::initShaderGLSL()
@@ -2387,10 +2075,10 @@ ViewerGL::initShaderGLSL()
 
     if (!_imp->shaderLoaded && _imp->supportsGLSL) {
         _imp->shaderBlack = new QGLShaderProgram( context() );
-        if ( !_imp->shaderBlack->addShaderFromSourceCode(QGLShader::Vertex,vertRGB) ) {
+        if ( !_imp->shaderBlack->addShaderFromSourceCode(QGLShader::Vertex, vertRGB) ) {
             cout << qPrintable( _imp->shaderBlack->log() ) << endl;
         }
-        if ( !_imp->shaderBlack->addShaderFromSourceCode(QGLShader::Fragment,blackFrag) ) {
+        if ( !_imp->shaderBlack->addShaderFromSourceCode(QGLShader::Fragment, blackFrag) ) {
             cout << qPrintable( _imp->shaderBlack->log() ) << endl;
         }
         if ( !_imp->shaderBlack->link() ) {
@@ -2398,10 +2086,10 @@ ViewerGL::initShaderGLSL()
         }
 
         _imp->shaderRGB = new QGLShaderProgram( context() );
-        if ( !_imp->shaderRGB->addShaderFromSourceCode(QGLShader::Vertex,vertRGB) ) {
+        if ( !_imp->shaderRGB->addShaderFromSourceCode(QGLShader::Vertex, vertRGB) ) {
             cout << qPrintable( _imp->shaderRGB->log() ) << endl;
         }
-        if ( !_imp->shaderRGB->addShaderFromSourceCode(QGLShader::Fragment,fragRGB) ) {
+        if ( !_imp->shaderRGB->addShaderFromSourceCode(QGLShader::Fragment, fragRGB) ) {
             cout << qPrintable( _imp->shaderRGB->log() ) << endl;
         }
 
@@ -2677,7 +2365,19 @@ ViewerGL::mousePressEvent(QMouseEvent* e)
 
     bool hasPickers = _imp->viewerTab->getGui()->hasPickers();
 
-
+    if (!overlaysCaught &&
+        buttonDownIsLeft(e) &&
+        _imp->buildUserRoIOnNextPress) {
+        _imp->draggedUserRoI.x1 = zoomPos.x();
+        _imp->draggedUserRoI.y1 = zoomPos.y();
+        _imp->draggedUserRoI.x2 = _imp->draggedUserRoI.x1 + 1;
+        _imp->draggedUserRoI.y2 = _imp->draggedUserRoI.y1 + 1;
+        _imp->buildUserRoIOnNextPress = false;
+        _imp->ms = eMouseStateBuildingUserRoI;
+        overlaysCaught = true;
+        mustRedraw = true;
+    }
+    
     if (!overlaysCaught &&
         (buttonDownIsMiddle(e) ||
          ( (e)->buttons() == Qt::RightButton && buttonMetaAlt(e) == Qt::AltModifier )) &&
@@ -2902,8 +2602,12 @@ ViewerGL::mouseReleaseEvent(QMouseEvent* e)
         if (_imp->hasMovedSincePress) {
             Q_EMIT selectionRectangleChanged(true);
         }
+    } else if (_imp->ms == eMouseStateBuildingUserRoI) {
+        QMutexLocker k(&_imp->userRoIMutex);
+        _imp->userRoI = _imp->draggedUserRoI;
     }
 
+    
     _imp->hasMovedSincePress = false;
 
 
@@ -2920,6 +2624,11 @@ ViewerGL::mouseReleaseEvent(QMouseEvent* e)
     }
     if (mustRedraw) {
         update();
+    }
+    
+    if (_imp->renderOnPenUp) {
+        _imp->renderOnPenUp = false;
+        getInternalNode()->renderCurrentFrame(false);
     }
 }
 
@@ -3022,7 +2731,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
     bool wasHovering = _imp->hs != eHoverStateNothing;
     
     bool cursorSet = false;
-    if ( (_imp->ms != eMouseStateDraggingImage) && !_imp->overlay) {
+    if ( (_imp->ms != eMouseStateDraggingImage) && _imp->overlay) {
         _imp->hs = eHoverStateNothing;
         if ( isWipeHandleVisible() && _imp->isNearbyWipeCenter(zoomPos, zoomScreenPixelWidth, zoomScreenPixelHeight) ) {
             setCursor( QCursor(Qt::SizeAllCursor) );
@@ -3150,7 +2859,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
                 _imp->userRoI.y1 -= dySinceLastMove;
                 l.unlock();
                 if ( displayingImage() ) {
-                    _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                    _imp->renderOnPenUp = true;
                 }
                 mustRedraw = true;
             }
@@ -3162,7 +2871,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
                 _imp->userRoI.x1 -= dxSinceLastMove;
                 l.unlock();
                 if ( displayingImage() ) {
-                    _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                    _imp->renderOnPenUp = true;
                 }
                 mustRedraw = true;
             }
@@ -3174,7 +2883,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
                 _imp->userRoI.x2 -= dxSinceLastMove;
                 l.unlock();
                 if ( displayingImage() ) {
-                    _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                    _imp->renderOnPenUp = true;
                 }
                 mustRedraw = true;
             }
@@ -3186,7 +2895,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
                 _imp->userRoI.y2 -= dySinceLastMove;
                 l.unlock();
                 if ( displayingImage() ) {
-                    _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                    _imp->renderOnPenUp = true;
                 }
                 mustRedraw = true;
             }
@@ -3198,7 +2907,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
                 _imp->userRoI.translate(-dxSinceLastMove,-dySinceLastMove);
             }
             if ( displayingImage() ) {
-                _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                _imp->renderOnPenUp = true;
             }
             mustRedraw = true;
             break;
@@ -3213,7 +2922,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
             }
             l.unlock();
             if ( displayingImage() ) {
-                _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                _imp->renderOnPenUp = true;
             }
             mustRedraw = true;
             break;
@@ -3228,7 +2937,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
             }
             l.unlock();
             if ( displayingImage() ) {
-                _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                _imp->renderOnPenUp = true;
             }
             mustRedraw = true;
             break;
@@ -3243,7 +2952,7 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
             }
             l.unlock();
             if ( displayingImage() ) {
-                _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                _imp->renderOnPenUp = true;
             }
             mustRedraw = true;
             break;
@@ -3257,7 +2966,20 @@ ViewerGL::penMotionInternal(int x, int y, double pressure, double timestamp, QIn
             }
             _imp->userRoIMutex.unlock();
             if ( displayingImage() ) {
-                _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
+                _imp->renderOnPenUp = true;
+            }
+            mustRedraw = true;
+            break;
+        }
+        case eMouseStateBuildingUserRoI: {
+            if ( (_imp->draggedUserRoI.x2 - dxSinceLastMove) > _imp->draggedUserRoI.x1 ) {
+                _imp->draggedUserRoI.x2 -= dxSinceLastMove;
+            }
+            if ( (_imp->draggedUserRoI.y1 - dySinceLastMove) < _imp->draggedUserRoI.y2 ) {
+                _imp->draggedUserRoI.y1 -= dySinceLastMove;
+            }
+            if ( displayingImage() ) {
+                _imp->renderOnPenUp = true;
             }
             mustRedraw = true;
             break;
@@ -3472,26 +3194,41 @@ ViewerGL::wheelEvent(QWheelEvent* e)
 {
     // always running in the main thread
     assert( qApp && qApp->thread() == QThread::currentThread() );
-    if (e->orientation() != Qt::Vertical) {
-        return QGLWidget::wheelEvent(e);
-    }
 
     if (!_imp->viewerTab) {
         return QGLWidget::wheelEvent(e);
     }
+
+    // delta=120 is a standard wheel mouse click, but mice may be more accurate
+    // - Apple Trackpad has an accuracy of delta=2
+    // - Apple Magic Mouse has an accuracy of delta=2
+    // - Apple Mighty Mouse has an accuracy of delta=28
+    // - Logitech Wheel Mouse has an accuracy of delta=120
+    // The Qt Unit is 8 deltas per degree.
+    // delta/2 gives a reasonable value in pixels (for panning, etc).
+
+    // frame seeking works both with horizontal and vertical wheel + control modifier
     if (modCASIsControl(e)) {
-        _imp->wheelDeltaSeekFrame += e->delta();
-        // 120 is a standard wheel mouse click, but mice may be more accurate (eg apple magic mouse)
-        if (_imp->wheelDeltaSeekFrame <= -120) {
-            _imp->wheelDeltaSeekFrame += 120;
+        const int delta_max = 28;
+        // threshold delta to the range -delta_max..delta_max
+        int delta = std::max(-delta_max, std::min(e->delta(), delta_max));
+        _imp->wheelDeltaSeekFrame += delta;
+        if (_imp->wheelDeltaSeekFrame <= -delta_max) {
+            _imp->wheelDeltaSeekFrame += delta_max;
             _imp->viewerTab->nextFrame();
-        } else if (_imp->wheelDeltaSeekFrame >= 120) {
-            _imp->wheelDeltaSeekFrame -= 120;
+        } else if (_imp->wheelDeltaSeekFrame >= delta_max) {
+            _imp->wheelDeltaSeekFrame -= delta_max;
             _imp->viewerTab->previousFrame();
         }
         return;
     }
-    
+
+    if (e->orientation() != Qt::Vertical) {
+        // we only handle vertical motion for zooming
+        return QGLWidget::wheelEvent(e);
+    }
+
+
     Gui* gui = _imp->viewerTab->getGui();
     if (!gui) {
         return QGLWidget::wheelEvent(e);
@@ -3583,17 +3320,6 @@ ViewerGL::zoomSlot(int v)
     
     _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
    
-}
-
-void
-ViewerGL::zoomSlot(QString str)
-{
-    // always running in the main thread
-    assert( qApp && qApp->thread() == QThread::currentThread() );
-    str.remove( QChar('%') );
-    int v = str.toInt();
-    assert(v > 0);
-    zoomSlot(v);
 }
 
 void
@@ -3784,14 +3510,18 @@ ViewerGL::onProjectFormatChangedInternal(const Format & format,bool triggerRende
     }
     
     
-    
-    if (!_imp->isUserRoISet) {
-        {
-            QMutexLocker l(&_imp->userRoIMutex);
-            _imp->userRoI = canonicalFormat;
-        }
-        _imp->isUserRoISet = true;
+    {
+        double w3 = canonicalFormat.width() / 3.;
+        double h3 = canonicalFormat.height() / 3.;
+        RectD userRoi;
+        userRoi.x1 = canonicalFormat.x1 + w3;
+        userRoi.x2 = canonicalFormat.x2 - w3;
+        userRoi.y1 = canonicalFormat.y1 + h3;
+        userRoi.y2 = canonicalFormat.y2 - h3;
+        QMutexLocker l(&_imp->userRoIMutex);
+        _imp->userRoI = userRoi;
     }
+    
     if (!loadingProject) {
         update();
     }
@@ -3931,6 +3661,8 @@ ViewerGL::keyPressEvent(QKeyEvent* e)
         toggleOverlays();
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDToggleWipe, modifiers, key)) {
         toggleWipe();
+    } else if (isKeybind(kShortcutGroupViewer, kShortcutIDCenterWipe, modifiers, key)) {
+        centerWipe();
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionHideAll, modifiers, key) ) {
         _imp->viewerTab->hideAllToolbars();
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionShowAll, modifiers, key) ) {
@@ -4010,6 +3742,18 @@ ViewerGL::populateMenu()
     toggleWipe->setChecked(getViewerTab()->getCompositingOperator() != Natron::eViewerCompositingOperatorNone);
     QObject::connect( toggleWipe,SIGNAL( triggered() ),this,SLOT( toggleWipe() ) );
     _imp->menu->addAction(toggleWipe);
+    
+    
+    QAction* centerWipe = new ActionWithShortcut(kShortcutGroupViewer,kShortcutIDCenterWipe,kShortcutDescCenterWipe, _imp->menu);
+    QObject::connect( centerWipe,SIGNAL( triggered() ),this,SLOT( centerWipe() ) );
+    _imp->menu->addAction(centerWipe);
+    
+    QAction* goToPrevLayer = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDPrevLayer, kShortcutDescPrevLayer, _imp->menu);
+    QObject::connect( goToPrevLayer,SIGNAL( triggered() ),_imp->viewerTab,SLOT( previousLayer() ) );
+    _imp->menu->addAction(goToPrevLayer);
+    QAction* goToNextLayer = new ActionWithShortcut(kShortcutGroupViewer, kShortcutIDNextLayer, kShortcutDescNextLayer, _imp->menu);
+    QObject::connect( goToNextLayer,SIGNAL( triggered() ),_imp->viewerTab,SLOT( nextLayer() ) );
+    _imp->menu->addAction(goToNextLayer);
     
     Natron::Menu* showHideMenu = new Natron::Menu(tr("Show/Hide"),_imp->menu);
     //showHideMenu->setFont(QFont(appFont,appFontSize));
@@ -4210,6 +3954,15 @@ ViewerGL::isVisibleInViewport(const RectD& rectangle) const
 }
 
 void
+ViewerGL::setBuildNewUserRoI(bool b)
+{
+    _imp->buildUserRoIOnNextPress = b;
+    
+    QMutexLocker k(&_imp->userRoIMutex);
+    _imp->draggedUserRoI = _imp->userRoI;
+}
+
+void
 ViewerGL::setUserRoIEnabled(bool b)
 {
     // always running in the main thread
@@ -4217,6 +3970,9 @@ ViewerGL::setUserRoIEnabled(bool b)
     {
         QMutexLocker(&_imp->userRoIMutex);
         _imp->userRoIEnabled = b;
+    }
+    if (!b) {
+        _imp->buildUserRoIOnNextPress = false;
     }
     if ( displayingImage() ) {
         _imp->viewerTab->getInternalNode()->renderCurrentFrame(false);
@@ -4637,106 +4393,6 @@ ViewerGL::resetWipeControls()
     }
 }
 
-bool
-ViewerGL::Implementation::isNearbyWipeCenter(const QPointF & pos,
-                                             double zoomScreenPixelWidth, double zoomScreenPixelHeight) const
-{
-    double toleranceX = zoomScreenPixelWidth * 8.;
-    double toleranceY = zoomScreenPixelHeight * 8.;
-    QMutexLocker l(&wipeControlsMutex);
-
-    if ( ( pos.x() >= (wipeCenter.x() - toleranceX) ) && ( pos.x() <= (wipeCenter.x() + toleranceX) ) &&
-         ( pos.y() >= (wipeCenter.y() - toleranceY) ) && ( pos.y() <= (wipeCenter.y() + toleranceY) ) ) {
-        return true;
-    }
-
-    return false;
-}
-
-bool
-ViewerGL::Implementation::isNearbyWipeRotateBar(const QPointF & pos,
-                                                double zoomScreenPixelWidth, double zoomScreenPixelHeight) const
-{
-    double toleranceX = zoomScreenPixelWidth * 8.;
-    double toleranceY = zoomScreenPixelHeight * 8.;
-
-    
-    double rotateX,rotateY,rotateOffsetX,rotateOffsetY;
-   
-    rotateX = WIPE_ROTATE_HANDLE_LENGTH * zoomScreenPixelWidth;
-    rotateY = WIPE_ROTATE_HANDLE_LENGTH * zoomScreenPixelHeight;
-    rotateOffsetX = WIPE_ROTATE_OFFSET * zoomScreenPixelWidth;
-    rotateOffsetY = WIPE_ROTATE_OFFSET * zoomScreenPixelHeight;
-    
-    QMutexLocker l(&wipeControlsMutex);
-    QPointF outterPoint;
-
-    outterPoint.setX( wipeCenter.x() + std::cos(wipeAngle) * (rotateX - rotateOffsetX) );
-    outterPoint.setY( wipeCenter.y() + std::sin(wipeAngle) * (rotateY - rotateOffsetY) );
-    if ( ( ( ( pos.y() >= (wipeCenter.y() - toleranceY) ) && ( pos.y() <= (outterPoint.y() + toleranceY) ) ) ||
-           ( ( pos.y() >= (outterPoint.y() - toleranceY) ) && ( pos.y() <= (wipeCenter.y() + toleranceY) ) ) ) &&
-         ( ( ( pos.x() >= (wipeCenter.x() - toleranceX) ) && ( pos.x() <= (outterPoint.x() + toleranceX) ) ) ||
-           ( ( pos.x() >= (outterPoint.x() - toleranceX) ) && ( pos.x() <= (wipeCenter.x() + toleranceX) ) ) ) ) {
-        Point a;
-        a.x = ( outterPoint.x() - wipeCenter.x() );
-        a.y = ( outterPoint.y() - wipeCenter.y() );
-        double norm = sqrt(a.x * a.x + a.y * a.y);
-
-        ///The point is in the bounding box of the segment, if it is vertical it must be on the segment anyway
-        if (norm == 0) {
-            return false;
-        }
-
-        a.x /= norm;
-        a.y /= norm;
-        Point b;
-        b.x = ( pos.x() - wipeCenter.x() );
-        b.y = ( pos.y() - wipeCenter.y() );
-        norm = sqrt(b.x * b.x + b.y * b.y);
-
-        ///This vector is not vertical
-        if (norm != 0) {
-            b.x /= norm;
-            b.y /= norm;
-
-            double crossProduct = b.y * a.x - b.x * a.y;
-            if (std::abs(crossProduct) <  0.1) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-bool
-ViewerGL::Implementation::isNearbyWipeMixHandle(const QPointF & pos,
-                                                double zoomScreenPixelWidth, double zoomScreenPixelHeight) const
-{
-    double toleranceX = zoomScreenPixelWidth * 8.;
-    double toleranceY = zoomScreenPixelHeight * 8.;
-    
-    QMutexLocker l(&wipeControlsMutex);
-    ///mix 1 is at rotation bar + pi / 8
-    ///mix 0 is at rotation bar + 3pi / 8
-    double alphaMix1,alphaMix0,alphaCurMix;
-
-    alphaMix1 = wipeAngle + M_PI_4 / 2;
-    alphaMix0 = wipeAngle + 3 * M_PI_4 / 2;
-    alphaCurMix = mixAmount * (alphaMix1 - alphaMix0) + alphaMix0;
-    QPointF mixPos;
-    double mixX = WIPE_MIX_HANDLE_LENGTH * zoomScreenPixelWidth;
-    double mixY = WIPE_MIX_HANDLE_LENGTH * zoomScreenPixelHeight;
-
-    mixPos.setX(wipeCenter.x() + std::cos(alphaCurMix) * mixX);
-    mixPos.setY(wipeCenter.y() + std::sin(alphaCurMix) * mixY);
-    if ( ( pos.x() >= (mixPos.x() - toleranceX) ) && ( pos.x() <= (mixPos.x() + toleranceX) ) &&
-         ( pos.y() >= (mixPos.y() - toleranceY) ) && ( pos.y() <= (mixPos.y() + toleranceY) ) ) {
-        return true;
-    }
-
-    return false;
-}
 
 bool
 ViewerGL::isWipeHandleVisible() const
@@ -4829,16 +4485,6 @@ ViewerGL::getTextureColorAt(int x,
     }
 }
 
-void
-ViewerGL::Implementation::refreshSelectionRectangle(const QPointF & pos)
-{
-    double xmin = std::min( pos.x(),lastDragStartPos.x() );
-    double xmax = std::max( pos.x(),lastDragStartPos.x() );
-    double ymin = std::min( pos.y(),lastDragStartPos.y() );
-    double ymax = std::max( pos.y(),lastDragStartPos.y() );
-
-    selectionRectangle.setRect(xmin,ymin,xmax - xmin,ymax - ymin);
-}
 
 void
 ViewerGL::getSelectionRectangle(double &left,
@@ -5341,6 +4987,8 @@ ViewerGL::getColorAtRect(const RectD &rect, // rectangle in canonical coordinate
                                                                        srcColorSpace,
                                                                        dstColorSpace,
                                                                        &rPix, &gPix, &bPix, &aPix);
+                    break;
+                case eImageBitDepthHalf:
                     break;
                 case eImageBitDepthFloat:
                     gotval = getColorAtInternal<float, 1>(tiles,

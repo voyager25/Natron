@@ -1,23 +1,33 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_TEXTURERECT_H_
 #define NATRON_ENGINE_TEXTURERECT_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <algorithm> // min, max
 
-#include "Engine/Rect.h"
+class RectI;
 
 /** @class This class describes the rectangle (or portion) of an image that is contained
  * into a texture. x1,y1,x2,y2 are respectivly the image coordinates of the left,bottom,right,top
@@ -93,23 +103,7 @@ struct TextureRect
     }
 
     bool intersect(const RectI & r,
-                   RectI* intersection) const
-    {
-        if ( isNull() || r.isNull() ) {
-            return false;
-        }
-
-        if ( (x1 > r.x2) || (r.x1 > x2) || (y1 > r.y2) || (r.y1 > y2) ) {
-            return false;
-        }
-
-        intersection->x1 = std::max(x1,r.x1);
-        intersection->x2 = std::min(x2,r.x2);
-        intersection->y1 = std::max(y1,r.y1);
-        intersection->y2 = std::min(y2,r.y2);
-
-        return true;
-    }
+                   RectI* intersection) const;
     
     bool contains(const TextureRect& other) const
     {

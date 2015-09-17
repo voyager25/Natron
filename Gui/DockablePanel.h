@@ -1,36 +1,48 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-#ifndef NATRON_GUI_SETTINGSPANEL_H_
-#define NATRON_GUI_SETTINGSPANEL_H_
+#ifndef _Gui_DockablePanel_h_
+#define _Gui_DockablePanel_h_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <map>
 
-#include "Global/Macros.h"
-CLANG_DIAG_OFF(deprecated)
-CLANG_DIAG_OFF(uninitialized)
-#include <QFrame>
-CLANG_DIAG_ON(deprecated)
-CLANG_DIAG_ON(uninitialized)
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
+
+#include "Global/Macros.h"
+
+CLANG_DIAG_OFF(deprecated)
+CLANG_DIAG_OFF(uninitialized)
+#include <QFrame>
 #include <QTabWidget>
 #include <QDialog>
+CLANG_DIAG_ON(deprecated)
+CLANG_DIAG_ON(uninitialized)
+
 #include "Global/GlobalDefines.h"
 
 #include "Engine/DockablePanelI.h"
@@ -41,7 +53,7 @@ class KnobGui;
 class KnobHolder;
 class NodeGui;
 class Gui;
-class Page_Knob;
+class KnobPage;
 class QVBoxLayout;
 class Button;
 class QUndoStack;
@@ -50,83 +62,7 @@ class QGridLayout;
 class RotoPanel;
 class MultiInstancePanel;
 class QTabWidget;
-class Group_Knob;
-
-/**
- * @brief Used when group are using the kFnOfxParamPropGroupIsTab extension
- **/
-class TabGroup : public QFrame
-{
-    QTabWidget* _tabWidget;
-    std::vector<boost::weak_ptr<Group_Knob> > _tabs;
-    
-public:
-    
-    TabGroup(QWidget* parent);
-    
-    QGridLayout* addTab(const boost::shared_ptr<Group_Knob>& group,const QString& name);
-    
-    void removeTab(Group_Knob* group);
-    
-    bool isEmpty() const
-    {
-        return _tabs.empty();
-    }
-};
-
-/**
- * @class This is to overcome an issue in QTabWidget : switching tab does not resize the QTabWidget.
- * This class resizes the QTabWidget to the current tab size.
- **/
-class DockablePanelTabWidget
-    : public QTabWidget
-{
-    Gui* _gui;
-public:
-
-    DockablePanelTabWidget(Gui* gui,QWidget* parent = 0);
-
-    virtual QSize sizeHint() const OVERRIDE FINAL;
-    virtual QSize minimumSizeHint() const OVERRIDE FINAL;
-    
-private:
-    
-    virtual void keyPressEvent(QKeyEvent* event) OVERRIDE FINAL;
-};
-
-class DockablePanel;
-class RightClickableWidget : public QWidget
-{
-    Q_OBJECT
-    
-    DockablePanel* panel;
-    
-public:
-    
-    
-    RightClickableWidget(DockablePanel* panel,QWidget* parent)
-    : QWidget(parent)
-    , panel(panel)
-    {
-        setObjectName("SettingsPanel");
-    }
-    
-    virtual ~RightClickableWidget() {}
-    
-    DockablePanel* getPanel() const { return panel; }
-    
-Q_SIGNALS:
-    
-    void rightClicked(const QPoint& p);
-    void escapePressed();
-    
-private:
-    
-    virtual void enterEvent(QEvent* e) OVERRIDE FINAL;
-    virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
-    virtual void mousePressEvent(QMouseEvent* e) OVERRIDE FINAL;
-    
-};
+class KnobGroup;
 
 /**
  * @brief An abstract class that defines a dockable properties panel that can be found in the Property bin pane.
@@ -136,7 +72,9 @@ class DockablePanel
     : public QFrame
     , public DockablePanelI
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -222,9 +160,9 @@ public:
     
     void setUserPageActiveIndex();
     
-    boost::shared_ptr<Page_Knob> getUserPageKnob() const;
+    boost::shared_ptr<KnobPage> getUserPageKnob() const;
     
-    void getUserPages(std::list<Page_Knob*>& userPages) const;
+    void getUserPages(std::list<KnobPage*>& userPages) const;
     
     void deleteKnobGui(const boost::shared_ptr<KnobI>& knob);
     
@@ -361,6 +299,7 @@ private:
     boost::scoped_ptr<DockablePanelPrivate> _imp;
 };
 
+<<<<<<< HEAD
 
 class NodeSettingsPanel
     : public DockablePanel
@@ -522,3 +461,6 @@ private:
     virtual void paintEvent(QPaintEvent* e) OVERRIDE FINAL;
 };
 #endif // NATRON_GUI_SETTINGSPANEL_H_
+=======
+#endif // _Gui_DockablePanel_h_
+>>>>>>> workshop

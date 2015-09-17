@@ -1,3 +1,27 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
+
 #include "DopeSheetHierarchyView.h"
 
 #include <QDebug> //REMOVEME
@@ -14,8 +38,10 @@
 #include "Gui/DopeSheet.h"
 #include "Gui/Gui.h"
 #include "Gui/GuiAppInstance.h"
+#include "Gui/GuiDefines.h"
 #include "Gui/KnobGui.h"
 #include "Gui/NodeGui.h"
+#include "Gui/NodeSettingsPanel.h"
 
 
 typedef std::list<boost::shared_ptr<DSKnob> > DSKnobPtrList;
@@ -208,15 +234,15 @@ QSize HierarchyViewItemDelegate::sizeHint(const QStyleOptionViewItem &option, co
 
     QSize itemSize = QStyledItemDelegate::sizeHint(option, index);
 
-    DopeSheet::ItemType nodeType = DopeSheet::ItemType(index.data(QT_ROLE_CONTEXT_TYPE).toInt());
+    Natron::DopeSheetItemType nodeType = Natron::DopeSheetItemType(index.data(QT_ROLE_CONTEXT_TYPE).toInt());
     int heightOffset = 0;
 
     switch (nodeType) {
-    case DopeSheet::ItemTypeReader:
-    case DopeSheet::ItemTypeRetime:
-    case DopeSheet::ItemTypeTimeOffset:
-    case DopeSheet::ItemTypeFrameRange:
-    case DopeSheet::ItemTypeGroup:
+    case Natron::eDopeSheetItemTypeReader:
+    case Natron::eDopeSheetItemTypeRetime:
+    case Natron::eDopeSheetItemTypeTimeOffset:
+    case Natron::eDopeSheetItemTypeFrameRange:
+    case Natron::eDopeSheetItemTypeGroup:
         heightOffset = 10;
         break;
     default:
@@ -326,17 +352,19 @@ void HierarchyViewPrivate::checkNodeVisibleState(DSNode *dsNode)
 {
     boost::shared_ptr<NodeGui> nodeGui = dsNode->getNodeGui();
 
-#pragma message WARN("BUG? the value stored to showNode is overwritten below")
-    bool showNode = nodeGui->isSettingsPanelVisible();
 
-    DopeSheet::ItemType nodeType = dsNode->getItemType();
+    Natron::DopeSheetItemType nodeType = dsNode->getItemType();
     QTreeWidgetItem *nodeItem = dsNode->getTreeItem();
 
-    if (nodeType == DopeSheet::ItemTypeCommon) {
+    bool showNode;
+    if (nodeType == Natron::eDopeSheetItemTypeCommon) {
         showNode = nodeHasAnimation(nodeGui);
-    }
-    else {
+    } else {
         showNode = true;
+    }
+    
+    if (!nodeGui->isSettingsPanelVisible()) {
+        showNode = false;
     }
 
     nodeItem->setData(0, QT_ROLE_CONTEXT_IS_ANIMATED, showNode);
@@ -449,8 +477,10 @@ void HierarchyViewPrivate::drawPluginIconArea(QPainter *p, boost::shared_ptr<DSN
         QPixmap pix;
 
         if (pix.load(iconFilePath.c_str())) {
-            pix = pix.scaled(NATRON_MEDIUM_BUTTON_SIZE - 2, NATRON_MEDIUM_BUTTON_SIZE - 2,
-                             Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            if (std::max(pix.width(), pix.height()) != NATRON_MEDIUM_BUTTON_ICON_SIZE) {
+                pix = pix.scaled(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE,
+                                 Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            }
 
             QRect areaRect = rowRect;
             areaRect.setWidth(pix.width() + 4);
@@ -608,6 +638,7 @@ HierarchyView::HierarchyView(DopeSheet *dopeSheetModel, Gui *gui, QWidget *paren
     setExpandsOnDoubleClick(false);
 
     setItemDelegate(new HierarchyViewItemDelegate(this));
+    setAttribute(Qt::WA_MacShowFocusRect,0);
 
     setStyleSheet("HierarchyView { border: 0px; }");
 
@@ -697,7 +728,8 @@ void HierarchyView::drawRow(QPainter *painter, const QStyleOptionViewItem &optio
 {
     QTreeWidgetItem *item = itemFromIndex(index);
 
-    bool drawPluginIconToo = (item->data(0, QT_ROLE_CONTEXT_TYPE).toInt() < DopeSheet::ItemTypeKnobRoot);
+    bool drawPluginIconToo = (item->data(0, QT_ROLE_CONTEXT_TYPE).toInt() < Natron::eDopeSheetItemTypeKnobRoot);
+    bool isTreeViewTopItem = !itemAbove(item);
     boost::shared_ptr<DSNode> dsNode = _imp->dopeSheetModel->findParentDSNode(item);
 
     QRect rowRect = option.rect;
@@ -738,7 +770,7 @@ void HierarchyView::drawRow(QPainter *painter, const QStyleOptionViewItem &optio
 
         _imp->drawPluginIconArea(painter, dsNode, rowRect, drawPluginIconToo);
 
-        if (drawPluginIconToo) {
+        if (drawPluginIconToo && !isTreeViewTopItem) {
             _imp->drawNodeTopSeparation(painter, item, rowRect);
         }
 
@@ -874,7 +906,7 @@ void HierarchyView::onNodeAboutToBeRemoved(DSNode *dsNode)
     for (int i = 0; i < treeItem->childCount(); ++i) {
         QTreeWidgetItem *child = treeItem->child(i);
 
-        if (child->data(0, QT_ROLE_CONTEXT_TYPE).toInt() < DopeSheet::ItemTypeKnobRoot) {
+        if (child->data(0, QT_ROLE_CONTEXT_TYPE).toInt() < Natron::eDopeSheetItemTypeKnobRoot) {
             toMove << child;
         }
     }

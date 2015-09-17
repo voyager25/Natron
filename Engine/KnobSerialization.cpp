@@ -1,18 +1,27 @@
 
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "KnobSerialization.h"
 
@@ -77,28 +86,28 @@ boost::shared_ptr<KnobI> KnobSerialization::createKnob(const std::string & typeN
 {
     boost::shared_ptr<KnobI> ret;
 
-    if ( typeName == Int_Knob::typeNameStatic() ) {
-        ret.reset( new Int_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Bool_Knob::typeNameStatic() ) {
-        ret.reset( new Bool_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Double_Knob::typeNameStatic() ) {
-        ret.reset( new Double_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Choice_Knob::typeNameStatic() ) {
-        ret.reset( new Choice_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == String_Knob::typeNameStatic() ) {
-        ret.reset( new String_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Parametric_Knob::typeNameStatic() ) {
-        ret.reset( new Parametric_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Color_Knob::typeNameStatic() ) {
-        ret.reset( new Color_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Path_Knob::typeNameStatic() ) {
-        ret.reset( new Path_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == File_Knob::typeNameStatic() ) {
-        ret.reset( new File_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == OutputFile_Knob::typeNameStatic() ) {
-        ret.reset( new OutputFile_Knob(NULL,"",dimension,false) );
-    } else if ( typeName == Button_Knob::typeNameStatic() ) {
-        ret.reset(new Button_Knob(NULL,"",dimension,false));
+    if ( typeName == KnobInt::typeNameStatic() ) {
+        ret.reset( new KnobInt(NULL,"",dimension,false) );
+    } else if ( typeName == KnobBool::typeNameStatic() ) {
+        ret.reset( new KnobBool(NULL,"",dimension,false) );
+    } else if ( typeName == KnobDouble::typeNameStatic() ) {
+        ret.reset( new KnobDouble(NULL,"",dimension,false) );
+    } else if ( typeName == KnobChoice::typeNameStatic() ) {
+        ret.reset( new KnobChoice(NULL,"",dimension,false) );
+    } else if ( typeName == KnobString::typeNameStatic() ) {
+        ret.reset( new KnobString(NULL,"",dimension,false) );
+    } else if ( typeName == KnobParametric::typeNameStatic() ) {
+        ret.reset( new KnobParametric(NULL,"",dimension,false) );
+    } else if ( typeName == KnobColor::typeNameStatic() ) {
+        ret.reset( new KnobColor(NULL,"",dimension,false) );
+    } else if ( typeName == KnobPath::typeNameStatic() ) {
+        ret.reset( new KnobPath(NULL,"",dimension,false) );
+    } else if ( typeName == KnobFile::typeNameStatic() ) {
+        ret.reset( new KnobFile(NULL,"",dimension,false) );
+    } else if ( typeName == KnobOutputFile::typeNameStatic() ) {
+        ret.reset( new KnobOutputFile(NULL,"",dimension,false) );
+    } else if ( typeName == KnobButton::typeNameStatic() ) {
+        ret.reset(new KnobButton(NULL,"",dimension,false));
     }
     if (ret) {
         ret->populate();
@@ -151,7 +160,7 @@ void
 KnobSerialization::restoreTracks(const boost::shared_ptr<KnobI> & knob,
                                  const std::list<boost::shared_ptr<Natron::Node> > & allNodes)
 {
-    Double_Knob* isDouble = dynamic_cast<Double_Knob*>( knob.get() );
+    KnobDouble* isDouble = dynamic_cast<KnobDouble*>( knob.get() );
 
     if ( isDouble && (isDouble->getName() == "center") && (isDouble->getDimension() == 2) ) {
         isDouble->restoreTracks(slavedTracks,allNodes);

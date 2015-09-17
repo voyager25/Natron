@@ -1,49 +1,60 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "TimeLineGui.h"
 
 #include <cmath>
 #include <set>
 #include <QtGui/QFont>
-CLANG_DIAG_OFF(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QtGui/QMouseEvent>
-CLANG_DIAG_ON(unused-private-field)
+GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 #include <QCoreApplication>
 #include <QThread>
 #include "Global/GlobalDefines.h"
 
 #include "Engine/Cache.h"
+#include "Engine/Image.h"
+#include "Engine/KnobTypes.h"
 #include "Engine/Node.h"
 #include "Engine/Project.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/TimeLine.h"
 #include "Engine/Settings.h"
-#include "Engine/KnobTypes.h"
-#include "Engine/Image.h"
+#include "Engine/TimeLine.h"
+#include "Engine/ViewerInstance.h"
 
-#include "Gui/ViewerTab.h"
-#include "Gui/TextRenderer.h"
-#include "Gui/ticks.h"
+#include "Gui/CurveEditor.h"
+#include "Gui/CurveWidget.h"
+#include "Gui/DopeSheetEditor.h"
 #include "Gui/Gui.h"
-#include "Gui/GuiMacros.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/GuiApplicationManager.h"
-#include "Gui/DopeSheetEditor.h"
-#include "Gui/CurveWidget.h"
-#include "Gui/CurveEditor.h"
+#include "Gui/GuiDefines.h"
+#include "Gui/GuiMacros.h"
+#include "Gui/TextRenderer.h"
+#include "Gui/ViewerTab.h"
+#include "Gui/ticks.h"
 
 // warning: 'gluErrorString' is deprecated: first deprecated in OS X 10.9 [-Wdeprecated-declarations]
 CLANG_DIAG_OFF(deprecated-declarations)
@@ -161,9 +172,9 @@ struct TimelineGuiPrivate
         const std::list<ViewerTab *> &viewers = gui->getViewersList();
 
         for (std::list<ViewerTab *>::const_iterator it = viewers.begin(); it != viewers.end(); ++it) {
-            ViewerTab *v = (*it);
-
-            v->centerOn(tlZoomCtx.left, zoomRight);
+            if ((*it) != viewerTab) {
+                (*it)->centerOn(tlZoomCtx.left, zoomRight);
+            }
         }
     }
 };
@@ -871,6 +882,15 @@ TimeLineGui::centerOn_tripleSync(SequenceTime left,
     _imp->tlZoomCtx.zoomFactor = w / curveWidth;
 
     update();
+}
+
+void
+TimeLineGui::getVisibleRange(SequenceTime* left, SequenceTime* right) const
+{
+    *left = _imp->tlZoomCtx.left;
+    double w = width();
+    double curveWidth = w / _imp->tlZoomCtx.zoomFactor;
+    *right = *left + curveWidth;
 }
 
 void

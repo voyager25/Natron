@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_GUI_SEQUENCEFILEDIALOG_H_
 #define NATRON_GUI_SEQUENCEFILEDIALOG_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <vector>
 #include <string>
@@ -22,11 +31,14 @@
 #include <utility>
 #include <set>
 #include <list>
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
 #endif
+
 #include "Global/Macros.h"
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QStyledItemDelegate>
@@ -83,7 +95,9 @@ struct FileDialogPreviewProvider;
 class UrlModel
     : public QStandardItemModel
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     enum Roles
@@ -94,13 +108,13 @@ public:
 
     explicit UrlModel(const std::map<std::string,std::string>& envVars, QObject *parent = 0);
 
-    QStringList mimeTypes() const;
-    virtual QMimeData * mimeData(const QModelIndexList &indexes) const;
+    QStringList mimeTypes() const OVERRIDE;
+    virtual QMimeData * mimeData(const QModelIndexList &indexes) const OVERRIDE;
     bool canDrop(QDragEnterEvent* e);
     virtual bool dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent) OVERRIDE FINAL;
     virtual Qt::ItemFlags flags(const QModelIndex &index) const OVERRIDE FINAL;
 
-    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
+    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) OVERRIDE;
 
 
     void setUrls(const std::vector<QUrl> &urls);
@@ -156,7 +170,9 @@ private:
 class FavoriteView
     : public QListView
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 Q_SIGNALS:
     void urlRequested(const QUrl &url);
@@ -245,14 +261,16 @@ public:
 class FileDialogComboBox
     : public QComboBox
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
-    
+GCC_DIAG_SUGGEST_OVERRIDE_ON
+
 public:
     
     
     FileDialogComboBox(SequenceFileDialog *p,QWidget *parent = 0);
     
-    void showPopup();
+    void showPopup() OVERRIDE;
     void setHistory(const QStringList &paths);
     QStringList history() const
     {
@@ -281,7 +299,9 @@ private:
 class SequenceFileDialog
 : public QDialog, public SortableViewI
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     enum FileDialogModeEnum
@@ -427,7 +447,7 @@ public Q_SLOTS:
     void seekUrl(const QUrl & url);
 
     ///same as setDirectory but for the look-in combobox
-    void goToDirectory(const QString &);
+    void onLookingComboboxChanged(const QString &);
 
     ///slot called when the selected directory changed, it updates the view with the (not yet fetched) directory.
     void updateView(const QString & currentDirectory);

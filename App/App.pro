@@ -1,12 +1,30 @@
-#This Source Code Form is subject to the terms of the Mozilla Public
-#License, v. 2.0. If a copy of the MPL was not distributed with this
-#file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
+# ***** BEGIN LICENSE BLOCK *****
+# This file is part of Natron <http://www.natron.fr/>,
+# Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+#
+# Natron is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# Natron is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+# ***** END LICENSE BLOCK *****
 
 TARGET = Natron
 VERSION = 2.0.0
 TEMPLATE = app
-CONFIG += app
+win32 {
+	CONFIG += console
+	RC_FILE += ../Natron.rc
+} else {
+	CONFIG += app
+}
 CONFIG += moc
 CONFIG += boost glew opengl qt expat cairo python shiboken pyside
 QT += gui core opengl network
@@ -30,9 +48,10 @@ INCLUDEPATH += $$PWD/../libs/OpenFX/HostSupport/include
 INCLUDEPATH += $$PWD/..
 
 #System library is required on windows to map network share names from drive letters
-win32 {
+win32-msvc* {
     LIBS += mpr.lib
 }
+
 
 win32-msvc* {
 	CONFIG(64bit) {
@@ -207,16 +226,68 @@ win32-msvc*{
         else:unix: PRE_TARGETDEPS += $$OUT_PWD/../libmv/libLibMV.a
 }
 
+# BreakpadClient
+
+gbreakpad {
+
+win32-msvc*{
+        CONFIG(64bit) {
+                CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/x64/release/ -lBreakpadClient
+                CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/x64/debug/ -lBreakpadClient
+        } else {
+                CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/win32/release/ -lBreakpadClient
+                CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/win32/debug/ -lBreakpadClient
+        }
+} else {
+        win32:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/release/ -lBreakpadClient
+        else:win32:CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/debug/ -lBreakpadClient
+        else:*-xcode:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/build/Release/ -lBreakpadClient
+        else:*-xcode:CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../BreakpadClient/build/Debug/ -lBreakpadClient
+        else:unix: LIBS += -L$$OUT_PWD/../BreakpadClient/ -lBreakpadClient
+}
+
+BREAKPAD_PATH = $$PWD/../google-breakpad/src
+INCLUDEPATH += $$BREAKPAD_PATH
+DEPENDPATH += $$BREAKPAD_PATH
+
+win32-msvc*{
+        CONFIG(64bit) {
+                CONFIG(release, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/x64/release/libBreakpadClient.lib
+                CONFIG(debug, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/x64/debug/libBreakpadClient.lib
+        } else {
+                CONFIG(release, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/win32/release/libBreakpadClient.lib
+                CONFIG(debug, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/win32/debug/libBreakpadClient.lib
+        }
+} else {
+        win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/release/libBreakpadClient.a
+        else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/debug/libBreakpadClient.a
+        else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/release/BreakpadClient.lib
+        else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/debug/BreakpadClient.lib
+        else:*-xcode:CONFIG(release, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/build/Release/libBreakpadClient.a
+        else:*-xcode:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/build/Debug/libBreakpadClient.a
+        else:unix: PRE_TARGETDEPS += $$OUT_PWD/../BreakpadClient/libBreakpadClient.a
+}
+
+} # gbreakpad
+
 include(../global.pri)
 include(../config.pri)
+
+win32-g++ {
+#Gcc is very picky here, if we include these libraries before the includes commands above, it will yield tons of unresolved externals
+	LIBS += -lmpr
+	#MingW needs to link against fontconfig explicitly since in Msys2 Qt does not link against fontconfig
+	LIBS +=  -lglu32 -lopengl32 -lfontconfig
+}
 
 SOURCES += \
     NatronApp_main.cpp
 
 INSTALLS += target
 
-Resources.files = $$PWD/../Gui/Resources/OpenColorIO-Configs
+Resources.files = $$PWD/../OpenColorIO-Configs
 macx {
+    Resources.files += $$PWD/../Gui/Resources/Images/natronProjectIcon_osx.icns
     Resources.path = Contents/Resources
     QMAKE_BUNDLE_DATA += Resources
     Fontconfig.files = $$PWD/../Gui/Resources/etc/fonts

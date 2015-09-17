@@ -1,38 +1,20 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
-/*
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- * High-speed conversion between 8 bit and floating point image data.
- *
- * Copyright 2002 Bill Spitzak and Digital Domain, Inc.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
+ * Natron is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU Library General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
- * USA.
- *
- * For use in closed-source software please contact Digital Domain,
- * 300 Rose Avenue, Venice, CA 90291 310-314-2800
- *
- */
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 ///
 ///// This namespace is kept is synch with what can be found in openfx-io repository. It is used here in Natron for the viewer essentially.
@@ -42,9 +24,11 @@
 #ifndef NATRON_ENGINE_LUT_H_
 #define NATRON_ENGINE_LUT_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <cmath>
 #include <map>
@@ -257,10 +241,10 @@ public:
      * \a alpha is a pointer to an extra alpha planar buffer if you want to premultiply by alpha the from channel.
      * The input and output buffers must not overlap in memory.
      **/
-    void to_byte_planar(unsigned char* to, const float* from,int W,const float* alpha = NULL,
-                        int inDelta = 1, int outDelta = 1) const;
-    void to_short_planar(unsigned short* to, const float* from,int W,const float* alpha = NULL,
-                         int inDelta = 1, int outDelta = 1) const;
+    //void to_byte_planar(unsigned char* to, const float* from,int W,const float* alpha = NULL,
+    //                    int inDelta = 1, int outDelta = 1) const;
+    //void to_short_planar(unsigned short* to, const float* from,int W,const float* alpha = NULL,
+    //                     int inDelta = 1, int outDelta = 1) const;
     void to_float_planar(float* to, const float* from,int W,const float* alpha = NULL,
                          int inDelta = 1, int outDelta = 1) const;
 
@@ -292,10 +276,10 @@ public:
      **/
     void to_byte_packed(unsigned char* to, const float* from,const RectI & conversionRect,
                         const RectI & srcRoD,const RectI & dstRoD,
-                        PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult) const;
-    void to_short_packed(unsigned short* to, const float* from,const RectI & conversionRect,
-                         const RectI & srcRoD,const RectI & dstRoD,
-                         PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult) const;
+                        PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult) const; // used by QtWriter
+    //void to_short_packed(unsigned short* to, const float* from,const RectI & conversionRect,
+    //                     const RectI & srcRoD,const RectI & dstRoD,
+    //                     PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult) const;
     void to_float_packed(float* to, const float* from,const RectI & conversionRect,
                          const RectI & srcRoD,const RectI & dstRoD,
                          PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult) const;
@@ -383,9 +367,9 @@ namespace Linear {
  * \a alpha is a pointer to an extra alpha planar buffer if you want to premultiply by alpha the from channel.
  * The input and output buffers must not overlap in memory.
  **/
-void to_byte_planar(unsigned char* to, const float* from,int W,const float* alpha = NULL,int inDelta = 1, int outDelta = 1);
-void to_short_planar(unsigned short* to, const float* from,int W,const float* alpha = NULL,int inDelta = 1, int outDelta = 1);
-void to_float_planar(float* to, const float* from,int W,const float* alpha = NULL,int inDelta = 1, int outDelta = 1);
+//void to_byte_planar(unsigned char* to, const float* from,int W,const float* alpha = NULL,int inDelta = 1, int outDelta = 1);
+//void to_short_planar(unsigned short* to, const float* from,int W,const float* alpha = NULL,int inDelta = 1, int outDelta = 1);
+//void to_float_planar(float* to, const float* from,int W,const float* alpha = NULL,int inDelta = 1, int outDelta = 1);
 
 
 /**
@@ -411,12 +395,12 @@ void to_float_planar(float* to, const float* from,int W,const float* alpha = NUL
    should be converted with the scan-line (srcRoD.y2 - y - 1) of the
    input buffer.
  **/
-void to_byte_packed(unsigned char* to, const float* from,const RectI & conversionRect,
-                    const RectI & srcRoD,const RectI & dstRoD,
-                    PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult);
-void to_short_packed(unsigned short* to, const float* from,const RectI & conversionRect,
-                     const RectI & srcRoD,const RectI & dstRoD,
-                     PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult);
+//void to_byte_packed(unsigned char* to, const float* from,const RectI & conversionRect,
+//                    const RectI & srcRoD,const RectI & dstRoD,
+//                    PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult);
+//void to_short_packed(unsigned short* to, const float* from,const RectI & conversionRect,
+//                     const RectI & srcRoD,const RectI & dstRoD,
+//                     PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult);
 void to_float_packed(float* to, const float* from,const RectI & conversionRect,
                      const RectI & srcRoD,const RectI & dstRoD,
                      PixelPackingEnum inputPacking,PixelPackingEnum outputPacking,bool invertY,bool premult);

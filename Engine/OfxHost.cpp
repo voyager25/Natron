@@ -1,16 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-//
-//  Created by Frédéric Devernay on 03/09/13.
-//
-//
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "OfxHost.h"
 
@@ -33,7 +43,10 @@ CLANG_DIAG_ON(deprecated-register)
 #include <QtCore/QThread>
 #include <QtCore/QThreadStorage>
 #include <QtConcurrentMap>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
+// /usr/local/include/boost/bind/arg.hpp:37:9: warning: unused typedef 'boost_static_assert_typedef_37' [-Wunused-local-typedef]
 #include <boost/bind.hpp>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #endif
 
 //ofx
@@ -43,6 +56,10 @@ CLANG_DIAG_ON(deprecated-register)
 #include <nuke/fnOfxExtensions.h>
 #endif
 #include <ofxNatron.h>
+
+#ifdef __NATRON_WIN32__
+#include <ofxhUtilities.h> // for wideStringToString
+#endif
 
 #include "Global/Macros.h"
 //ofx host support
@@ -77,17 +94,47 @@ CLANG_DIAG_ON(unknown-pragmas)
 #include "Engine/Node.h"
 #include "Engine/AppInstance.h"
 #include "Engine/Project.h"
+#include "Engine/ThreadStorage.h"
 
 using namespace Natron;
 
+/**
+ * @brief A application-wide TLS struct containing all stuff needed to workaround OFX poor specs:
+ * missing image effect handles etc...
+ **/
+
+
+
+struct Natron::OfxHostPrivate
+{
+    
+    boost::shared_ptr<OFX::Host::ImageEffect::PluginCache> imageEffectPluginCache;
+    ThreadStorage<GlobalOFXTLS> globalTLS;
+    
+#ifdef MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
+    std::list<QMutex*> pluginsMutexes;
+    QMutex* pluginsMutexesLock; //<protects _pluginsMutexes
+#endif
+
+    
+    OfxHostPrivate()
+    : imageEffectPluginCache()
+    , globalTLS()
+#ifdef MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
+    , pluginsMutexes()
+    , pluginsMutexesLock(0)
+#endif
+    {
+        
+    }
+    
+};
 
 Natron::OfxHost::OfxHost()
-    : _imageEffectPluginCache( new OFX::Host::ImageEffect::PluginCache(*this) )
-#ifdef MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
-    , _pluginsMutexes()
-    , _pluginsMutexesLock(new QMutex)
-#endif
+    : _imp(new OfxHostPrivate())
+
 {
+    _imp->imageEffectPluginCache.reset(new OFX::Host::ImageEffect::PluginCache(*this));
 }
 
 Natron::OfxHost::~OfxHost()
@@ -95,9 +142,8 @@ Natron::OfxHost::~OfxHost()
     //Clean up, to be polite.
     OFX::Host::PluginCache::clearPluginCache();
 
-    delete _imageEffectPluginCache;
 #ifdef MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
-    delete _pluginsMutexesLock;
+    delete _imp->pluginsMutexesLock;
 #endif
 }
 
@@ -148,8 +194,8 @@ Natron::OfxHost::setProperties()
 
     _properties.setStringProperty( kOfxPropName,appPTR->getCurrentSettings()->getHostName() );
     _properties.setStringProperty(kOfxPropLabel, NATRON_APPLICATION_NAME); // "nuke" //< use this to pass for nuke
-    _properties.setIntProperty(kOfxPropAPIVersion, 1, 0);  //OpenFX API v1.3
-    _properties.setIntProperty(kOfxPropAPIVersion, 3, 1);
+    _properties.setIntProperty(kOfxPropAPIVersion, 1, 0);  //OpenFX API v1.4
+    _properties.setIntProperty(kOfxPropAPIVersion, 4, 1);
     _properties.setIntProperty(kOfxPropVersion, NATRON_VERSION_MAJOR, 0);
     _properties.setIntProperty(kOfxPropVersion, NATRON_VERSION_MINOR, 1);
     _properties.setIntProperty(kOfxPropVersion, NATRON_VERSION_REVISION, 2);
@@ -181,14 +227,14 @@ Natron::OfxHost::setProperties()
     //_properties.setStringProperty(kOfxImageEffectPropSupportedContexts, kOfxImageEffectContextWriter, 5 );
 
     _properties.setIntProperty(kOfxImageEffectPropSupportsMultipleClipDepths, 1);
-    _properties.setIntProperty(kOfxImageEffectPropSupportsMultipleClipPARs, 0);
-    _properties.setIntProperty(kOfxImageEffectPropSetableFrameRate, 0);
+    _properties.setIntProperty(kOfxImageEffectPropSupportsMultipleClipPARs, 1);
+    _properties.setIntProperty(kOfxImageEffectPropSetableFrameRate, 1);
     _properties.setIntProperty(kOfxImageEffectPropSetableFielding, 0);
     _properties.setIntProperty(kOfxParamHostPropSupportsCustomInteract, 1 );
-    _properties.setIntProperty( kOfxParamHostPropSupportsStringAnimation, String_Knob::canAnimateStatic() );
-    _properties.setIntProperty( kOfxParamHostPropSupportsChoiceAnimation, Choice_Knob::canAnimateStatic() );
-    _properties.setIntProperty( kOfxParamHostPropSupportsBooleanAnimation, Bool_Knob::canAnimateStatic() );
-    _properties.setIntProperty( kOfxParamHostPropSupportsCustomAnimation, String_Knob::canAnimateStatic() );
+    _properties.setIntProperty( kOfxParamHostPropSupportsStringAnimation, KnobString::canAnimateStatic() );
+    _properties.setIntProperty( kOfxParamHostPropSupportsChoiceAnimation, KnobChoice::canAnimateStatic() );
+    _properties.setIntProperty( kOfxParamHostPropSupportsBooleanAnimation, KnobBool::canAnimateStatic() );
+    _properties.setIntProperty( kOfxParamHostPropSupportsCustomAnimation, KnobString::canAnimateStatic() );
     _properties.setPointerProperty(kOfxPropHostOSHandle, NULL);
     _properties.setIntProperty(kOfxParamHostPropSupportsParametricAnimation, 0);
 
@@ -493,11 +539,6 @@ Natron::OfxHost::addPathToLoadOFXPlugins(const std::string path)
     OFX::Host::PluginCache::getPluginCache()->addFileToPath(path);
 }
 
-#if defined(WINDOWS)
-// defined in ofxhPluginCache.cpp
-const TCHAR * getStdOFXPluginPath(const std::string &hostId);
-#endif
-
 void
 Natron::OfxHost::loadOFXPlugins(std::map<std::string,std::vector< std::pair<std::string,double> > >* readersMap,
                                 std::map<std::string,std::vector< std::pair<std::string,double> > >* writersMap)
@@ -507,11 +548,17 @@ Natron::OfxHost::loadOFXPlugins(std::map<std::string,std::vector< std::pair<std:
     OFX::Host::PluginCache::getPluginCache()->setCacheVersion(NATRON_APPLICATION_NAME "OFXCachev1");
 
     /// register the image effect cache with the global plugin cache
-    _imageEffectPluginCache->registerInCache( *OFX::Host::PluginCache::getPluginCache() );
+    _imp->imageEffectPluginCache->registerInCache( *OFX::Host::PluginCache::getPluginCache() );
 
 
 #if defined(WINDOWS)
-    OFX::Host::PluginCache::getPluginCache()->addFileToPath( getStdOFXPluginPath("Nuke") );
+#ifdef UNICODE
+    std::wstring wpath = OFX::Host::PluginCache::getStdOFXPluginPath("Nuke");
+    std::string path = OFX::wideStringToString(wpath);
+#else
+    std::string path = OFX::Host::PluginCache::getStdOFXPluginPath("Nuke");
+#endif
+    OFX::Host::PluginCache::getPluginCache()->addFileToPath(path);
     OFX::Host::PluginCache::getPluginCache()->addFileToPath("C:\\Program Files\\Common Files\\OFX\\Nuke");
 #endif
 #if defined(__linux__) || defined(__FreeBSD__)
@@ -564,7 +611,7 @@ Natron::OfxHost::loadOFXPlugins(std::map<std::string,std::vector< std::pair<std:
     /*Filling node name list and plugin grouping*/
     typedef std::map<OFX::Host::ImageEffect::MajorPlugin,OFX::Host::ImageEffect::ImageEffectPlugin *> PMap;
     const PMap& ofxPlugins =
-    _imageEffectPluginCache->getPluginsByIDMajor();
+    _imp->imageEffectPluginCache->getPluginsByIDMajor();
     
     
     for (PMap::const_iterator it = ofxPlugins.begin();
@@ -617,7 +664,8 @@ Natron::OfxHost::loadOFXPlugins(std::map<std::string,std::vector< std::pair<std:
         std::set<std::string>::const_iterator foundReader = contexts.find(kOfxImageEffectContextReader);
         std::set<std::string>::const_iterator foundWriter = contexts.find(kOfxImageEffectContextWriter);
         
-        bool userCreatable = openfxId != PLUGINID_OFX_ROTO;
+        bool userCreatable = !p->getDescriptor().isDeprecated();
+        bool isInternalOnly = openfxId == PLUGINID_OFX_ROTO;
         
         Natron::Plugin* natronPlugin = appPTR->registerPlugin( groups,
                                                               openfxId.c_str(),
@@ -629,6 +677,9 @@ Natron::OfxHost::loadOFXPlugins(std::map<std::string,std::vector< std::pair<std:
                                                               new Natron::LibraryBinary(Natron::LibraryBinary::eLibraryTypeBuiltin),
                                                               p->getDescriptor().getRenderThreadSafety() == kOfxImageEffectRenderUnsafe,
                                                               p->getVersionMajor(), p->getVersionMinor(),userCreatable );
+        if (isInternalOnly) {
+            natronPlugin->setForInternalUseOnly(true);
+        }
         
         natronPlugin->setOfxPlugin(p);
         
@@ -764,20 +815,16 @@ Natron::OfxHost::newMemoryInstance(size_t nBytes)
 
 #ifdef OFX_SUPPORTS_MULTITHREAD
 
-
-///Stored as int, because we need -1; list because we need it recursive for the multiThread func
-static QThreadStorage<std::list<int> > gThreadIndex;
-
-
 void
-Natron::OfxHost::setThreadAsActionCaller(bool actionCaller)
+Natron::OfxHost::setThreadAsActionCaller(Natron::OfxImageEffectInstance* instance, bool actionCaller)
 {
+    GlobalOFXTLS& local = _imp->globalTLS.localData();
+    local.lastEffectCallingMainEntry = instance;
     if (actionCaller) {
-        gThreadIndex.localData().push_back(-1);
+        local.threadIndexes.push_back(-1);
     } else {
-        std::list<int>& local = gThreadIndex.localData();
-        assert(!local.empty());
-        local.pop_back();
+        assert(!local.threadIndexes.empty());
+        local.threadIndexes.pop_back();
     }
 }
 
@@ -796,8 +843,8 @@ threadFunctionWrapper(OfxThreadFunctionV1 func,
                       void *customArg)
 {
     assert(threadIndex < threadMax);
-    std::list<int>& localData = gThreadIndex.localData();
-    localData.push_back((int)threadIndex);
+    GlobalOFXTLS& local = appPTR->getCurrentThreadTLS();
+    local.threadIndexes.push_back((int)threadIndex);
     
     boost::shared_ptr<ParallelRenderArgsSetter> tlsRaii;
     //Set the TLS if not NULL
@@ -815,7 +862,7 @@ threadFunctionWrapper(OfxThreadFunctionV1 func,
     }
 
     ///reset back the index otherwise it could mess up the indexes if the same thread is re-used
-    localData.pop_back();
+    local.threadIndexes.pop_back();
 
     return ret;
 }
@@ -846,8 +893,8 @@ public:
     void run() OVERRIDE
     {
         assert(_threadIndex < _threadMax);
-        std::list<int>& localData = gThreadIndex.localData();
-        localData.push_back((int)_threadIndex);
+        GlobalOFXTLS& local = appPTR->getCurrentThreadTLS();
+        local.threadIndexes.push_back((int)_threadIndex);
         
         //Copy the TLS of the caller thread to the newly spawned thread
         boost::shared_ptr<ParallelRenderArgsSetter> tlsRaii;
@@ -865,7 +912,7 @@ public:
         }
 
         ///reset back the index otherwise it could mess up the indexes if the same thread is re-used
-        localData.pop_back();
+        local.threadIndexes.pop_back();
     }
 
 private:
@@ -1069,18 +1116,15 @@ Natron::OfxHost::multiThreadIndex(unsigned int *threadIndex) const
     if (!threadIndex) {
         return kOfxStatFailed;
     }
-
-    if (!gThreadIndex.hasLocalData()) {
-        *threadIndex = 0;
+    GlobalOFXTLS& local = appPTR->getCurrentThreadTLS();
+    
+    if (!local.threadIndexes.empty() && local.threadIndexes.back() != -1) {
+        *threadIndex = local.threadIndexes.back();
     } else {
-        std::list<int>& localData = gThreadIndex.localData();
-        if (!localData.empty() && localData.back() != -1) {
-            *threadIndex = localData.back();
-        } else {
-            *threadIndex = 0;
-        }
+        *threadIndex = 0;
     }
-
+    
+    
 
     return kOfxStatOK;
 }
@@ -1090,12 +1134,9 @@ Natron::OfxHost::multiThreadIndex(unsigned int *threadIndex) const
 int
 Natron::OfxHost::multiThreadIsSpawnedThread() const
 {
-    if (!gThreadIndex.hasLocalData()) {
-        return 0;
-    } else {
-        std::list<int>& localData = gThreadIndex.localData();
-        return !localData.empty() && localData.back() != -1;
-    }
+    GlobalOFXTLS& local = appPTR->getCurrentThreadTLS();
+    return !local.threadIndexes.empty() && local.threadIndexes.back() != -1;
+    
 }
 
 // Create a mutex
@@ -1272,6 +1313,25 @@ Natron::OfxHost::mutexTryLock(const OfxMutexHandle mutex)
 
 #endif // ifdef OFX_SUPPORTS_MULTITHREAD
 
+#ifdef OFX_SUPPORTS_DIALOG
+// dialog
+/// @see OfxDialogSuiteV1.RequestDialog()
+OfxStatus
+Natron::OfxHost::requestDialog(void* user_data)
+{
+    appPTR->requestOFXDIalogOnMainThread(user_data);
+    return kOfxStatOK;
+}
+
+/// @see OfxDialogSuiteV1.NotifyRedrawPending()
+OfxStatus
+Natron::OfxHost::notifyRedrawPending()
+{
+    return kOfxStatReplyDefault;
+}
+
+#endif
+
 #ifdef OFX_SUPPORTS_OPENGLRENDER
 /// @see OfxImageEffectOpenGLRenderSuiteV1.flushResources()
 OfxStatus Natron::OfxHost::flushOpenGLResources() const
@@ -1280,3 +1340,9 @@ OfxStatus Natron::OfxHost::flushOpenGLResources() const
 }
 #endif
 
+
+GlobalOFXTLS&
+Natron::OfxHost::getCurrentThreadTLS()
+{
+    return _imp->globalTLS.localData();
+}

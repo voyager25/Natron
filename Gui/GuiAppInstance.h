@@ -1,19 +1,29 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef GUIAPPINSTANCE_H
 #define GUIAPPINSTANCE_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <map>
 
@@ -51,7 +61,9 @@ struct GuiAppInstancePrivate;
 class GuiAppInstance
     : public AppInstance
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -124,8 +136,8 @@ public:
     virtual bool isGuiFrozen() const OVERRIDE FINAL;
 
     virtual bool isShowingDialog() const OVERRIDE FINAL;
-    virtual void startProgress(KnobHolder* effect,const std::string & message,bool canCancel = true) OVERRIDE FINAL;
-    virtual void endProgress(KnobHolder* effect) OVERRIDE FINAL;
+    virtual void progressStart(KnobHolder* effect, const std::string &message, const std::string &messageid, bool canCancel = true) OVERRIDE FINAL;
+    virtual void progressEnd(KnobHolder* effect) OVERRIDE FINAL;
     virtual bool progressUpdate(KnobHolder* effect,double t) OVERRIDE FINAL;
     virtual void onMaxPanelsOpenedChanged(int maxPanels) OVERRIDE FINAL;
     virtual void connectViewersToViewerCache() OVERRIDE FINAL;
@@ -137,7 +149,7 @@ public:
     virtual std::string openImageFileDialog() OVERRIDE FINAL;
     virtual std::string saveImageFileDialog() OVERRIDE FINAL;
 
-    virtual void startRenderingFullSequence(const AppInstance::RenderWork& w,bool renderInSeparateProcess,const QString& savePath) OVERRIDE FINAL;
+    virtual void startRenderingFullSequence(bool enableRenderStats,const AppInstance::RenderWork& w,bool renderInSeparateProcess,const QString& savePath) OVERRIDE FINAL;
 
     virtual void clearViewersLastRenderedTexture() OVERRIDE FINAL;
     
@@ -153,7 +165,7 @@ public:
     void discardLastViewerUsingTimeline();
     
 
-    virtual void declareCurrentAppVariable_Python();
+    virtual void declareCurrentAppVariable_Python() OVERRIDE;
 
     virtual void createLoadProjectSplashScreen(const QString& projectFile) OVERRIDE FINAL;
     
@@ -186,6 +198,25 @@ public:
     
     virtual void setUserIsPainting(const boost::shared_ptr<Natron::Node>& rotopaintNode) OVERRIDE FINAL;
     virtual boost::shared_ptr<Natron::Node> getIsUserPainting() const OVERRIDE FINAL WARN_UNUSED_RETURN;
+    
+    virtual bool isRenderStatsActionChecked() const OVERRIDE FINAL;
+    
+    virtual bool save(const std::string& filename) OVERRIDE FINAL WARN_UNUSED_RETURN;
+    virtual bool saveAs(const std::string& filename) OVERRIDE FINAL WARN_UNUSED_RETURN;
+    
+    virtual AppInstance* loadProject(const std::string& filename) OVERRIDE FINAL WARN_UNUSED_RETURN;
+    
+    ///Close the current project but keep the window
+    virtual bool resetProject()  OVERRIDE FINAL;
+    
+    ///Reset + close window, quit if last window
+    virtual bool closeProject()  OVERRIDE FINAL;
+    
+    ///Opens a new window
+    virtual AppInstance* newProject()  OVERRIDE FINAL;
+    
+
+
     
 private:
 

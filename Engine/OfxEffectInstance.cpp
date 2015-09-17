@@ -1,17 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "OfxEffectInstance.h"
 
@@ -35,27 +44,34 @@ CLANG_DIAG_OFF(tautological-undefined-compare) // appeared in clang 3.5
 CLANG_DIAG_ON(tautological-undefined-compare)
 CLANG_DIAG_ON(unknown-pragmas)
 #include <ofxhPluginAPICache.h>
+CLANG_DIAG_OFF(unknown-pragmas)
+CLANG_DIAG_OFF(tautological-undefined-compare)
+#include <ofxhImageEffect.h>
+CLANG_DIAG_ON(tautological-undefined-compare)
+CLANG_DIAG_ON(unknown-pragmas)
 #include <ofxhImageEffectAPI.h>
+#include <ofxOpenGLRender.h>
 #include <ofxhHost.h>
 
 #include <tuttle/ofxReadWrite.h>
 #include "ofxNatron.h"
 #include <nuke/fnOfxExtensions.h>
 
+#include "Engine/AppInstance.h"
 #include "Engine/AppManager.h"
-#include "Engine/OfxParamInstance.h"
+#include "Engine/KnobFile.h"
+#include "Engine/KnobTypes.h"
+#include "Engine/Node.h"
+#include "Engine/NodeSerialization.h"
 #include "Engine/OfxClipInstance.h"
 #include "Engine/OfxImageEffectInstance.h"
 #include "Engine/OfxOverlayInteract.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/TimeLine.h"
+#include "Engine/OfxParamInstance.h"
 #include "Engine/Project.h"
-#include "Engine/KnobFile.h"
-#include "Engine/KnobTypes.h"
-#include "Engine/AppInstance.h"
-#include "Engine/NodeSerialization.h"
-#include "Engine/Node.h"
+#include "Engine/RotoLayer.h"
+#include "Engine/TimeLine.h"
 #include "Engine/Transform.h"
+#include "Engine/ViewerInstance.h"
 
 #define READER_INPUT_NAME "Sync"
 
@@ -442,7 +458,7 @@ OfxEffectInstance::initializeContextDependentParams()
 {
     assert(_context != eContextNone);
     if ( isWriter() ) {
-        _renderButton = Natron::createKnob<Button_Knob>(this, "Render");
+        _renderButton = Natron::createKnob<KnobButton>(this, "Render");
         _renderButton->setHintToolTip("Starts rendering the specified frame range.");
         _renderButton->setAsRenderButton();
     }
@@ -946,12 +962,15 @@ OfxEffectInstance::onInputChanged(int inputNo)
                                              false,
                                              false,
                                              0,
-                                             dynamic_cast<OutputEffectInstance*>(this),
+                                             getNode(),
+                                             0,
                                              0, //texture index
                                              getApp()->getTimeLine().get(),
                                              NodePtr(),
                                              false,
-                                             false);
+                                             false,
+                                             false,
+                                             boost::shared_ptr<RenderStats>());
     
     EffectPointerThreadProperty_RAII propHolder_raii(this);
     
@@ -998,6 +1017,7 @@ OfxEffectInstance::onInputChanged(int inputNo)
         _effect->endInstanceChangedAction(kOfxChangeUserEdited);
     }
 
+    getNode()->refreshDynamicProperties();
 }
 
 /** @brief map a std::string to a context */
@@ -1594,7 +1614,7 @@ OfxEffectInstance::getRegionsOfInterest(double time,
                                         const RectD & outputRoD,
                                         const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
                                         int view,
-                                        EffectInstance::RoIMap* ret)
+                                        RoIMap* ret)
 {
     assert(_context != eContextNone);
     std::map<OFX::Host::ImageEffect::ClipInstance*,OfxRectD> inputRois;
@@ -1674,11 +1694,11 @@ OfxEffectInstance::getRegionsOfInterest(double time,
     
 } // getRegionsOfInterest
 
-Natron::EffectInstance::FramesNeededMap
+FramesNeededMap
 OfxEffectInstance::getFramesNeeded(double time, int view)
 {
     assert(_context != eContextNone);
-    EffectInstance::FramesNeededMap ret;
+    FramesNeededMap ret;
     if (!_initialized) {
         return ret;
     }
@@ -1926,6 +1946,7 @@ OfxEffectInstance::beginSequenceRender(double first,
                                        const RenderScale & scale,
                                        bool isSequentialRender,
                                        bool isRenderResponseToUserInteraction,
+                                       bool draftMode,
                                        int view)
 {
     {
@@ -1954,7 +1975,7 @@ OfxEffectInstance::beginSequenceRender(double first,
         
         ///Take the preferences lock so that it cannot be modified throughout the action.
         QReadLocker preferencesLocker(_preferencesLock);
-        stat = effectInstance()->beginRenderAction(first, last, step, interactive, scale, isSequentialRender, isRenderResponseToUserInteraction, view);
+        stat = effectInstance()->beginRenderAction(first, last, step, interactive, scale, isSequentialRender, isRenderResponseToUserInteraction, draftMode, view);
     }
 
     if ( (stat != kOfxStatOK) && (stat != kOfxStatReplyDefault) ) {
@@ -1972,6 +1993,7 @@ OfxEffectInstance::endSequenceRender(double first,
                                      const RenderScale & scale,
                                      bool isSequentialRender,
                                      bool isRenderResponseToUserInteraction,
+                                     bool draftMode,
                                      int view)
 {
     {
@@ -1999,7 +2021,7 @@ OfxEffectInstance::endSequenceRender(double first,
         
         ///Take the preferences lock so that it cannot be modified throughout the action.
         QReadLocker preferencesLocker(_preferencesLock);
-        stat = effectInstance()->endRenderAction(first, last, step, interactive,scale, isSequentialRender, isRenderResponseToUserInteraction, view);
+        stat = effectInstance()->endRenderAction(first, last, step, interactive,scale, isSequentialRender, isRenderResponseToUserInteraction, draftMode, view);
     }
 
     if ( (stat != kOfxStatOK) && (stat != kOfxStatReplyDefault) ) {
@@ -2517,7 +2539,7 @@ OfxEffectInstance::knobChanged(KnobI* k,
 
     ///If the param changed is a button and the node is disabled don't do anything which might
     ///trigger an analysis
-    if ( (reason == eValueChangedReasonUserEdited) && dynamic_cast<Button_Knob*>(k) && getNode()->isNodeDisabled() ) {
+    if ( (reason == eValueChangedReasonUserEdited) && dynamic_cast<KnobButton*>(k) && getNode()->isNodeDisabled() ) {
         return;
     }
 
@@ -2527,9 +2549,6 @@ OfxEffectInstance::knobChanged(KnobI* k,
     }
 
 
-    // OFX::Host::Param::paramSetValue() does it for us when it's edited by the plugin
-    bool canCallInstanceChangedAction = reason != Natron::eValueChangedReasonPluginEdited;
-    
     std::string ofxReason = natronValueChangedReasonToOfxValueChangedReason(reason);
     assert( !ofxReason.empty() ); // crashes when resetting to defaults
     OfxPointD renderScale;
@@ -2545,29 +2564,28 @@ OfxEffectInstance::knobChanged(KnobI* k,
     
     int recursionLevel = getRecursionLevel();
 
-    if (canCallInstanceChangedAction) {
-        if (recursionLevel == 1) {
-            SET_CAN_SET_VALUE(true);
-            ClipsThreadStorageSetter clipSetter(effectInstance(),
-                                                false,
-                                                true, //< setView ?
-                                                view,
-                                                true, //< setmipmaplevel?
-                                                0);
-            
-            ///This action as all the overlay interacts actions can trigger recursive actions, such as
-            ///getClipPreferences() so we don't take the clips preferences lock for read here otherwise we would
-            ///create a deadlock. This code then assumes that the instance changed action of the plug-in doesn't require
-            ///the clip preferences to stay the same throughout the action.
-            stat = effectInstance()->paramInstanceChangedAction(k->getOriginalName(), ofxReason,(OfxTime)time,renderScale);
-        } else {
-            ///This action as all the overlay interacts actions can trigger recursive actions, such as
-            ///getClipPreferences() so we don't take the clips preferences lock for read here otherwise we would
-            ///create a deadlock. This code then assumes that the instance changed action of the plug-in doesn't require
-            ///the clip preferences to stay the same throughout the action.
-            stat = effectInstance()->paramInstanceChangedAction(k->getOriginalName(), ofxReason,(OfxTime)time,renderScale);
-        }
+    if (recursionLevel == 1) {
+        SET_CAN_SET_VALUE(true);
+        ClipsThreadStorageSetter clipSetter(effectInstance(),
+                                            false,
+                                            true, //< setView ?
+                                            view,
+                                            true, //< setmipmaplevel?
+                                            0);
+        
+        ///This action as all the overlay interacts actions can trigger recursive actions, such as
+        ///getClipPreferences() so we don't take the clips preferences lock for read here otherwise we would
+        ///create a deadlock. This code then assumes that the instance changed action of the plug-in doesn't require
+        ///the clip preferences to stay the same throughout the action.
+        stat = effectInstance()->paramInstanceChangedAction(k->getOriginalName(), ofxReason,(OfxTime)time,renderScale);
+    } else {
+        ///This action as all the overlay interacts actions can trigger recursive actions, such as
+        ///getClipPreferences() so we don't take the clips preferences lock for read here otherwise we would
+        ///create a deadlock. This code then assumes that the instance changed action of the plug-in doesn't require
+        ///the clip preferences to stay the same throughout the action.
+        stat = effectInstance()->paramInstanceChangedAction(k->getOriginalName(), ofxReason,(OfxTime)time,renderScale);
     }
+    
     if ( (stat != kOfxStatOK) && (stat != kOfxStatReplyDefault) ) {
         QString err( QString( getNode()->getScriptName_mt_safe().c_str() ) + ": An error occured while changing parameter " +
                     k->getDescription().c_str() );
@@ -2672,6 +2690,20 @@ OfxEffectInstance::supportsTiles() const
     }
 
     return effectInstance()->supportsTiles() && outputClip->supportsTiles();
+}
+
+Natron::PluginOpenGLRenderSupport
+OfxEffectInstance::supportsOpenGLRender() const
+{
+    const std::string& str = effectInstance()->getProps().getStringProperty(kOfxImageEffectPropOpenGLRenderSupported);
+    if (str == "false") {
+        return ePluginOpenGLRenderSupportNone;
+    } else if (str == "true") {
+        return ePluginOpenGLRenderSupportYes;
+    } else {
+        assert(str == "needed");
+        return ePluginOpenGLRenderSupportNeeded;
+    }
 }
 
 bool
@@ -3050,12 +3082,12 @@ OfxEffectInstance::getTransform(double time,
 }
 
 void
-OfxEffectInstance::rerouteInputAndSetTransform(const std::list<InputMatrix>& inputTransforms)
+OfxEffectInstance::rerouteInputAndSetTransform(const InputMatrixMap& inputTransforms)
 {
-    for (std::list<InputMatrix>::const_iterator it = inputTransforms.begin(); it != inputTransforms.end(); ++it) {
-        OfxClipInstance* clip = getClipCorrespondingToInput(it->inputNb);
+    for (InputMatrixMap::const_iterator it = inputTransforms.begin(); it != inputTransforms.end(); ++it) {
+        OfxClipInstance* clip = getClipCorrespondingToInput(it->first);
         assert(clip);
-        clip->setTransformAndReRouteInput(*it->cat, it->newInputEffect, it->newInputNbToFetchFrom);
+        clip->setTransformAndReRouteInput(*it->second.cat, it->second.newInputEffect, it->second.newInputNbToFetchFrom);
     }
     
 }

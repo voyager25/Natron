@@ -1,24 +1,36 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
 #ifndef NODEGROUP_H
 #define NODEGROUP_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <list>
+#include <set>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
+#include <boost/shared_ptr.hpp>
 #endif
 
 #include "Engine/EffectInstance.h"
@@ -29,6 +41,11 @@
 typedef boost::shared_ptr<Natron::Node> NodePtr;
 typedef std::list<NodePtr> NodeList;
 
+
+
+
+
+
 namespace Natron {
 class Node;
 class OutputEffectInstance;
@@ -37,6 +54,7 @@ class TimeLine;
 class NodeGraphI;
 class KnobI;
 class ViewerInstance;
+class RenderStats;
 struct NodeCollectionPrivate;
 class NodeCollection
 {
@@ -230,15 +248,19 @@ public:
                                bool isSequential,
                                bool canAbort,
                                U64 renderAge,
-                               Natron::OutputEffectInstance* renderRequester,
+                               const boost::shared_ptr<Natron::Node>& treeRoot,
+                               const FrameRequestMap* request,
                                int textureIndex,
                                const TimeLine* timeline,
                                const boost::shared_ptr<Natron::Node>& activeRotoPaintNode,
                                bool isAnalysis,
-                               bool draftMode);
+                               bool draftMode,
+                               bool viewerProgressReportEnabled,
+                               const boost::shared_ptr<RenderStats>& stats);
     void invalidateParallelRenderArgs();
     
     void getParallelRenderArgs(std::map<boost::shared_ptr<Natron::Node>,ParallelRenderArgs >& argsMap) const;
+    
     
     void forceGetClipPreferencesOnAllTrees();
     
@@ -287,6 +309,7 @@ class ParallelRenderArgsSetter
     NodeCollection* collection;
     std::map<boost::shared_ptr<Natron::Node>,ParallelRenderArgs > argsMap;
     
+        
 public:
     
     ParallelRenderArgsSetter(NodeCollection* n,
@@ -296,12 +319,15 @@ public:
                              bool isSequential,
                              bool canAbort,
                              U64 renderAge,
-                             Natron::OutputEffectInstance* renderRequester,
+                             const boost::shared_ptr<Natron::Node>& treeRoot,
+                             const FrameRequestMap* request,
                              int textureIndex,
                              const TimeLine* timeline,
                              const boost::shared_ptr<Natron::Node>& activeRotoPaintNode,
                              bool isAnalysis,
-                             bool draftMode);
+                             bool draftMode,
+                             bool viewerProgressReportEnabled,
+                             const boost::shared_ptr<RenderStats>& stats);
     
     ParallelRenderArgsSetter(const std::map<boost::shared_ptr<Natron::Node>,ParallelRenderArgs >& args);
     
@@ -312,8 +338,9 @@ public:
 struct NodeGroupPrivate;
 class NodeGroup : public Natron::OutputEffectInstance, public NodeCollection
 {
-    
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
     
 public:
     
@@ -386,17 +413,17 @@ public:
     virtual void notifyInputMaskStateChanged(const boost::shared_ptr<Natron::Node>& node) OVERRIDE FINAL;
     virtual void notifyNodeNameChanged(const boost::shared_ptr<Natron::Node>& node) OVERRIDE FINAL;
     
-    boost::shared_ptr<Natron::Node> getOutputNode() const;
+    boost::shared_ptr<Natron::Node> getOutputNode(bool useGuiConnexions) const;
+        
+    boost::shared_ptr<Natron::Node> getOutputNodeInput(bool useGuiConnexions) const;
     
-    std::list<boost::shared_ptr<Natron::Node> > getAllOutputNodes() const;
-    
-    boost::shared_ptr<Natron::Node> getOutputNodeInput() const;
-    
-    boost::shared_ptr<Natron::Node> getRealInputForInput(const boost::shared_ptr<Natron::Node>& input) const;
+    boost::shared_ptr<Natron::Node> getRealInputForInput(bool useGuiConnexions,const boost::shared_ptr<Natron::Node>& input) const;
     
     void getInputs(std::vector<boost::shared_ptr<Natron::Node> >* inputs) const;
     
     void getInputsOutputs(std::list<Natron::Node* >* nodes) const;
+    
+    void dequeueConnexions();
     
     bool getIsDeactivatingGroup() const;
     void setIsDeactivatingGroup(bool b);

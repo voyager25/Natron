@@ -15,6 +15,7 @@ See :ref:`details`
 Functions
 ^^^^^^^^^
 
+*    def :meth:`addUserPlane<NatronEngine.Effect.addUserPlane>` (planeName,channels)
 *    def :meth:`endChanges<NatronEngine.Effect.endChanges>` ()
 *    def :meth:`beginChanges<NatronEngine.Effect.beginChanges>` ()
 *    def :meth:`canConnectInput<NatronEngine.Effect.canConnectInput>` (inputNumber, node)
@@ -37,6 +38,7 @@ Functions
 *    def :meth:`getScriptName<NatronEngine.Effect.getScriptName>` ()
 *    def :meth:`getSize<NatronEngine.Effect.getSize>` ()
 *    def :meth:`getUserPageParam<NatronEngine.Effect.getUserPageParam>` ()
+*    def :meth:`isUserSelected<NatronEngine.Effect.isUserSelected>` ()
 *    def :meth:`setColor<NatronEngine.Effect.setColor>` (r, g, b)
 *    def :meth:`setLabel<NatronEngine.Effect.setLabel>` (name)
 *    def :meth:`setPosition<NatronEngine.Effect.setPosition>` (x, y)
@@ -90,6 +92,26 @@ See :ref:`this section<userParams.details>`
 Member functions description
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+.. method:: NatronEngine.Effect.addUserPlane(planeName,channels)
+
+	:param planeName: :class:`str<NatronEngine.std::string>`
+	:param channels: :class:`sequence`
+	:rtype: :class:`bool<PySide.QtCore.bool>`
+	
+	Adds a new plane to the Channels selector of the node in its settings panel. When selected,
+	the end-user can choose to output the result of the node to this new custom plane.
+	The *planeName* will identify the plane uniquely and must not contain spaces or non
+	python compliant characters.
+	The *channels* are a sequence of channel names, e.g::
+	
+	    addUserPlane("MyLayer",["R", "G", "B", "A"])
+	
+	.. note::
+		
+		A plane cannot contain more than 4 channels and must at least have 1 channel.
+		
+	This function returns *True* if the layer was added successfully, *False* otherwise.
+
 .. method:: NatronEngine.Effect.beginChanges()
 
 	Starts a begin/End bracket, blocking all evaluation (=renders and callback onParamChanged) that would be issued due to
@@ -135,8 +157,6 @@ Effect. This function could return False for one of the following reasons:
 	* The *node* cannot have any node connected to it (such as a BackDrop or an Output)
 	* This Effect or the given *node* is a child of another node (for trackers only)
 	* Connecting *node* would create a cycle in the graph implying that it would create infinite recursions
-	* The pixel aspect ratio of *node* is different than one of the already existing input of this Effect and this Effect cannot handle different input pixel aspect ratios
-	* The frame rate of *node* is different than one of the already existing input
 
 
 .. method:: NatronEngine.Effect.connectInput(inputNumber, input)
@@ -346,6 +366,16 @@ should not be used.
 
 
 Convenience function to return the user page parameter if this Effect has one.
+
+
+.. method:: NatronEngine.Effect.isUserSelected()
+
+
+    :rtype: :class:`bool<PySide.QtCore.bool>`
+
+
+	Returns true if this node is selected in its containing nodegraph.
+
 
 
 

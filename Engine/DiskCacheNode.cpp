@@ -1,18 +1,30 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "DiskCacheNode.h"
+
+#include <stdexcept>
 
 #include "Engine/Node.h"
 #include "Engine/Image.h"
@@ -24,10 +36,10 @@ using namespace Natron;
 
 struct DiskCacheNodePrivate
 {
-    boost::weak_ptr<Choice_Knob> frameRange;
-    boost::weak_ptr<Int_Knob> firstFrame;
-    boost::weak_ptr<Int_Knob> lastFrame;
-    boost::weak_ptr<Button_Knob> preRender;
+    boost::weak_ptr<KnobChoice> frameRange;
+    boost::weak_ptr<KnobInt> firstFrame;
+    boost::weak_ptr<KnobInt> lastFrame;
+    boost::weak_ptr<KnobButton> preRender;
     
     DiskCacheNodePrivate()
     {
@@ -65,9 +77,9 @@ DiskCacheNode::shouldCacheOutput(bool /*isFrameVaryingOrAnimated*/) const
 void
 DiskCacheNode::initializeKnobs()
 {
-    boost::shared_ptr<Page_Knob> page = Natron::createKnob<Page_Knob>(this, "Controls");
+    boost::shared_ptr<KnobPage> page = Natron::createKnob<KnobPage>(this, "Controls");
     
-    boost::shared_ptr<Choice_Knob> frameRange = Natron::createKnob<Choice_Knob>(this, "Frame range");
+    boost::shared_ptr<KnobChoice> frameRange = Natron::createKnob<KnobChoice>(this, "Frame range");
     frameRange->setName("frameRange");
     frameRange->setAnimationEnabled(false);
     std::vector<std::string> choices;
@@ -80,7 +92,7 @@ DiskCacheNode::initializeKnobs()
     page->addKnob(frameRange);
     _imp->frameRange = frameRange;
     
-    boost::shared_ptr<Int_Knob> firstFrame = Natron::createKnob<Int_Knob>(this, "First frame");
+    boost::shared_ptr<KnobInt> firstFrame = Natron::createKnob<KnobInt>(this, "First frame");
     firstFrame->setAnimationEnabled(false);
     firstFrame->setName("firstFrame");
     firstFrame->disableSlider();
@@ -91,7 +103,7 @@ DiskCacheNode::initializeKnobs()
     page->addKnob(firstFrame);
     _imp->firstFrame = firstFrame;
     
-    boost::shared_ptr<Int_Knob> lastFrame = Natron::createKnob<Int_Knob>(this, "Last frame");
+    boost::shared_ptr<KnobInt> lastFrame = Natron::createKnob<KnobInt>(this, "Last frame");
     lastFrame->setAnimationEnabled(false);
     lastFrame->setName("LastFrame");
     lastFrame->disableSlider();
@@ -101,7 +113,7 @@ DiskCacheNode::initializeKnobs()
     page->addKnob(lastFrame);
     _imp->lastFrame = lastFrame;
     
-    boost::shared_ptr<Button_Knob> preRender = Natron::createKnob<Button_Knob>(this, "Pre-cache");
+    boost::shared_ptr<KnobButton> preRender = Natron::createKnob<KnobButton>(this, "Pre-cache");
     preRender->setName("preRender");
     preRender->setEvaluateOnChange(false);
     preRender->setHintToolTip("Cache the frame range specified by rendering images at zoom-level 100% only.");
@@ -137,7 +149,7 @@ DiskCacheNode::knobChanged(KnobI* k, Natron::ValueChangedReasonEnum /*reason*/, 
         w.lastFrame = INT_MAX;
         std::list<AppInstance::RenderWork> works;
         works.push_back(w);
-        getApp()->startWritersRendering(works);
+        getApp()->startWritersRendering(getApp()->isRenderStatsActionChecked(),works);
     }
 }
 

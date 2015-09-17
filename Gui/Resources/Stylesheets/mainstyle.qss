@@ -5,13 +5,25 @@
 /*You have to fill the arguments with  stylesheet-representable colours.*/
 
 QWidget {
-    color: black;
+    color: %5;
     background-color: %2;
 }
 
+QFrame {
+   color: black;
+}
+
+/*QLabel inherits QFrame so we put it afterwards, otherwise the label text will be black too.*/
 QLabel {
     color: %5;
 }
+
+
+QGroupBox {
+   color: black;
+}
+
+
 
 Natron--Label[altered="true"] {
     color: %10;
@@ -248,7 +260,7 @@ QLabel:disabled {
 }
 
 
-TabWidget{background-color: %2;}
+TabWidget{background-color: %4;}
 
 NodeSettingsPanel{
     background-color : %2;
@@ -358,7 +370,7 @@ QCheckBox {
 }
 
 QGraphicsView {
-    background-color: %3;
+    background-color: %2;
 }
 
 QScrollArea {
@@ -446,11 +458,16 @@ QTabBar::tab {
     background: %4;
     border: 1px solid ;
     border-bottom-color: %2;
-    min-width: 8ex;
+    min-width: 18ex;
     padding: 2px;
     border-top-right-radius: 5px;
     border-top-left-radius: 5px;
 }
+
+QTabBar::tab#DockablePanelTabWidget {
+    min-width: 5ex;
+}
+
 QTabBar::tab:hover {
     background: %1;
 }

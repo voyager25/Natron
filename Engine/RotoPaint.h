@@ -1,12 +1,20 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef ROTOPAINT_H
 #define ROTOPAINT_H
@@ -53,7 +61,7 @@ public:
 
     virtual std::string getPluginLabel() const OVERRIDE WARN_UNUSED_RETURN;
 
-    virtual std::string getDescription() const WARN_UNUSED_RETURN;
+    virtual std::string getDescription() const OVERRIDE WARN_UNUSED_RETURN;
 
     virtual void getPluginGrouping(std::list<std::string>* grouping) const OVERRIDE FINAL
     {
@@ -64,7 +72,7 @@ public:
 
     virtual bool isInputMask(int inputNb) const OVERRIDE FINAL WARN_UNUSED_RETURN;  
 
-    virtual bool isInputOptional(int /*inputNb*/) const
+    virtual bool isInputOptional(int /*inputNb*/) const OVERRIDE FINAL WARN_UNUSED_RETURN
     {
         return true;
     }
@@ -115,6 +123,15 @@ private:
 
     virtual Natron::StatusEnum
     getRegionOfDefinition(U64 hash,double time, const RenderScale & scale, int view, RectD* rod) OVERRIDE WARN_UNUSED_RETURN;
+    
+    virtual void getRegionsOfInterest(double time,
+                                      const RenderScale & scale,
+                                      const RectD & outputRoD, //!< the RoD of the effect, in canonical coordinates
+                                      const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
+                                      int view,
+                                      RoIMap* ret) OVERRIDE FINAL;
+    
+    virtual FramesNeededMap getFramesNeeded(double time, int view) OVERRIDE FINAL;
 
     virtual bool isIdentity(double time,
                         const RenderScale & scale,

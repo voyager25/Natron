@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_GUI_VIEWERTAB_H_
 #define NATRON_GUI_VIEWERTAB_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
@@ -26,16 +35,20 @@ CLANG_DIAG_ON(uninitialized)
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
-#include "Global/GlobalDefines.h"
-#include "Engine/ScriptObject.h"
-#include "Gui/FromQtEnums.h"
 
+#include "Global/GlobalDefines.h"
+#include "Global/KeySymbols.h" // Key
+
+#include "Engine/ScriptObject.h"
+#include "Engine/RenderStats.h"
 
 namespace Natron
 {
     class Node;
     class ImageComponents;
 }
+typedef std::map<boost::shared_ptr<Natron::Node>,NodeRenderStats > RenderStatsMap;
+
 class ViewerGL;
 class ViewerInstance;
 class Gui;
@@ -53,7 +66,9 @@ class ViewerTab
     : public QWidget
     , public ScriptObject
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     explicit ViewerTab(const std::list<NodeGui*> & existingRotoNodes,
@@ -85,7 +100,7 @@ public:
      *@brief Tells all the nodes in the grpah to draw their overlays
      **/
     /*All the overlay methods are forwarding calls to the default node instance*/
-    void drawOverlays(double scaleX, double scaleY) const;
+    void drawOverlays(double time,double scaleX, double scaleY) const;
 
     bool notifyOverlaysPenDown(double scaleX, double scaleY, Natron::PenType pen, bool isTabletEvent,const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QMouseEvent* e);
 
@@ -262,9 +277,18 @@ public:
     void synchronizeOtherViewersProjection();
     
     void centerOn_tripleSync(SequenceTime left, SequenceTime right);
+    
+    void zoomIn();
+    void zoomOut();
+    
+    void refresh(bool enableRenderStats);
+    
+    void connectToInput(int inputNb);
 
 public Q_SLOTS:
 
+    void onZoomComboboxCurrentIndexChanged(int index);
+    
     void startPause(bool);
     void abortRendering();
     void startBackward(bool);
@@ -295,6 +319,8 @@ public Q_SLOTS:
     void showView(int view);
 
     void onEnableViewerRoIButtonToggle(bool);
+    
+    void onCreateNewRoIPressed();
 
     void onAutoContrastChanged(bool b);
 
@@ -389,6 +415,13 @@ public Q_SLOTS:
     void onGainSliderEditingFinished(bool hasMovedOnce);
     
     void onSyncViewersButtonPressed(bool clicked);
+    
+    void onRenderStatsAvailable(int time, int view, double wallTime, const RenderStatsMap& stats);
+    
+    void nextLayer();
+    void previousLayer();
+    
+    void toggleTripleSync(bool toggled);
     
 private:
     

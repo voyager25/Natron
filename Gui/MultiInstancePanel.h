@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef MULTIINSTANCEPANEL_H
 #define MULTIINSTANCEPANEL_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
@@ -31,7 +40,7 @@ class QHBoxLayout;
 class QItemSelection;
 class ViewerInstance;
 class TableItem;
-class Button_Knob;
+class KnobButton;
 class Gui;
 /**
  * @brief This class represents a multi-instance settings panel.
@@ -40,7 +49,9 @@ struct MultiInstancePanelPrivate;
 class MultiInstancePanel
     :  public NamedKnobHolder
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -70,7 +81,7 @@ public:
 
     boost::shared_ptr<KnobI> getKnobForItem(TableItem* item,int* dimension) const;
     Gui* getGui() const;
-    virtual void setIconForButton(Button_Knob* /*knob*/)
+    virtual void setIconForButton(KnobButton* /*knob*/)
     {
     }
 
@@ -138,7 +149,7 @@ protected:
 
 private:
 
-    virtual void onButtonTriggered(Button_Knob* button);
+    virtual void onButtonTriggered(KnobButton* button);
 
     void resetInstances(const std::list<Natron::Node*> & instances);
 
@@ -155,7 +166,9 @@ struct TrackerPanelPrivateV1;
 class TrackerPanelV1
     : public MultiInstancePanel
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -199,13 +212,58 @@ private:
     virtual void initializeExtraKnobs() OVERRIDE FINAL;
     virtual void appendExtraGui(QVBoxLayout* layout) OVERRIDE FINAL;
     virtual void appendButtons(QHBoxLayout* buttonLayout) OVERRIDE FINAL;
-    virtual void setIconForButton(Button_Knob* knob) OVERRIDE FINAL;
-    virtual void onButtonTriggered(Button_Knob* button) OVERRIDE FINAL;
+    virtual void setIconForButton(KnobButton* knob) OVERRIDE FINAL;
+    virtual void onButtonTriggered(KnobButton* button) OVERRIDE FINAL;
     virtual void showMenuForInstance(Natron::Node* item) OVERRIDE FINAL;
 
     boost::scoped_ptr<TrackerPanelPrivateV1> _imp;
 };
 
+<<<<<<< HEAD
+=======
+struct TrackSchedulerPrivate;
+class TrackScheduler : public QThread
+{
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
+    Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
+    
+public:
+    
+    TrackScheduler(const TrackerPanel* panel);
+    
+    virtual ~TrackScheduler();
+    
+    /**
+     * @brief Track the selectedInstances, calling the instance change action on each button (either the previous or
+     * next button) in a separate thread. 
+     * @param start the first frame to track, if forward is true then start < end
+     * @param end the next frame after the last frame to track (a la STL iterators), if forward is true then end > start
+     **/
+    void track(int start,int end,bool forward,const std::list<KnobButton*> & selectedInstances);
+    
+    void abortTracking();
+    
+    void quitThread();
+    
+    bool isWorking() const;
+    
+Q_SIGNALS:
+    
+    void trackingStarted();
+    
+    void trackingFinished();
+    
+    void progressUpdate(double progress);
+
+private:
+    
+    virtual void run() OVERRIDE FINAL;
+    
+    boost::scoped_ptr<TrackSchedulerPrivate> _imp;
+    
+};
+>>>>>>> workshop
 
 
 #endif // MULTIINSTANCEPANEL_H

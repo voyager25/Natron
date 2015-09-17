@@ -1,22 +1,38 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-#ifndef NATRON_GUI_NODEGRAPH_H_
-#define NATRON_GUI_NODEGRAPH_H_
+#ifndef _Gui_NodeGraph_h_
+#define _Gui_NodeGraph_h_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "Global/Macros.h"
+
+#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
+#include <boost/noncopyable.hpp>
+#include <boost/scoped_ptr.hpp>
+#include <boost/shared_ptr.hpp>
+#endif
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QGraphicsView>
@@ -24,11 +40,6 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
-#include <boost/noncopyable.hpp>
-#include <boost/scoped_ptr.hpp>
-#include <boost/shared_ptr.hpp>
-#endif
 
 #include "Engine/NodeGraphI.h"
 #include "Engine/ScriptObject.h"
@@ -56,7 +67,9 @@ class Node;
 
 class NodeGraph : public QGraphicsView, public NodeGraphI, public ScriptObject, public boost::noncopyable
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
@@ -74,6 +87,8 @@ public:
                                              double xPosHint,double yPosHint,bool pushUndoRedoCommand,bool autoConnect);
 
     void selectNode(const boost::shared_ptr<NodeGui> & n,bool addToSelection);
+    
+    void deselectNode(const boost::shared_ptr<NodeGui>& n);
     
     void setSelection(const std::list<boost::shared_ptr<NodeGui> >& nodes);
     
@@ -107,7 +122,6 @@ public:
     void discardGuiPointer();
     void discardScenePointer();
 
-    void refreshAllEdges();
 
     /**
      * @brief Removes the given node from the nodegraph, using the undo/redo stack.
@@ -277,8 +291,10 @@ private:
 struct FindNodeDialogPrivate;
 class FindNodeDialog : public QDialog
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
-    
+GCC_DIAG_SUGGEST_OVERRIDE_ON
+
 public:
     
     FindNodeDialog(NodeGraph* graph,QWidget* parent);
@@ -308,13 +324,19 @@ private:
 struct EditNodeNameDialogPrivate;
 class EditNodeNameDialog: public QDialog
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
     
 public:
     
-    EditNodeNameDialog(NodeGraph* graph,const boost::shared_ptr<NodeGui>& node,QWidget* parent);
+    EditNodeNameDialog(const boost::shared_ptr<NodeGui>& node,QWidget* parent);
     
     virtual ~EditNodeNameDialog();
+    
+    QString getTypedName() const;
+    
+    boost::shared_ptr<NodeGui> getNode() const;
     
 private:
     
@@ -324,4 +346,4 @@ private:
     boost::scoped_ptr<EditNodeNameDialogPrivate> _imp;
 };
 
-#endif // NATRON_GUI_NODEGRAPH_H_
+#endif // _Gui_NodeGraph_h_

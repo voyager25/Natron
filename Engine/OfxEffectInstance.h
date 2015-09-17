@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_OFXNODE_H_
 #define NATRON_ENGINE_OFXNODE_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "Global/Macros.h"
 #include <map>
@@ -29,9 +38,8 @@ CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_ON(deprecated)
 #include <QtCore/QStringList>
 //ofx
-// ofxhPropertySuite.h:565:37: warning: 'this' pointer cannot be null in well-defined C++ code; comparison may be assumed to always evaluate to true [-Wtautological-undefined-compare]
 CLANG_DIAG_OFF(unknown-pragmas)
-CLANG_DIAG_OFF(tautological-undefined-compare) // appeared in clang 3.5
+CLANG_DIAG_OFF(tautological-undefined-compare)
 #include <ofxhImageEffect.h>
 CLANG_DIAG_ON(tautological-undefined-compare)
 CLANG_DIAG_ON(unknown-pragmas)
@@ -46,7 +54,7 @@ CLANG_DIAG_ON(unknown-pragmas)
 
 class QReadWriteLock;
 class OfxClipInstance;
-class Button_Knob;
+class KnobButton;
 class OverlaySupport;
 class NodeSerialization;
 class KnobSerialization;
@@ -91,7 +99,9 @@ public:
 class OfxEffectInstance
     : public AbstractOfxEffectInstance
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
     OfxEffectInstance(boost::shared_ptr<Natron::Node> node);
@@ -182,9 +192,9 @@ public:
                                   const RectD & outputRoD, //!< full RoD in canonical coordinates
                                   const RectD & renderWindow, //!< the region to be rendered in the output image, in Canonical Coordinates
                                   int view,
-                                Natron::EffectInstance::RoIMap* ret) OVERRIDE FINAL;
+                                  RoIMap* ret) OVERRIDE FINAL;
 
-    virtual Natron::EffectInstance::FramesNeededMap getFramesNeeded(double time,int view) WARN_UNUSED_RETURN;
+    virtual FramesNeededMap getFramesNeeded(double time,int view) OVERRIDE WARN_UNUSED_RETURN;
     virtual void getFrameRange(double *first,double *last) OVERRIDE;
     virtual void initializeOverlayInteract() OVERRIDE FINAL;
     virtual bool hasOverlay() const OVERRIDE FINAL;
@@ -222,7 +232,7 @@ public:
      * full RoD images to the effect whenever it fetches one.
      **/
     virtual bool supportsTiles() const OVERRIDE FINAL WARN_UNUSED_RETURN;
-
+    virtual Natron::PluginOpenGLRenderSupport supportsOpenGLRender() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual bool doesTemporalClipAccess() const OVERRIDE FINAL WARN_UNUSED_RETURN;
 
     /**
@@ -239,21 +249,23 @@ public:
     virtual void restoreClipPreferences() OVERRIDE FINAL;
     virtual std::vector<std::string> supportedFileFormats() const OVERRIDE FINAL;
     virtual Natron::StatusEnum beginSequenceRender(double first,
-                                               double last,
-                                               double step,
-                                               bool interactive,
-                                               const RenderScale & scale,
-                                               bool isSequentialRender,
-                                               bool isRenderResponseToUserInteraction,
-                                               int view) OVERRIDE FINAL WARN_UNUSED_RETURN;
+                                                   double last,
+                                                   double step,
+                                                   bool interactive,
+                                                   const RenderScale & scale,
+                                                   bool isSequentialRender,
+                                                   bool isRenderResponseToUserInteraction,
+                                                   bool draftMode,
+                                                   int view) OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual Natron::StatusEnum endSequenceRender(double first,
-                                             double last,
-                                             double step,
-                                             bool interactive,
-                                             const RenderScale & scale,
-                                             bool isSequentialRender,
-                                             bool isRenderResponseToUserInteraction,
-                                             int view) OVERRIDE FINAL WARN_UNUSED_RETURN;
+                                                 double last,
+                                                 double step,
+                                                 bool interactive,
+                                                 const RenderScale & scale,
+                                                 bool isSequentialRender,
+                                                 bool isRenderResponseToUserInteraction,
+                                                 bool draftMode,
+                                                 int view) OVERRIDE FINAL WARN_UNUSED_RETURN;
     virtual void addAcceptedComponents(int inputNb, std::list<Natron::ImageComponents>* comps) OVERRIDE FINAL;
     virtual void addSupportedBitDepth(std::list<Natron::ImageBitDepthEnum>* depths) const OVERRIDE FINAL;
     virtual void getPreferredDepthAndComponents(int inputNb, std::list<Natron::ImageComponents>* comp, Natron::ImageBitDepthEnum* depth) const OVERRIDE FINAL;
@@ -268,7 +280,7 @@ public:
                                                 ComponentsNeededMap* comps,
                                                 SequenceTime* passThroughTime,
                                                 int* passThroughView,
-                                                boost::shared_ptr<Natron::Node>* passThroughInput) ;
+                                                boost::shared_ptr<Natron::Node>* passThroughInput) OVERRIDE;
 
 
     virtual bool isMultiPlanar() const OVERRIDE FINAL WARN_UNUSED_RETURN;
@@ -287,7 +299,7 @@ public:
                                             int view,
                                             Natron::EffectInstance** inputToTransform,
                                             Transform::Matrix3x3* transform) OVERRIDE FINAL WARN_UNUSED_RETURN;
-    virtual void rerouteInputAndSetTransform(const std::list<EffectInstance::InputMatrix>& inputTransforms) OVERRIDE FINAL;
+    virtual void rerouteInputAndSetTransform(const InputMatrixMap& inputTransforms) OVERRIDE FINAL;
     virtual void clearTransform(int inputNb) OVERRIDE FINAL;
 
     virtual bool isFrameVarying() const OVERRIDE FINAL WARN_UNUSED_RETURN;
@@ -382,7 +394,7 @@ private:
         }
     };
 
-    virtual bool checkCanSetValue() const { return isDuringActionThatCanSetValue(); }
+    virtual bool checkCanSetValue() const OVERRIDE { return isDuringActionThatCanSetValue(); }
 
 #define SET_CAN_SET_VALUE(canSetValue) OfxEffectInstance::CanSetSetValueFlag_RAII canSetValueSetter(this,canSetValue)
 
@@ -402,7 +414,7 @@ private:
 
     bool _created; // true after the call to createInstance
     bool _initialized; //true when the image effect instance has been created and populated
-    boost::shared_ptr<Button_Knob> _renderButton; //< render button for writers
+    boost::shared_ptr<KnobButton> _renderButton; //< render button for writers
     mutable Natron::RenderSafetyEnum _renderSafety;
     mutable bool _wasRenderSafetySet;
     mutable QReadWriteLock* _renderSafetyLock;

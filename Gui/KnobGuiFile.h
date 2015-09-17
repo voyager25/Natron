@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
-#ifndef NATRON_GUI_KNOBGUIFILE_H_
-#define NATRON_GUI_KNOBGUIFILE_H_
+#ifndef _Gui_KnobGuiFile_h_
+#define _Gui_KnobGuiFile_h_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <map>
 #include "Global/Macros.h"
@@ -36,38 +45,40 @@ class QFileSystemWatcher;
 
 // Engine
 class KnobI;
-class File_Knob;
-class OutputFile_Knob;
-class Path_Knob;
+class KnobFile;
+class KnobOutputFile;
+class KnobPath;
 
 // Gui
 class LineEdit;
 class DockablePanel;
 class Button;
-class File_Knob_UndoCommand;
+class KnobFile_UndoCommand;
 class TableView;
 class TableModel;
 class TableItem;
 //================================
-class File_KnobGui
+class KnobGuiFile
     : public KnobGui
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
-    friend class File_Knob_UndoCommand;
+    friend class KnobFile_UndoCommand;
 
 public:
 
     static KnobGui * BuildKnobGui(boost::shared_ptr<KnobI> knob,
                                   DockablePanel *container)
     {
-        return new File_KnobGui(knob, container);
+        return new KnobGuiFile(knob, container);
     }
 
-    File_KnobGui(boost::shared_ptr<KnobI> knob,
+    KnobGuiFile(boost::shared_ptr<KnobI> knob,
                  DockablePanel *container);
 
-    virtual ~File_KnobGui() OVERRIDE;
+    virtual ~KnobGuiFile() OVERRIDE;
     
     virtual void removeSpecificGui() OVERRIDE FINAL;
 
@@ -95,7 +106,7 @@ public Q_SLOTS:
 private:
     
     virtual void addRightClickMenuEntries(QMenu* menu) OVERRIDE FINAL;
-    virtual bool shouldAddStretch() const { return false; }
+    virtual bool shouldAddStretch() const OVERRIDE FINAL { return false; }
     virtual void createWidget(QHBoxLayout* layout) OVERRIDE FINAL;
     virtual void _hide() OVERRIDE FINAL;
     virtual void _show() OVERRIDE FINAL;
@@ -117,28 +128,30 @@ private:
     QDateTime _lastModified;
     QFileSystemWatcher* _watcher;
     std::string _fileBeingWatched;
-    boost::weak_ptr<File_Knob> _knob;
+    boost::weak_ptr<KnobFile> _knob;
 };
 
 
 //================================
-class OutputFile_KnobGui
+class KnobGuiOutputFile
     : public KnobGui
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
     static KnobGui * BuildKnobGui(boost::shared_ptr<KnobI> knob,
                                   DockablePanel *container)
     {
-        return new OutputFile_KnobGui(knob, container);
+        return new KnobGuiOutputFile(knob, container);
     }
 
-    OutputFile_KnobGui(boost::shared_ptr<KnobI> knob,
+    KnobGuiOutputFile(boost::shared_ptr<KnobI> knob,
                        DockablePanel *container);
 
-    virtual ~OutputFile_KnobGui() OVERRIDE;
+    virtual ~KnobGuiOutputFile() OVERRIDE;
 
     virtual void removeSpecificGui() OVERRIDE FINAL;
     
@@ -161,7 +174,7 @@ public Q_SLOTS:
 private:
     
     virtual void addRightClickMenuEntries(QMenu* menu) OVERRIDE FINAL;
-    virtual bool shouldAddStretch() const { return false; }
+    virtual bool shouldAddStretch() const OVERRIDE FINAL { return false; }
     virtual void createWidget(QHBoxLayout* layout) OVERRIDE FINAL;
     virtual void _hide() OVERRIDE FINAL;
     virtual void _show() OVERRIDE FINAL;
@@ -178,29 +191,31 @@ private:
     LineEdit *_lineEdit;
     Button *_openFileButton;
     QString _lastOpened;
-    boost::weak_ptr<OutputFile_Knob> _knob;
+    boost::weak_ptr<KnobOutputFile> _knob;
 };
 
 
 //================================
 
-class Path_KnobGui
+class KnobGuiPath
     : public KnobGui
 {
+GCC_DIAG_SUGGEST_OVERRIDE_OFF
     Q_OBJECT
+GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
     static KnobGui * BuildKnobGui(boost::shared_ptr<KnobI> knob,
                                   DockablePanel *container)
     {
-        return new Path_KnobGui(knob, container);
+        return new KnobGuiPath(knob, container);
     }
 
-    Path_KnobGui(boost::shared_ptr<KnobI> knob,
+    KnobGuiPath(boost::shared_ptr<KnobI> knob,
                  DockablePanel *container);
 
-    virtual ~Path_KnobGui() OVERRIDE;
+    virtual ~KnobGuiPath() OVERRIDE;
     
     virtual void removeSpecificGui() OVERRIDE FINAL;
 
@@ -230,7 +245,7 @@ public Q_SLOTS:
 
 private:
     virtual void addRightClickMenuEntries(QMenu* menu) OVERRIDE FINAL;
-    virtual bool shouldAddStretch() const { return false; }
+    virtual bool shouldAddStretch() const OVERRIDE FINAL { return false; }
     virtual void createWidget(QHBoxLayout *layout) OVERRIDE FINAL;
     virtual void _hide() OVERRIDE FINAL;
     virtual void _show() OVERRIDE FINAL;
@@ -274,10 +289,10 @@ private:
     Button* _removePathButton;
     Button* _editPathButton;
     QString _lastOpened;
-    boost::weak_ptr<Path_Knob> _knob;
+    boost::weak_ptr<KnobPath> _knob;
     bool _isInsertingItem;
     Variables _items;
 };
 
-#endif // NATRON_GUI_KNOBGUIFILE_H_
+#endif // _Gui_KnobGuiFile_h_
 

@@ -1,20 +1,29 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef NATRON_ENGINE_CURVE_H_
 #define NATRON_ENGINE_CURVE_H_
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <vector>
 #include <map>
@@ -24,14 +33,11 @@
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
-GCC_DIAG_OFF(unused-parameter)
-// /opt/local/include/boost/serialization/smart_cast.hpp:254:25: warning: unused parameter 'u' [-Wunused-parameter]
-#include <boost/archive/xml_iarchive.hpp>
-GCC_DIAG_ON(unused-parameter)
-#include <boost/archive/xml_oarchive.hpp>
 #endif
 #include "Global/Macros.h"
 #include "Global/GlobalDefines.h"
+
+namespace boost { namespace serialization { class access; } }
 
 #define NATRON_CURVE_X_SPACING_EPSILON 1e-6
 /**
@@ -104,14 +110,7 @@ private:
     friend class boost::serialization::access;
     template<class Archive>
     void serialize(Archive & ar,
-                   const unsigned int /*version*/)
-    {
-        ar & boost::serialization::make_nvp("Time",_time);
-        ar & boost::serialization::make_nvp("Value",_value);
-        ar & boost::serialization::make_nvp("InterpolationMethod",_interpolation);
-        ar & boost::serialization::make_nvp("LeftDerivative",_leftDerivative);
-        ar & boost::serialization::make_nvp("RightDerivative",_rightDerivative);
-    }
+                   const unsigned int version);
 };
 
 struct KeyFrame_compare_time
@@ -132,8 +131,6 @@ class RectD;
 
 class Curve
 {
-    friend class boost::serialization::access;
-
     enum CurveChangedReasonEnum
     {
         eCurveChangedReasonDerivativesChanged = 0,
@@ -277,6 +274,7 @@ public:
     static KeyFrameSet::const_iterator findWithTime(const KeyFrameSet& keys,double time);
     
 private:
+    friend class boost::serialization::access;
     template<class Archive>
     void serialize(Archive & ar, const unsigned int version);
 

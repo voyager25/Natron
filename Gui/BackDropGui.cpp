@@ -1,11 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "BackDropGui.h"
 
@@ -23,7 +38,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/Node.h"
 #include "Engine/BackDrop.h"
 
-#include "Gui/KnobGuiTypes.h"
+#include "Gui/KnobGuiString.h"
 
 #define RESIZE_HANDLE_SIZE 20
 
@@ -67,7 +82,7 @@ BackDropGuiPrivate::getLabelValue() const
 {
     boost::shared_ptr<KnobI> k = _publicInterface->getNode()->getKnobByName("Label");
     assert(k);
-    String_Knob* isStr = dynamic_cast<String_Knob*>(k.get());
+    KnobString* isStr = dynamic_cast<KnobString*>(k.get());
     assert(isStr);
     return isStr->getValue();
 }
@@ -149,7 +164,7 @@ BackDropGuiPrivate::refreshLabelText(int nameHeight,const QString &text)
     QFont f;
     QColor color;
     if (!text.isEmpty()) {
-        String_KnobGui::parseFont(textLabel, &f, &color);
+        KnobGuiString::parseFont(textLabel, &f, &color);
         label->setFont(f);
     }
     

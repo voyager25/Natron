@@ -1,7 +1,20 @@
-#This Source Code Form is subject to the terms of the Mozilla Public
-#License, v. 2.0. If a copy of the MPL was not distributed with this
-#file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
+# ***** BEGIN LICENSE BLOCK *****
+# This file is part of Natron <http://www.natron.fr/>,
+# Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+#
+# Natron is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# Natron is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+# ***** END LICENSE BLOCK *****
 
 TARGET = Gui
 TEMPLATE = lib
@@ -56,47 +69,99 @@ win32-msvc* {
 SOURCES += \
     AboutWindow.cpp \
     ActionShortcuts.cpp \
+    AddKnobDialog.cpp \
     AnimatedCheckBox.cpp \
     AnimationButton.cpp \
+    AutoHideToolBar.cpp \
     BackDropGui.cpp \
     Button.cpp \
+    ChannelsComboBox.cpp \
     ClickableLabel.cpp \
     ComboBox.cpp \
     CurveEditor.cpp \
     CurveEditorUndoRedo.cpp \
+    CurveGui.cpp \
     CurveWidget.cpp \
+    CurveWidgetDialogs.cpp \
+    CurveWidgetPrivate.cpp \
     CustomParamInteract.cpp \
     DefaultOverlays.cpp \
     DockablePanel.cpp \
+    DockablePanelPrivate.cpp \
+    DockablePanelTabWidget.cpp \
     DopeSheet.cpp \
     DopeSheetView.cpp \
     DopeSheetEditorUndoRedo.cpp \
     DopeSheetHierarchyView.cpp \
     DopeSheetEditor.cpp \
     Edge.cpp \
-    FromQtEnums.cpp \
+    EditExpressionDialog.cpp \
+    EditScriptDialog.cpp \
+    FloatingWidget.cpp \
+    QtEnumConvert.cpp \
     Gui.cpp \
+    Gui05.cpp \
+    Gui10.cpp \
+    Gui15.cpp \
+    Gui20.cpp \
+    Gui30.cpp \
+    Gui40.cpp \
+    Gui50.cpp \
     GuiApplicationManager.cpp \
+    GuiApplicationManager10.cpp \
+    GuiApplicationManagerPrivate.cpp \
     GuiAppInstance.cpp \
     GuiAppWrapper.cpp \
+    GuiPrivate.cpp \
     Histogram.cpp \
     InfoViewerWidget.cpp \
     KnobGui.cpp \
+    KnobGui10.cpp \
+    KnobGui20.cpp \
     KnobGuiFactory.cpp \
+    KnobGuiPrivate.cpp \
     KnobGuiFile.cpp \
-    KnobGuiTypes.cpp \
+    FileTypeMainWindow_win.cpp \
+    KnobGuiButton.cpp \
+    KnobGuiInt.cpp \
+    KnobGuiBool.cpp \
+    KnobGuiDouble.cpp \
+    KnobGuiChoice.cpp \
+    KnobGuiSeparator.cpp \
+    KnobGuiColor.cpp \
+    KnobGuiString.cpp \
+    KnobGuiGroup.cpp \
+    KnobGuiParametric.cpp \
     KnobUndoCommand.cpp \
     Label.cpp \
     LineEdit.cpp \
+    LinkToKnobDialog.cpp \
+    LogWindow.cpp \
+    ManageUserParamsDialog.cpp \
     MessageBox.cpp \
     Menu.cpp \
     MultiInstancePanel.cpp \
+    NewLayerDialog.cpp \
     NodeBackDropSerialization.cpp \
     NodeCreationDialog.cpp \
     NodeGraph.cpp \
+    NodeGraph05.cpp \
+    NodeGraph10.cpp \
+    NodeGraph13.cpp \
+    NodeGraph15.cpp \
+    NodeGraph20.cpp \
+    NodeGraph25.cpp \
+    NodeGraph30.cpp \
+    NodeGraph35.cpp \
+    NodeGraph40.cpp \
+    NodeGraph45.cpp \
+    NodeGraphPrivate.cpp \
+    NodeGraphPrivate10.cpp \
     NodeGraphUndoRedo.cpp \
     NodeGui.cpp \
     NodeGuiSerialization.cpp \
+    NodeSettingsPanel.cpp \
+    PickKnobDialog.cpp \
     PreferencesPanel.cpp \
     ProjectGui.cpp \
     ProjectGuiSerialization.cpp \
@@ -104,6 +169,9 @@ SOURCES += \
     QtDecoder.cpp \
     QtEncoder.cpp \
     RenderingProgressDialog.cpp \
+    RenderStatsDialog.cpp \
+    ResizableMessageBox.cpp \
+    RightClickableWidget.cpp \
     RotoGui.cpp \
     RotoPanel.cpp \
     RotoUndoCommand.cpp \
@@ -117,6 +185,7 @@ SOURCES += \
     SpinBox.cpp \
     SplashScreen.cpp \
     Splitter.cpp \
+    TabGroup.cpp \
     TableModelView.cpp \
     TabWidget.cpp \
     TextRenderer.cpp \
@@ -128,8 +197,15 @@ SOURCES += \
     TrackerGui.cpp \
     TrackerUndoCommand.cpp \
     Utils.cpp \
+    VerticalColorBar.cpp \
     ViewerGL.cpp \
+    ViewerGLPrivate.cpp \
     ViewerTab.cpp \
+    ViewerTab10.cpp \
+    ViewerTab20.cpp \
+    ViewerTab30.cpp \
+    ViewerTab40.cpp \
+    ViewerTabPrivate.cpp \
     NatronGui/natrongui_module_wrapper.cpp \
     NatronGui/pyguiapplication_wrapper.cpp \
     NatronGui/guiapp_wrapper.cpp \
@@ -141,59 +217,96 @@ SOURCES += \
 HEADERS += \
     AboutWindow.h \
     ActionShortcuts.h \
+    AddKnobDialog.h \
     AnimatedCheckBox.h \
     AnimationButton.h \
+    AutoHideToolBar.h \
     BackDropGui.h \
     Button.h \
+    ChannelsComboBox.h \
     ClickableLabel.h \
     ComboBox.h \
     CurveEditor.h \
     CurveEditorUndoRedo.h \
+    CurveGui.h \
     CurveSelection.h \
     CurveWidget.h \
+    CurveWidgetDialogs.h \
+    CurveWidgetPrivate.h \
     CustomParamInteract.h \
     DefaultOverlays.h \
     DockablePanel.h \
+    DockablePanelPrivate.h \
+    DockablePanelTabWidget.h \
     DopeSheet.h \
     DopeSheetView.h \
     DopeSheetEditorUndoRedo.h \
     DopeSheetHierarchyView.h \
     DopeSheetEditor.h \
     Edge.h \
-    FromQtEnums.h \
+    EditExpressionDialog.h \
+    EditScriptDialog.h \
+    FileTypeMainWindow_win.h \
+    FloatingWidget.h \
+    QtEnumConvert.h \
     GroupBoxLabel.h \
     Gui.h \
-    GuiMacros.h \
+    GuiDefines.h \
     GuiApplicationManager.h \
+    GuiApplicationManagerPrivate.h \
     GuiAppInstance.h \
     GuiAppWrapper.h \
+    GuiMacros.h \
+    GuiPrivate.h \
     GlobalGuiWrapper.h \
     Histogram.h \
     InfoViewerWidget.h \
     KnobGui.h \
     KnobGuiFactory.h \
     KnobGuiFile.h \
-    KnobGuiTypes.h \
+    KnobGuiButton.h \
+    KnobGuiInt.h \
+    KnobGuiBool.h \
+    KnobGuiDouble.h \
+    KnobGuiChoice.h \
+    KnobGuiSeparator.h \
+    KnobGuiColor.h \
+    KnobGuiString.h \
+    KnobGuiGroup.h \
+    KnobGuiParametric.h \
     KnobUndoCommand.h \
     Label.h \
     LineEdit.h \
+    LinkToKnobDialog.h \
+    LogWindow.h \
+    ManageUserParamsDialog.h \
     MessageBox.h \
     Menu.h \
     MultiInstancePanel.h \
+    NewLayerDialog.h \
     NodeBackDropSerialization.h \
+    NodeClipBoard.h \
     NodeCreationDialog.h \
     NodeGraph.h \
+    NodeGraphPrivate.h \
     NodeGraphUndoRedo.h \
     NodeGui.h \
     NodeGuiSerialization.h \
+    NodeSettingsPanel.h \
+    PickKnobDialog.h \
     PreferencesPanel.h \
     ProjectGui.h \
     ProjectGuiSerialization.h \
+    PropertiesBinWrapper.h \
     Pyside_Gui_Python.h \
     PythonPanels.h \
     QtDecoder.h \
     QtEncoder.h \
+    RegisteredTabs.h \
     RenderingProgressDialog.h \
+    RenderStatsDialog.h \
+    ResizableMessageBox.h \
+    RightClickableWidget.h \
     RotoGui.h \
     RotoPanel.h \
     RotoUndoCommand.h \
@@ -207,6 +320,7 @@ HEADERS += \
     SpinBox.h \
     SplashScreen.h \
     Splitter.h \
+    TabGroup.h \
     TableModelView.h \
     TabWidget.h \
     TextRenderer.h \
@@ -218,8 +332,11 @@ HEADERS += \
     TrackerGui.h \
     TrackerUndoCommand.h \
     Utils.h \
+    VerticalColorBar.h \
     ViewerGL.h \
+    ViewerGLPrivate.h \
     ViewerTab.h \
+    ViewerTabPrivate.h \
     ZoomContext.h \
     ../libs/OpenFX/include/ofxCore.h \
     ../libs/OpenFX/include/ofxDialog.h \
@@ -400,3 +517,8 @@ Resources/OpenColorIO-Configs/spi-vfx/luts/vd16.spi1d \
 Resources/OpenColorIO-Configs/spi-vfx/luts/vd8.spi1d \
 Resources/OpenColorIO-Configs/spi-vfx/luts/version_8_whitebalanced.spimtx \
 Resources/OpenColorIO-Configs/spi-vfx/make_vfx_ocio.py
+
+macx {
+OBJECTIVE_SOURCES += \
+    QtMac.mm
+}

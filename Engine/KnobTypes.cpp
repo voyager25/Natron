@@ -1,17 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "KnobTypes.h"
 
@@ -19,30 +28,36 @@
 #include <locale>
 #include <sstream>
 #include <algorithm> // min, max
+#include <stdexcept>
 
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
 #include <boost/math/special_functions/fpclassify.hpp>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 
 #include <QDebug>
 #include <QThread>
 #include <QCoreApplication>
 
-#include "Engine/Curve.h"
-#include "Engine/KnobFile.h"
-#include "Engine/Transform.h"
 #include "Engine/AppInstance.h"
-#include "Engine/RotoContext.h"
-#include "Engine/Node.h"
-#include "Engine/TimeLine.h"
+#include "Engine/Bezier.h"
+#include "Engine/BezierCP.h"
+#include "Engine/Curve.h"
 #include "Engine/EffectInstance.h"
-#include "Engine/Image.h"
-#include "Engine/KnobSerialization.h"
 #include "Engine/Format.h"
+#include "Engine/Image.h"
+#include "Engine/KnobFile.h"
+#include "Engine/KnobSerialization.h"
+#include "Engine/Node.h"
+#include "Engine/RotoContext.h"
+#include "Engine/TimeLine.h"
+#include "Engine/Transform.h"
+
 using namespace Natron;
 using std::make_pair;
 using std::pair;
 
-/******************************INT_KNOB**************************************/
-Int_Knob::Int_Knob(KnobHolder* holder,
+/******************************KnobInt**************************************/
+KnobInt::KnobInt(KnobHolder* holder,
                    const std::string &description,
                    int dimension,
                    bool declaredByPlugin)
@@ -56,20 +71,20 @@ Int_Knob::Int_Knob(KnobHolder* holder,
 }
 
 void
-Int_Knob::disableSlider()
+KnobInt::disableSlider()
 {
     _disableSlider = true;
 }
 
 bool
-Int_Knob::isSliderDisabled() const
+KnobInt::isSliderDisabled() const
 {
     return _disableSlider;
 }
 
 
 void
-Int_Knob::setIncrement(int incr,
+KnobInt::setIncrement(int incr,
                        int index)
 {
     if (incr <= 0) {
@@ -79,14 +94,14 @@ Int_Knob::setIncrement(int incr,
     }
     
     if ( index >= (int)_increments.size() ) {
-        throw std::runtime_error("Int_Knob::setIncrement , dimension out of range");
+        throw std::runtime_error("KnobInt::setIncrement , dimension out of range");
     }
     _increments[index] = incr;
     Q_EMIT incrementChanged(_increments[index], index);
 }
 
 void
-Int_Knob::setIncrement(const std::vector<int> &incr)
+KnobInt::setIncrement(const std::vector<int> &incr)
 {
     assert( (int)incr.size() == getDimension() );
     _increments = incr;
@@ -100,33 +115,33 @@ Int_Knob::setIncrement(const std::vector<int> &incr)
 }
 
 const std::vector<int> &
-Int_Knob::getIncrements() const
+KnobInt::getIncrements() const
 {
     return _increments;
 }
 
 bool
-Int_Knob::canAnimate() const
+KnobInt::canAnimate() const
 {
     return true;
 }
 
-const std::string Int_Knob::_typeNameStr("Int");
+const std::string KnobInt::_typeNameStr("Int");
 const std::string &
-Int_Knob::typeNameStatic()
+KnobInt::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Int_Knob::typeName() const
+KnobInt::typeName() const
 {
     return typeNameStatic();
 }
 
-/******************************BOOL_KNOB**************************************/
+/******************************KnobBool**************************************/
 
-Bool_Knob::Bool_Knob(KnobHolder* holder,
+KnobBool::KnobBool(KnobHolder* holder,
                      const std::string &description,
                      int dimension,
                      bool declaredByPlugin)
@@ -135,28 +150,28 @@ Bool_Knob::Bool_Knob(KnobHolder* holder,
 }
 
 bool
-Bool_Knob::canAnimate() const
+KnobBool::canAnimate() const
 {
     return canAnimateStatic();
 }
 
-const std::string Bool_Knob::_typeNameStr("Bool");
+const std::string KnobBool::_typeNameStr("Bool");
 const std::string &
-Bool_Knob::typeNameStatic()
+KnobBool::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Bool_Knob::typeName() const
+KnobBool::typeName() const
 {
     return typeNameStatic();
 }
 
-/******************************DOUBLE_KNOB**************************************/
+/******************************KnobDouble**************************************/
 
 
-Double_Knob::Double_Knob(KnobHolder* holder,
+KnobDouble::KnobDouble(KnobHolder* holder,
                          const std::string &description,
                          int dimension,
                          bool declaredByPlugin)
@@ -179,7 +194,7 @@ Double_Knob::Double_Knob(KnobHolder* holder,
 }
 
 void
-Double_Knob::setHasNativeOverlayHandle(bool handle)
+KnobDouble::setHasNativeOverlayHandle(bool handle)
 {
     KnobHolder* holder = getHolder();
     if (holder) {
@@ -192,7 +207,7 @@ Double_Knob::setHasNativeOverlayHandle(bool handle)
         }
         boost::shared_ptr<KnobI> thisShared = holder->getKnobByName(getName());
         assert(thisShared);
-        boost::shared_ptr<Double_Knob> thisSharedDouble = boost::dynamic_pointer_cast<Double_Knob>(thisShared);
+        boost::shared_ptr<KnobDouble> thisSharedDouble = boost::dynamic_pointer_cast<KnobDouble>(thisShared);
         assert(thisSharedDouble);
         if (handle) {
             effect->getNode()->addDefaultPositionOverlay(thisSharedDouble);
@@ -205,56 +220,56 @@ Double_Knob::setHasNativeOverlayHandle(bool handle)
 }
 
 bool
-Double_Knob::getHasNativeOverlayHandle() const
+KnobDouble::getHasNativeOverlayHandle() const
 {
     return _hasNativeOverlayHandle;
 }
 
 void
-Double_Knob::disableSlider()
+KnobDouble::disableSlider()
 {
     _disableSlider = true;
 }
 
 bool
-Double_Knob::isSliderDisabled() const
+KnobDouble::isSliderDisabled() const
 {
     return _disableSlider;
 }
 
 bool
-Double_Knob::canAnimate() const
+KnobDouble::canAnimate() const
 {
     return true;
 }
 
-const std::string Double_Knob::_typeNameStr("Double");
+const std::string KnobDouble::_typeNameStr("Double");
 const std::string &
-Double_Knob::typeNameStatic()
+KnobDouble::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Double_Knob::typeName() const
+KnobDouble::typeName() const
 {
     return typeNameStatic();
 }
 
 const std::vector<double> &
-Double_Knob::getIncrements() const
+KnobDouble::getIncrements() const
 {
     return _increments;
 }
 
 const std::vector<int> &
-Double_Knob::getDecimals() const
+KnobDouble::getDecimals() const
 {
     return _decimals;
 }
 
 void
-Double_Knob::setIncrement(double incr,
+KnobDouble::setIncrement(double incr,
                           int index)
 {
     if (incr <= 0.) {
@@ -263,7 +278,7 @@ Double_Knob::setIncrement(double incr,
         return;
     }
     if ( index >= (int)_increments.size() ) {
-        throw std::runtime_error("Double_Knob::setIncrement , dimension out of range");
+        throw std::runtime_error("KnobDouble::setIncrement , dimension out of range");
     }
     
     _increments[index] = incr;
@@ -271,11 +286,11 @@ Double_Knob::setIncrement(double incr,
 }
 
 void
-Double_Knob::setDecimals(int decis,
+KnobDouble::setDecimals(int decis,
                          int index)
 {
     if ( index >= (int)_decimals.size() ) {
-        throw std::runtime_error("Double_Knob::setDecimals , dimension out of range");
+        throw std::runtime_error("KnobDouble::setDecimals , dimension out of range");
     }
     
     _decimals[index] = decis;
@@ -284,7 +299,7 @@ Double_Knob::setDecimals(int decis,
 
 
 void
-Double_Knob::setIncrement(const std::vector<double> &incr)
+KnobDouble::setIncrement(const std::vector<double> &incr)
 {
     assert( incr.size() == (U32)getDimension() );
     _increments = incr;
@@ -294,7 +309,7 @@ Double_Knob::setIncrement(const std::vector<double> &incr)
 }
 
 void
-Double_Knob::setDecimals(const std::vector<int> &decis)
+KnobDouble::setDecimals(const std::vector<int> &decis)
 {
     assert( decis.size() == (U32)getDimension() );
     _decimals = decis;
@@ -304,7 +319,7 @@ Double_Knob::setDecimals(const std::vector<int> &decis)
 }
 
 void
-Double_Knob::onNodeDeactivated()
+KnobDouble::onNodeDeactivated()
 {
     ///unslave all roto control points that would be slaved
     for (std::list< boost::shared_ptr<BezierCP> >::iterator it = _slavedTracks.begin(); it != _slavedTracks.end(); ++it) {
@@ -313,15 +328,15 @@ Double_Knob::onNodeDeactivated()
 }
 
 void
-Double_Knob::onNodeActivated()
+KnobDouble::onNodeActivated()
 {
     ///get a shared_ptr to this
     assert( getHolder() );
-    boost::shared_ptr<Double_Knob> thisShared;
+    boost::shared_ptr<KnobDouble> thisShared;
     const std::vector<boost::shared_ptr<KnobI> > & knobs = getHolder()->getKnobs();
     for (U32 i = 0; i < knobs.size(); ++i) {
         if (knobs[i].get() == this) {
-            thisShared = boost::dynamic_pointer_cast<Double_Knob>(knobs[i]);
+            thisShared = boost::dynamic_pointer_cast<KnobDouble>(knobs[i]);
             break;
         }
     }
@@ -334,7 +349,7 @@ Double_Knob::onNodeActivated()
 }
 
 void
-Double_Knob::removeSlavedTrack(const boost::shared_ptr<BezierCP> & cp)
+KnobDouble::removeSlavedTrack(const boost::shared_ptr<BezierCP> & cp)
 {
     std::list< boost::shared_ptr<BezierCP> >::iterator found = std::find(_slavedTracks.begin(),_slavedTracks.end(),cp);
     
@@ -344,7 +359,7 @@ Double_Knob::removeSlavedTrack(const boost::shared_ptr<BezierCP> & cp)
 }
 
 void
-Double_Knob::serializeTracks(std::list<SerializedTrack>* tracks)
+KnobDouble::serializeTracks(std::list<SerializedTrack>* tracks)
 {
     for (std::list< boost::shared_ptr<BezierCP> >::iterator it = _slavedTracks.begin(); it != _slavedTracks.end(); ++it) {
         SerializedTrack s;
@@ -358,16 +373,16 @@ Double_Knob::serializeTracks(std::list<SerializedTrack>* tracks)
 }
 
 void
-Double_Knob::restoreTracks(const std::list <SerializedTrack> & tracks,
+KnobDouble::restoreTracks(const std::list <SerializedTrack> & tracks,
                            const std::list<boost::shared_ptr<Node> > & activeNodes)
 {
     ///get a shared_ptr to this
     assert( getHolder() );
-    boost::shared_ptr<Double_Knob> thisShared;
+    boost::shared_ptr<KnobDouble> thisShared;
     const std::vector<boost::shared_ptr<KnobI> > & knobs = getHolder()->getKnobs();
     for (U32 i = 0; i < knobs.size(); ++i) {
         if (knobs[i].get() == this) {
-            thisShared = boost::dynamic_pointer_cast<Double_Knob>(knobs[i]);
+            thisShared = boost::dynamic_pointer_cast<KnobDouble>(knobs[i]);
             break;
         }
     }
@@ -421,7 +436,7 @@ Double_Knob::restoreTracks(const std::list <SerializedTrack> & tracks,
     }
 } // restoreTracks
 
-Double_Knob::~Double_Knob()
+KnobDouble::~KnobDouble()
 {
     for (std::list< boost::shared_ptr<BezierCP> >::iterator it = _slavedTracks.begin(); it != _slavedTracks.end(); ++it) {
         (*it)->unslave();
@@ -451,19 +466,19 @@ getInputRoD(EffectInstance* effect,
 }
 
 void
-Double_Knob::setSpatial(bool spatial)
+KnobDouble::setSpatial(bool spatial)
 {
     _spatial = spatial;
 }
 
 bool
-Double_Knob::getIsSpatial() const
+KnobDouble::getIsSpatial() const
 {
     return _spatial;
 }
 
 void
-Double_Knob::setDefaultValuesNormalized(int dims,
+KnobDouble::setDefaultValuesNormalized(int dims,
                                         double defaults[])
 {
     assert( dims == getDimension() );
@@ -474,13 +489,13 @@ Double_Knob::setDefaultValuesNormalized(int dims,
 }
 
 bool
-Double_Knob::areDefaultValuesNormalized() const
+KnobDouble::areDefaultValuesNormalized() const
 {
     return _defaultStoredNormalized;
 }
 
 void
-Double_Knob::denormalize(int dimension,
+KnobDouble::denormalize(int dimension,
                          double time,
                          double* value) const
 {
@@ -501,7 +516,7 @@ Double_Knob::denormalize(int dimension,
 }
 
 void
-Double_Knob::normalize(int dimension,
+KnobDouble::normalize(int dimension,
                        double time,
                        double* value) const
 {
@@ -521,9 +536,9 @@ Double_Knob::normalize(int dimension,
     }
 }
 
-/******************************BUTTON_KNOB**************************************/
+/******************************KnobButton**************************************/
 
-Button_Knob::Button_Knob(KnobHolder*  holder,
+KnobButton::KnobButton(KnobHolder*  holder,
                          const std::string &description,
                          int dimension,
                          bool declaredByPlugin)
@@ -534,27 +549,27 @@ Button_Knob::Button_Knob(KnobHolder*  holder,
 }
 
 bool
-Button_Knob::canAnimate() const
+KnobButton::canAnimate() const
 {
     return false;
 }
 
-const std::string Button_Knob::_typeNameStr("Button");
+const std::string KnobButton::_typeNameStr("Button");
 const std::string &
-Button_Knob::typeNameStatic()
+KnobButton::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Button_Knob::typeName() const
+KnobButton::typeName() const
 {
     return typeNameStatic();
 }
 
-/******************************CHOICE_KNOB**************************************/
+/******************************KnobChoice**************************************/
 
-Choice_Knob::Choice_Knob(KnobHolder* holder,
+KnobChoice::KnobChoice(KnobHolder* holder,
                          const std::string &description,
                          int dimension,
                          bool declaredByPlugin)
@@ -565,44 +580,44 @@ Choice_Knob::Choice_Knob(KnobHolder* holder,
 {
 }
 
-Choice_Knob::~Choice_Knob()
+KnobChoice::~KnobChoice()
 {
 }
 
 void
-Choice_Knob::setHostCanAddOptions(bool add)
+KnobChoice::setHostCanAddOptions(bool add)
 {
     _addNewChoice = add;
 }
 
 bool
-Choice_Knob::getHostCanAddOptions() const
+KnobChoice::getHostCanAddOptions() const
 {
     return _addNewChoice;
 }
 
 bool
-Choice_Knob::canAnimate() const
+KnobChoice::canAnimate() const
 {
     return canAnimateStatic();
 }
 
-const std::string Choice_Knob::_typeNameStr("Choice");
+const std::string KnobChoice::_typeNameStr("Choice");
 const std::string &
-Choice_Knob::typeNameStatic()
+KnobChoice::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Choice_Knob::typeName() const
+KnobChoice::typeName() const
 {
     return typeNameStatic();
 }
 
 /*Must be called right away after the constructor.*/
 void
-Choice_Knob::populateChoices(const std::vector<std::string> &entries,
+KnobChoice::populateChoices(const std::vector<std::string> &entries,
                              const std::vector<std::string> &entriesHelp)
 {
     assert( entriesHelp.empty() || entriesHelp.size() == entries.size() );
@@ -635,37 +650,37 @@ Choice_Knob::populateChoices(const std::vector<std::string> &entries,
 }
 
 std::vector<std::string>
-Choice_Knob::getEntries_mt_safe() const
+KnobChoice::getEntries_mt_safe() const
 {
     QMutexLocker l(&_entriesMutex);
     return _entries;
 }
 
 const std::string&
-Choice_Knob::getEntry(int v) const
+KnobChoice::getEntry(int v) const
 {
     if (v < 0 || (int)_entries.size() <= v) {
-        throw std::runtime_error(std::string("Choice_Knob::getEntry: index out of range"));
+        throw std::runtime_error(std::string("KnobChoice::getEntry: index out of range"));
     }
     return _entries[v];
 }
 
 int
-Choice_Knob::getNumEntries() const
+KnobChoice::getNumEntries() const
 {
     QMutexLocker l(&_entriesMutex);
     return (int)_entries.size();
 }
 
 std::vector<std::string>
-Choice_Knob::getEntriesHelp_mt_safe() const
+KnobChoice::getEntriesHelp_mt_safe() const
 {
     QMutexLocker l(&_entriesMutex);
     return _entriesHelp;
 }
 
 std::string
-Choice_Knob::getActiveEntryText_mt_safe() const
+KnobChoice::getActiveEntryText_mt_safe() const
 {
     int activeIndex = getValue();
     
@@ -696,7 +711,7 @@ trim(std::string const & str)
 }
 
 std::string
-Choice_Knob::getHintToolTipFull() const
+KnobChoice::getHintToolTipFull() const
 {
     assert(QThread::currentThread() == qApp->thread());
     
@@ -753,7 +768,7 @@ static bool caseInsensitiveCompare(const std::string& a,const std::string& b)
 }
 
 KnobHelper::ValueChangedReturnCodeEnum
-Choice_Knob::setValueFromLabel(const std::string & value,
+KnobChoice::setValueFromLabel(const std::string & value,
                                int dimension,
                                bool turnOffAutoKeying)
 {
@@ -763,11 +778,11 @@ Choice_Knob::setValueFromLabel(const std::string & value,
         }
     }
     return KnobHelper::eValueChangedReturnCodeNothingChanged;
-    //throw std::runtime_error(std::string("Choice_Knob::setValueFromLabel: unknown label ") + value);
+    //throw std::runtime_error(std::string("KnobChoice::setValueFromLabel: unknown label ") + value);
 }
 
 void
-Choice_Knob::setDefaultValueFromLabel(const std::string & value,
+KnobChoice::setDefaultValueFromLabel(const std::string & value,
                                       int dimension)
 {
     for (std::size_t i = 0; i < _entries.size(); ++i) {
@@ -775,11 +790,11 @@ Choice_Knob::setDefaultValueFromLabel(const std::string & value,
             return setDefaultValue(i, dimension);
         }
     }
-    //throw std::runtime_error(std::string("Choice_Knob::setDefaultValueFromLabel: unknown label ") + value);
+    //throw std::runtime_error(std::string("KnobChoice::setDefaultValueFromLabel: unknown label ") + value);
 }
 
 void
-Choice_Knob::choiceRestoration(Choice_Knob* knob,const ChoiceExtraData* data)
+KnobChoice::choiceRestoration(KnobChoice* knob,const ChoiceExtraData* data)
 {
     assert(knob && data);
     
@@ -808,9 +823,9 @@ Choice_Knob::choiceRestoration(Choice_Knob* knob,const ChoiceExtraData* data)
     }
     
 }
-/******************************SEPARATOR_KNOB**************************************/
+/******************************KnobSeparator**************************************/
 
-Separator_Knob::Separator_Knob(KnobHolder* holder,
+KnobSeparator::KnobSeparator(KnobHolder* holder,
                                const std::string &description,
                                int dimension,
                                bool declaredByPlugin)
@@ -819,25 +834,25 @@ Separator_Knob::Separator_Knob(KnobHolder* holder,
 }
 
 bool
-Separator_Knob::canAnimate() const
+KnobSeparator::canAnimate() const
 {
     return false;
 }
 
-const std::string Separator_Knob::_typeNameStr("Separator");
+const std::string KnobSeparator::_typeNameStr("Separator");
 const std::string &
-Separator_Knob::typeNameStatic()
+KnobSeparator::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Separator_Knob::typeName() const
+KnobSeparator::typeName() const
 {
     return typeNameStatic();
 }
 
-/******************************COLOR_KNOB**************************************/
+/******************************KnobColor**************************************/
 
 /**
  * @brief A color knob with of variable dimension. Each color is a double ranging in [0. , 1.]
@@ -846,7 +861,7 @@ Separator_Knob::typeName() const
  * In dimension 4 the knob will have R,G,B and A channels.
  **/
 
-Color_Knob::Color_Knob(KnobHolder* holder,
+KnobColor::KnobColor(KnobHolder* holder,
                        const std::string &description,
                        int dimension,
                        bool declaredByPlugin)
@@ -859,13 +874,13 @@ Color_Knob::Color_Knob(KnobHolder* holder,
 }
 
 void
-Color_Knob::onDimensionSwitchToggled(bool b)
+KnobColor::onDimensionSwitchToggled(bool b)
 {
     _allDimensionsEnabled = b;
 }
 
 bool
-Color_Knob::areAllDimensionsEnabled() const
+KnobColor::areAllDimensionsEnabled() const
 {
     return _allDimensionsEnabled;
 }
@@ -873,46 +888,46 @@ Color_Knob::areAllDimensionsEnabled() const
 
 
 bool
-Color_Knob::canAnimate() const
+KnobColor::canAnimate() const
 {
     return true;
 }
 
 const std::string
-Color_Knob::_typeNameStr("Color");
+KnobColor::_typeNameStr("Color");
 const std::string &
-Color_Knob::typeNameStatic()
+KnobColor::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Color_Knob::typeName() const
+KnobColor::typeName() const
 {
     return typeNameStatic();
 }
 
 
 void
-Color_Knob::setSimplified(bool simp)
+KnobColor::setSimplified(bool simp)
 {
     _simplifiedMode = simp;
 }
 
 bool
-Color_Knob::isSimplified() const
+KnobColor::isSimplified() const
 {
     return _simplifiedMode;
 }
 
-/******************************STRING_KNOB**************************************/
+/******************************KnobString**************************************/
 
 
-String_Knob::String_Knob(KnobHolder* holder,
+KnobString::KnobString(KnobHolder* holder,
                          const std::string &description,
                          int dimension,
                          bool declaredByPlugin)
-: AnimatingString_KnobHelper(holder, description, dimension,declaredByPlugin)
+: AnimatingKnobStringHelper(holder, description, dimension,declaredByPlugin)
 , _multiLine(false)
 , _richText(false)
 , _isLabel(false)
@@ -920,31 +935,31 @@ String_Knob::String_Knob(KnobHolder* holder,
 {
 }
 
-String_Knob::~String_Knob()
+KnobString::~KnobString()
 {
 }
 
 bool
-String_Knob::canAnimate() const
+KnobString::canAnimate() const
 {
     return canAnimateStatic();
 }
 
-const std::string String_Knob::_typeNameStr("String");
+const std::string KnobString::_typeNameStr("String");
 const std::string &
-String_Knob::typeNameStatic()
+KnobString::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-String_Knob::typeName() const
+KnobString::typeName() const
 {
     return typeNameStatic();
 }
 
 bool
-String_Knob::hasContentWithoutHtmlTags() const
+KnobString::hasContentWithoutHtmlTags() const
 {
     std::string str = getValue();
     if (str.empty()) {
@@ -974,9 +989,9 @@ String_Knob::hasContentWithoutHtmlTags() const
     return true;
 }
 
-/******************************GROUP_KNOB**************************************/
+/******************************KnobGroup**************************************/
 
-Group_Knob::Group_Knob(KnobHolder* holder,
+KnobGroup::KnobGroup(KnobHolder* holder,
                        const std::string &description,
                        int dimension,
                        bool declaredByPlugin)
@@ -986,38 +1001,38 @@ Group_Knob::Group_Knob(KnobHolder* holder,
 }
 
 void
-Group_Knob::setAsTab()
+KnobGroup::setAsTab()
 {
     _isTab = true;
 }
 
 bool
-Group_Knob::isTab() const
+KnobGroup::isTab() const
 {
     return _isTab;
 }
 
 bool
-Group_Knob::canAnimate() const
+KnobGroup::canAnimate() const
 {
     return false;
 }
 
-const std::string Group_Knob::_typeNameStr("Group");
+const std::string KnobGroup::_typeNameStr("Group");
 const std::string &
-Group_Knob::typeNameStatic()
+KnobGroup::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Group_Knob::typeName() const
+KnobGroup::typeName() const
 {
     return typeNameStatic();
 }
 
 void
-Group_Knob::addKnob(boost::shared_ptr<KnobI> k)
+KnobGroup::addKnob(boost::shared_ptr<KnobI> k)
 {
     for (std::size_t i = 0; i < _children.size(); ++i) {
         if (_children[i].lock() == k) {
@@ -1028,8 +1043,8 @@ Group_Knob::addKnob(boost::shared_ptr<KnobI> k)
     
     boost::shared_ptr<KnobI> parent= k->getParentKnob();
     if (parent) {
-        Group_Knob* isParentGrp = dynamic_cast<Group_Knob*>(parent.get());
-        Page_Knob* isParentPage = dynamic_cast<Page_Knob*>(parent.get());
+        KnobGroup* isParentGrp = dynamic_cast<KnobGroup*>(parent.get());
+        KnobPage* isParentPage = dynamic_cast<KnobPage*>(parent.get());
         if (isParentGrp) {
             isParentGrp->removeKnob(k.get());
         } else if (isParentPage) {
@@ -1045,7 +1060,7 @@ Group_Knob::addKnob(boost::shared_ptr<KnobI> k)
 }
 
 void
-Group_Knob::removeKnob(KnobI* k)
+KnobGroup::removeKnob(KnobI* k)
 {
     for (std::vector<boost::weak_ptr<KnobI> >::iterator it = _children.begin(); it != _children.end(); ++it) {
         if (it->lock().get() == k) {
@@ -1056,7 +1071,7 @@ Group_Knob::removeKnob(KnobI* k)
 }
 
 void
-Group_Knob::moveOneStepUp(KnobI* k)
+KnobGroup::moveOneStepUp(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
@@ -1072,7 +1087,7 @@ Group_Knob::moveOneStepUp(KnobI* k)
 }
 
 void
-Group_Knob::moveOneStepDown(KnobI* k)
+KnobGroup::moveOneStepDown(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
@@ -1088,7 +1103,7 @@ Group_Knob::moveOneStepDown(KnobI* k)
 }
 
 void
-Group_Knob::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
+KnobGroup::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
 {
     for (std::size_t i = 0; i < _children.size(); ++i) {
         if (_children[i].lock() == k) {
@@ -1098,8 +1113,8 @@ Group_Knob::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
     
     boost::shared_ptr<KnobI> parent= k->getParentKnob();
     if (parent) {
-        Group_Knob* isParentGrp = dynamic_cast<Group_Knob*>(parent.get());
-        Page_Knob* isParentPage = dynamic_cast<Page_Knob*>(parent.get());
+        KnobGroup* isParentGrp = dynamic_cast<KnobGroup*>(parent.get());
+        KnobPage* isParentPage = dynamic_cast<KnobPage*>(parent.get());
         if (isParentGrp) {
             isParentGrp->removeKnob(k.get());
         } else if (isParentPage) {
@@ -1119,7 +1134,7 @@ Group_Knob::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
 }
 
 std::vector< boost::shared_ptr<KnobI> >
-Group_Knob::getChildren() const
+KnobGroup::getChildren() const
 {
     std::vector< boost::shared_ptr<KnobI> > ret;
     for (std::size_t i = 0; i < _children.size(); ++i) {
@@ -1133,7 +1148,7 @@ Group_Knob::getChildren() const
 
 /******************************PAGE_KNOB**************************************/
 
-Page_Knob::Page_Knob(KnobHolder* holder,
+KnobPage::KnobPage(KnobHolder* holder,
                      const std::string &description,
                      int dimension,
                      bool declaredByPlugin)
@@ -1142,27 +1157,27 @@ Page_Knob::Page_Knob(KnobHolder* holder,
 }
 
 bool
-Page_Knob::canAnimate() const
+KnobPage::canAnimate() const
 {
     return false;
 }
 
-const std::string Page_Knob::_typeNameStr("Page");
+const std::string KnobPage::_typeNameStr("Page");
 const std::string &
-Page_Knob::typeNameStatic()
+KnobPage::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 const std::string &
-Page_Knob::typeName() const
+KnobPage::typeName() const
 {
     return typeNameStatic();
 }
 
 
 std::vector< boost::shared_ptr<KnobI> >
-Page_Knob::getChildren() const
+KnobPage::getChildren() const
 {
     std::vector< boost::shared_ptr<KnobI> > ret;
     for (std::size_t i = 0; i < _children.size(); ++i) {
@@ -1175,7 +1190,7 @@ Page_Knob::getChildren() const
 }
 
 void
-Page_Knob::addKnob(const boost::shared_ptr<KnobI> &k)
+KnobPage::addKnob(const boost::shared_ptr<KnobI> &k)
 {
     for (std::size_t i = 0; i < _children.size(); ++i) {
         if (_children[i].lock() == k) {
@@ -1186,8 +1201,8 @@ Page_Knob::addKnob(const boost::shared_ptr<KnobI> &k)
     
     boost::shared_ptr<KnobI> parent= k->getParentKnob();
     if (parent) {
-        Group_Knob* isParentGrp = dynamic_cast<Group_Knob*>(parent.get());
-        Page_Knob* isParentPage = dynamic_cast<Page_Knob*>(parent.get());
+        KnobGroup* isParentGrp = dynamic_cast<KnobGroup*>(parent.get());
+        KnobPage* isParentPage = dynamic_cast<KnobPage*>(parent.get());
         if (isParentGrp) {
             isParentGrp->removeKnob(k.get());
         } else if (isParentPage) {
@@ -1201,7 +1216,7 @@ Page_Knob::addKnob(const boost::shared_ptr<KnobI> &k)
 }
 
 void
-Page_Knob::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
+KnobPage::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
 {
     for (std::size_t i = 0; i < _children.size(); ++i) {
         if (_children[i].lock() == k) {
@@ -1211,8 +1226,8 @@ Page_Knob::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
     
     boost::shared_ptr<KnobI> parent= k->getParentKnob();
     if (parent) {
-        Group_Knob* isParentGrp = dynamic_cast<Group_Knob*>(parent.get());
-        Page_Knob* isParentPage = dynamic_cast<Page_Knob*>(parent.get());
+        KnobGroup* isParentGrp = dynamic_cast<KnobGroup*>(parent.get());
+        KnobPage* isParentPage = dynamic_cast<KnobPage*>(parent.get());
         if (isParentGrp) {
             isParentGrp->removeKnob(k.get());
         } else if (isParentPage) {
@@ -1234,7 +1249,7 @@ Page_Knob::insertKnob(int index, const boost::shared_ptr<KnobI>& k)
 }
 
 void
-Page_Knob::removeKnob(KnobI* k)
+KnobPage::removeKnob(KnobI* k)
 {
     for (std::vector<boost::weak_ptr<KnobI> >::iterator it = _children.begin(); it != _children.end(); ++it) {
         if (it->lock().get() == k) {
@@ -1245,7 +1260,7 @@ Page_Knob::removeKnob(KnobI* k)
 }
 
 void
-Page_Knob::moveOneStepUp(KnobI* k)
+KnobPage::moveOneStepUp(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
@@ -1261,7 +1276,7 @@ Page_Knob::moveOneStepUp(KnobI* k)
 }
 
 void
-Page_Knob::moveOneStepDown(KnobI* k)
+KnobPage::moveOneStepDown(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
@@ -1277,10 +1292,10 @@ Page_Knob::moveOneStepDown(KnobI* k)
 }
 
 
-/******************************Parametric_Knob**************************************/
+/******************************KnobParametric**************************************/
 
 
-Parametric_Knob::Parametric_Knob(KnobHolder* holder,
+KnobParametric::KnobParametric(KnobHolder* holder,
                                  const std::string &description,
                                  int dimension,
                                  bool declaredByPlugin)
@@ -1299,27 +1314,27 @@ Parametric_Knob::Parametric_Knob(KnobHolder* holder,
     }
 }
 
-const std::string Parametric_Knob::_typeNameStr("Parametric");
+const std::string KnobParametric::_typeNameStr("Parametric");
 const std::string &
-Parametric_Knob::typeNameStatic()
+KnobParametric::typeNameStatic()
 {
     return _typeNameStr;
 }
 
 bool
-Parametric_Knob::canAnimate() const
+KnobParametric::canAnimate() const
 {
     return false;
 }
 
 const std::string &
-Parametric_Knob::typeName() const
+KnobParametric::typeName() const
 {
     return typeNameStatic();
 }
 
 void
-Parametric_Knob::setCurveColor(int dimension,
+KnobParametric::setCurveColor(int dimension,
                                double r,
                                double g,
                                double b)
@@ -1337,7 +1352,7 @@ Parametric_Knob::setCurveColor(int dimension,
 }
 
 void
-Parametric_Knob::getCurveColor(int dimension,
+KnobParametric::getCurveColor(int dimension,
                                double* r,
                                double* g,
                                double* b)
@@ -1352,7 +1367,7 @@ Parametric_Knob::getCurveColor(int dimension,
 
 
 void
-Parametric_Knob::setParametricRange(double min,
+KnobParametric::setParametricRange(double min,
                                     double max)
 {
     ///only called in the main thread
@@ -1364,7 +1379,7 @@ Parametric_Knob::setParametricRange(double min,
     }
 }
 
-std::pair<double,double> Parametric_Knob::getParametricRange() const
+std::pair<double,double> KnobParametric::getParametricRange() const
 {
     ///Mt-safe as it never changes
     assert( !_curves.empty() );
@@ -1373,12 +1388,12 @@ std::pair<double,double> Parametric_Knob::getParametricRange() const
 }
 
 boost::shared_ptr<Curve>
-Parametric_Knob::getDefaultParametricCurve(int dimension) const
+KnobParametric::getDefaultParametricCurve(int dimension) const
 {
     assert(dimension >= 0 && dimension < (int)_curves.size());
     std::pair<int,boost::shared_ptr<KnobI> >  master = getMaster(dimension);
     if (master.second) {
-        Parametric_Knob* m = dynamic_cast<Parametric_Knob*>(master.second.get());
+        KnobParametric* m = dynamic_cast<KnobParametric*>(master.second.get());
         assert(m);
         return m->getDefaultParametricCurve(dimension);
     } else {
@@ -1387,14 +1402,14 @@ Parametric_Knob::getDefaultParametricCurve(int dimension) const
 
 }
 
-boost::shared_ptr<Curve> Parametric_Knob::getParametricCurve(int dimension) const
+boost::shared_ptr<Curve> KnobParametric::getParametricCurve(int dimension) const
 {
     ///Mt-safe as Curve is MT-safe and the pointer is never deleted
     
     assert( dimension < (int)_curves.size() );
     std::pair<int,boost::shared_ptr<KnobI> >  master = getMaster(dimension);
     if (master.second) {
-        Parametric_Knob* m = dynamic_cast<Parametric_Knob*>(master.second.get());
+        KnobParametric* m = dynamic_cast<KnobParametric*>(master.second.get());
         assert(m);
         return m->getParametricCurve(dimension);
     } else {
@@ -1403,7 +1418,7 @@ boost::shared_ptr<Curve> Parametric_Knob::getParametricCurve(int dimension) cons
 }
 
 Natron::StatusEnum
-Parametric_Knob::addControlPoint(int dimension,
+KnobParametric::addControlPoint(int dimension,
                                  double key,
                                  double value)
 {
@@ -1425,7 +1440,7 @@ Parametric_Knob::addControlPoint(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::addHorizontalControlPoint(int dimension,double key,double value)
+KnobParametric::addHorizontalControlPoint(int dimension,double key,double value)
 {
     ///Mt-safe as Curve is MT-safe
     if (dimension >= (int)_curves.size() ||
@@ -1448,7 +1463,7 @@ Parametric_Knob::addHorizontalControlPoint(int dimension,double key,double value
 }
 
 Natron::StatusEnum
-Parametric_Knob::getValue(int dimension,
+KnobParametric::getValue(int dimension,
                           double parametricPosition,
                           double *returnValue) const
 {
@@ -1466,7 +1481,7 @@ Parametric_Knob::getValue(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::getNControlPoints(int dimension,
+KnobParametric::getNControlPoints(int dimension,
                                    int *returnValue) const
 {
     ///Mt-safe as Curve is MT-safe
@@ -1479,7 +1494,7 @@ Parametric_Knob::getNControlPoints(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::getNthControlPoint(int dimension,
+KnobParametric::getNthControlPoint(int dimension,
                                     int nthCtl,
                                     double *key,
                                     double *value) const
@@ -1500,7 +1515,7 @@ Parametric_Knob::getNthControlPoint(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::getNthControlPoint(int dimension,
+KnobParametric::getNthControlPoint(int dimension,
                                       int nthCtl,
                                       double *key,
                                       double *value,
@@ -1525,7 +1540,7 @@ Parametric_Knob::getNthControlPoint(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::setNthControlPoint(int dimension,
+KnobParametric::setNthControlPoint(int dimension,
                                     int nthCtl,
                                     double key,
                                     double value)
@@ -1545,7 +1560,7 @@ Parametric_Knob::setNthControlPoint(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::setNthControlPoint(int dimension,
+KnobParametric::setNthControlPoint(int dimension,
                                       int nthCtl,
                                       double key,
                                       double value,
@@ -1570,7 +1585,7 @@ Parametric_Knob::setNthControlPoint(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::deleteControlPoint(int dimension,
+KnobParametric::deleteControlPoint(int dimension,
                                     int nthCtl)
 {
     ///Mt-safe as Curve is MT-safe
@@ -1585,7 +1600,7 @@ Parametric_Knob::deleteControlPoint(int dimension,
 }
 
 Natron::StatusEnum
-Parametric_Knob::deleteAllControlPoints(int dimension)
+KnobParametric::deleteAllControlPoints(int dimension)
 {
     ///Mt-safe as Curve is MT-safe
     if ( dimension >= (int)_curves.size() ) {
@@ -1598,10 +1613,10 @@ Parametric_Knob::deleteAllControlPoints(int dimension)
 }
 
 void
-Parametric_Knob::cloneExtraData(KnobI* other,int dimension )
+KnobParametric::cloneExtraData(KnobI* other,int dimension )
 {
     ///Mt-safe as Curve is MT-safe
-    Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(other);
+    KnobParametric* isParametric = dynamic_cast<KnobParametric*>(other);
     
     if ( isParametric && ( isParametric->getDimension() == getDimension() ) ) {
         for (int i = 0; i < getDimension(); ++i) {
@@ -1613,10 +1628,10 @@ Parametric_Knob::cloneExtraData(KnobI* other,int dimension )
 }
 
 bool
-Parametric_Knob::cloneExtraDataAndCheckIfChanged(KnobI* other,int dimension) {
+KnobParametric::cloneExtraDataAndCheckIfChanged(KnobI* other,int dimension) {
     bool hasChanged = false;
     ///Mt-safe as Curve is MT-safe
-    Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(other);
+    KnobParametric* isParametric = dynamic_cast<KnobParametric*>(other);
     
     if ( isParametric && ( isParametric->getDimension() == getDimension() ) ) {
         for (int i = 0; i < getDimension(); ++i) {
@@ -1629,12 +1644,12 @@ Parametric_Knob::cloneExtraDataAndCheckIfChanged(KnobI* other,int dimension) {
 }
 
 void
-Parametric_Knob::cloneExtraData(KnobI* other,
+KnobParametric::cloneExtraData(KnobI* other,
                                 SequenceTime offset,
                                 const RangeD* range,
                                 int dimension)
 {
-    Parametric_Knob* isParametric = dynamic_cast<Parametric_Knob*>(other);
+    KnobParametric* isParametric = dynamic_cast<KnobParametric*>(other);
     
     if (isParametric) {
         int dimMin = std::min( getDimension(), isParametric->getDimension() );
@@ -1647,7 +1662,7 @@ Parametric_Knob::cloneExtraData(KnobI* other,
 }
 
 void
-Parametric_Knob::saveParametricCurves(std::list< Curve >* curves) const
+KnobParametric::saveParametricCurves(std::list< Curve >* curves) const
 {
     for (U32 i = 0; i < _curves.size(); ++i) {
         curves->push_back(*_curves[i]);
@@ -1655,7 +1670,7 @@ Parametric_Knob::saveParametricCurves(std::list< Curve >* curves) const
 }
 
 void
-Parametric_Knob::loadParametricCurves(const std::list< Curve > & curves)
+KnobParametric::loadParametricCurves(const std::list< Curve > & curves)
 {
     assert( !_curves.empty() );
     int i = 0;
@@ -1666,7 +1681,7 @@ Parametric_Knob::loadParametricCurves(const std::list< Curve > & curves)
 }
 
 void
-Parametric_Knob::resetExtraToDefaultValue(int dimension)
+KnobParametric::resetExtraToDefaultValue(int dimension)
 {
     Natron::StatusEnum s = deleteAllControlPoints(dimension);
     Q_UNUSED(s);
@@ -1676,7 +1691,7 @@ Parametric_Knob::resetExtraToDefaultValue(int dimension)
 }
 
 void
-Parametric_Knob::setDefaultCurvesFromCurves()
+KnobParametric::setDefaultCurvesFromCurves()
 {
     assert(_curves.size() == _defaultCurves.size());
     for (std::size_t i = 0; i < _curves.size(); ++i) {
@@ -1685,7 +1700,7 @@ Parametric_Knob::setDefaultCurvesFromCurves()
 }
 
 bool
-Parametric_Knob::hasModificationsVirtual(int dimension) const
+KnobParametric::hasModificationsVirtual(int dimension) const
 {
     assert(dimension >= 0 && dimension < (int)_curves.size());
     KeyFrameSet defKeys = _defaultCurves[dimension]->getKeyFrames_mt_safe();

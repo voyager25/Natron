@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "NodeGui.h"
 
@@ -35,41 +45,45 @@ CLANG_DIAG_ON(uninitialized)
 
 #include <ofxNatron.h>
 
-#include "Engine/OfxEffectInstance.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/OfxImageEffectInstance.h"
-#include "Engine/Project.h"
+#include "Engine/BackDrop.h"
+#include "Engine/Image.h"
+#include "Engine/Knob.h"
 #include "Engine/Node.h"
 #include "Engine/NodeSerialization.h"
-#include "Engine/Image.h"
-#include "Engine/Settings.h"
+#include "Engine/OfxEffectInstance.h"
+#include "Engine/OfxImageEffectInstance.h"
 #include "Engine/Plugin.h"
-#include "Engine/BackDrop.h"
-#include "Engine/Knob.h"
+#include "Engine/Project.h"
+#include "Engine/RotoLayer.h"
+#include "Engine/Settings.h"
+#include "Engine/ViewerInstance.h"
 
-#include "Gui/Edge.h"
-#include "Gui/DockablePanel.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/Gui.h"
-#include "Gui/KnobGui.h"
-#include "Gui/ViewerGL.h"
-#include "Gui/LineEdit.h"
+#include "Gui/BackDropGui.h"
+#include "Gui/Button.h"
 #include "Gui/CurveEditor.h"
+#include "Gui/DefaultOverlays.h"
+#include "Gui/DockablePanel.h"
 #include "Gui/DopeSheetEditor.h"
-#include "Gui/MultiInstancePanel.h"
-#include "Gui/NodeGuiSerialization.h"
-#include "Gui/GuiApplicationManager.h"
+#include "Gui/Edge.h"
+#include "Gui/Gui.h"
 #include "Gui/GuiAppInstance.h"
-#include "Gui/KnobGuiTypes.h"
+#include "Gui/GuiApplicationManager.h"
+#include "Gui/GuiDefines.h"
+#include "Gui/KnobGui.h"
+#include "Gui/KnobGuiString.h"
+#include "Gui/Label.h"
+#include "Gui/LineEdit.h"
+#include "Gui/MultiInstancePanel.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGraphUndoRedo.h"
+#include "Gui/NodeGuiSerialization.h"
+#include "Gui/NodeSettingsPanel.h"
+#include "Gui/SequenceFileDialog.h"
 #include "Gui/SequenceFileDialog.h"
 #include "Gui/SpinBox.h"
-#include "Gui/Button.h"
-#include "Gui/NodeGraphUndoRedo.h"
-#include "Gui/SequenceFileDialog.h"
-#include "Gui/BackDropGui.h"
-#include "Gui/DefaultOverlays.h"
 #include "Gui/Utils.h"
+#include "Gui/ViewerGL.h"
+#include "Gui/ViewerTab.h"
 
 #define NATRON_STATE_INDICATOR_OFFSET 5
 
@@ -108,73 +122,73 @@ replaceLineBreaksWithHtmlParagraph(QString txt)
 static void getPixmapForMergeOperator(const QString& op,QPixmap* pix)
 {
     if (op == "atop") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_ATOP,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_ATOP, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "average") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_AVERAGE,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_AVERAGE, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "color-burn") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COLOR_BURN,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COLOR_BURN, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "color-dodge") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COLOR_DODGE,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COLOR_DODGE, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "conjoint-over") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_CONJOINT_OVER,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_CONJOINT_OVER, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "copy") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COPY,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COPY, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "difference") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DIFFERENCE,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DIFFERENCE, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "disjoint-over") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DISJOINT_OVER,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DISJOINT_OVER, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "divide") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DIVIDE,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DIVIDE, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "exclusion") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_EXCLUSION,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_EXCLUSION, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "freeze") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_FREEZE,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_FREEZE, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "from") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_FROM,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_FROM, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "geometric") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_GEOMETRIC,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_GEOMETRIC, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "hard-light") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_HARD_LIGHT,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_HARD_LIGHT, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "hypot") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_HYPOT,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_HYPOT, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "in") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_IN,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_IN, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "interpolated") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_INTERPOLATED,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_INTERPOLATED, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "mask") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MASK,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MASK, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "matte") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MATTE,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MATTE, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "max") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MAX,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MAX, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "min") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MIN,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MIN, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "minus") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MINUS,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MINUS, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "multiply") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MULTIPLY,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MULTIPLY, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "out") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OUT,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OUT, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "over") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OVER,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OVER, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "overlay") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OVERLAY,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OVERLAY, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "pinlight") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_PINLIGHT,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_PINLIGHT, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "plus") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_PLUS,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_PLUS, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "reflect") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_REFLECT,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_REFLECT, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "screen") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_SCREEN,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_SCREEN, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "soft-light") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_SOFT_LIGHT,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_SOFT_LIGHT, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "stencil") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_STENCIL,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_STENCIL, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "under") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_UNDER,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_UNDER, NATRON_PLUGIN_ICON_SIZE, pix);
     } else if (op == "xor") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_XOR,pix);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_XOR, NATRON_PLUGIN_ICON_SIZE, pix);
     }
 }
 
@@ -307,7 +321,7 @@ NodeGui::initialize(NodeGraph* dag,
     if (internalNode->getPluginID() == PLUGINID_OFX_MERGE) {
         boost::shared_ptr<KnobI> knob = internalNode->getKnobByName(kNatronOfxParamStringSublabelName);
         assert(knob);
-        String_Knob* strKnob = dynamic_cast<String_Knob*>(knob.get());
+        KnobString* strKnob = dynamic_cast<KnobString*>(knob.get());
         if (strKnob) {
             onNodeExtraLabelChanged(strKnob->getValue().c_str());
         }
@@ -579,7 +593,10 @@ NodeGui::createGui()
             _pluginIconFrame = new QGraphicsRectItem(this);
             _pluginIconFrame->setZValue(depth);
             _pluginIconFrame->setBrush(QColor(50,50,50));
-            pix = pix.scaled(NATRON_PLUGIN_ICON_SIZE,NATRON_PLUGIN_ICON_SIZE,Qt::IgnoreAspectRatio,Qt::SmoothTransformation);
+            int size = NATRON_PLUGIN_ICON_SIZE;
+            if (std::max(pix.width(), pix.height()) != size) {
+                pix = pix.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            }
             _pluginIcon->setPixmap(pix);
         }
     }
@@ -897,7 +914,7 @@ NodeGui::refreshPositionEnd(double x,
     refreshEdges();
     NodePtr node = getNode();
     if (node) {
-        const std::list<Natron::Node* > & outputs = node->getOutputs();
+        const std::list<Natron::Node* > & outputs = node->getGuiOutputs();
 
         for (std::list<Natron::Node* >::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
             assert(*it);
@@ -1003,7 +1020,7 @@ NodeGui::refreshPosition(double x,
 
             if ( ( !_magnecEnabled.x() || !_magnecEnabled.y() ) ) {
                 ///check now the outputs
-                const std::list<Natron::Node* > & outputs = getNode()->getOutputs();
+                const std::list<Natron::Node* > & outputs = getNode()->getGuiOutputs();
                 for (std::list<Natron::Node* >::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
                     boost::shared_ptr<NodeGuiI> node_gui_i = (*it)->getNodeGui();
                     if (!node_gui_i) {
@@ -1096,7 +1113,7 @@ NodeGui::refreshDashedStateOfEdges()
 void
 NodeGui::refreshEdges()
 {
-    const std::vector<boost::shared_ptr<Natron::Node> > & nodeInputs = getNode()->getInputs_mt_safe();
+    const std::vector<boost::shared_ptr<Natron::Node> > & nodeInputs = getNode()->getGuiInputs();
     if (_inputEdges.size() != nodeInputs.size()) {
         return;
     }
@@ -1310,7 +1327,7 @@ NodeGui::initializeInputs()
     NodePtr node = getNode();
 
     ///The actual numbers of inputs of the internal node
-    std::vector<NodePtr> inputs = node->getInputs_copy();
+    const std::vector<NodePtr>& inputs = node->getGuiInputs();
 
     ///Delete all  inputs that may exist
     for (InputEdges::iterator it = _inputEdges.begin(); it != _inputEdges.end(); ++it) {
@@ -1391,6 +1408,7 @@ NodeGui::initializeInputs()
         }
 
     }
+    
 } // initializeInputs
 
 bool
@@ -1435,11 +1453,14 @@ void
 NodeGui::checkOptionalEdgesVisibility()
 {
     QPointF mousePos = mapFromScene(_graph->mapToScene(_graph->mapFromGlobal(QCursor::pos())));
-    if (contains(mousePos) || getIsSelected()) {
-        _optionalInputsVisible = true;
-    } else {
-        _optionalInputsVisible = false;
-    }
+    bool visible = contains(mousePos) || getIsSelected();
+    setOptionalInputsVisibleInternal(visible);
+}
+
+void
+NodeGui::setOptionalInputsVisibleInternal(bool visible)
+{
+    _optionalInputsVisible = visible;
     
     NodePtr node = getNode();
     bool isReader = node->getLiveInstance()->isReader();
@@ -1457,36 +1478,15 @@ NodeGui::checkOptionalEdgesVisibility()
             
         }
     }
-}
 
+}
 
 void
 NodeGui::setOptionalInputsVisible(bool visible)
 {
-    ///Don't do this for inspectors
-    NodePtr node = getNode();
-
-    //InspectorNode* isInspector = dynamic_cast<InspectorNode*>(node.get());
-   
 
     if (visible != _optionalInputsVisible) {
-        _optionalInputsVisible = visible;
-        
-        bool isReader = node->getLiveInstance()->isReader();
-        for (U32 i = 0; i < _inputEdges.size() ; ++i) {
-            if (isReader || (node->getLiveInstance()->isInputOptional(i) &&
-                node->getLiveInstance()->isInputMask(i) &&
-                !_inputEdges[i]->isRotoEdge())) {
-                
-                bool nodeVisible = visible;
-                if (!visible && node->getRealInput(i) ) {
-                    nodeVisible = true;
-                }
-                
-                _inputEdges[i]->setVisible(nodeVisible);
-                
-            }
-        }
+        setOptionalInputsVisibleInternal(visible);
     }
 }
 
@@ -1619,7 +1619,7 @@ NodeGui::findConnectedEdge(NodeGui* parent)
 bool
 NodeGui::connectEdge(int edgeNumber)
 {
-    const std::vector<boost::shared_ptr<Natron::Node> > & inputs = getNode()->getInputs_mt_safe();
+    const std::vector<boost::shared_ptr<Natron::Node> > & inputs = getNode()->getGuiInputs();
 
     if ( (edgeNumber < 0) || ( edgeNumber >= (int)inputs.size() ) || _inputEdges.size() != inputs.size() ) {
         return false;
@@ -1638,6 +1638,8 @@ NodeGui::connectEdge(int edgeNumber)
     if (dynamic_cast<InspectorNode*>(node.get())) {
         initializeInputsForInspector();
     }
+    
+    checkOptionalEdgesVisibility();
 
     return true;
 
@@ -1750,7 +1752,7 @@ NodeGui::showGui()
         _outputEdge->setActive(true);
     }
     refreshEdges();
-    const std::list<Natron::Node* > & outputs = node->getOutputs();
+    const std::list<Natron::Node* > & outputs = node->getGuiOutputs();
     for (std::list<Natron::Node* >::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
         assert(*it);
         (*it)->doRefreshEdgesGUI();
@@ -2192,7 +2194,7 @@ NodeGui::moveBelowPositionRecursively(const QRectF & r)
 
     if ( r.intersects(sceneRect) ) {
         changePosition(0, r.height() + NodeGui::DEFAULT_OFFSET_BETWEEN_NODES);
-        const std::list<Natron::Node* > & outputs = getNode()->getOutputs();
+        const std::list<Natron::Node* > & outputs = getNode()->getGuiOutputs();
         for (std::list<Natron::Node* >::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
             assert(*it);
             boost::shared_ptr<NodeGuiI> outputGuiI = (*it)->getNodeGui();
@@ -2399,7 +2401,7 @@ void
 NodeGui::refreshOutputEdgeVisibility()
 {
     if (_outputEdge) {
-        if ( getNode()->getOutputs().empty() ) {
+        if ( getNode()->getGuiOutputs().empty() ) {
             if ( !_outputEdge->isVisible() ) {
                 _outputEdge->setActive(true);
                 _outputEdge->show();
@@ -2613,7 +2615,7 @@ NodeGui::setScale_natron(double scale)
         _outputEdge->setScale(scale);
     }
     refreshEdges();
-    const std::list<Natron::Node* > & outputs = getNode()->getOutputs();
+    const std::list<Natron::Node* > & outputs = getNode()->getGuiOutputs();
     for (std::list<Natron::Node* >::const_iterator it = outputs.begin(); it != outputs.end(); ++it) {
         assert(*it);
         (*it)->doRefreshEdgesGUI();
@@ -2707,7 +2709,7 @@ NodeGui::setNameItemHtml(const QString & name,
     QFont f;
     QColor color;
     if (hasFontData) {
-        String_KnobGui::parseFont(textLabel, &f, &color);
+        KnobGuiString::parseFont(textLabel, &f, &color);
     }
     _nameItem->setFont(f);
 
@@ -2730,7 +2732,7 @@ NodeGui::onNodeExtraLabelChanged(const QString & label)
         ///The multi-instances store in the kNatronOfxParamStringSublabelName knob the name of the instance
         ///Since the "main-instance" is the one displayed on the node-graph we don't want it to display its name
         ///hence we remove it
-        _nodeLabel = String_KnobGui::removeNatronHtmlTag(_nodeLabel);
+        _nodeLabel = KnobGuiString::removeNatronHtmlTag(_nodeLabel);
     }
     _nodeLabel = replaceLineBreaksWithHtmlParagraph(_nodeLabel); ///< maybe we should do this in the knob itself when the user writes ?
     setNameItemHtml(node->getLabel().c_str(),_nodeLabel);
@@ -2738,7 +2740,7 @@ NodeGui::onNodeExtraLabelChanged(const QString & label)
     //For the merge node, set its operator icon
     if (getNode()->getPlugin()->getPluginID() == QString(PLUGINID_OFX_MERGE)) {
         assert(_mergeIcon);
-        QString op = String_KnobGui::getNatronHtmlTagContent(label);
+        QString op = KnobGuiString::getNatronHtmlTagContent(label);
         //Remove surrounding parenthesis
         if (op[0] == QChar('(')) {
             op.remove(0, 1);
@@ -2747,12 +2749,11 @@ NodeGui::onNodeExtraLabelChanged(const QString & label)
             op.remove(op.size() - 1,1);
         }
         QPixmap pix;
-        getPixmapForMergeOperator(op,&pix);
+        getPixmapForMergeOperator(op, &pix);
         if (pix.isNull()) {
             _mergeIcon->setVisible(false);
         } else {
             _mergeIcon->setVisible(true);
-            pix = pix.scaled(NATRON_PLUGIN_ICON_SIZE,NATRON_PLUGIN_ICON_SIZE,Qt::IgnoreAspectRatio,Qt::SmoothTransformation);
             _mergeIcon->setPixmap(pix);
         }
         refreshSize();
@@ -2794,6 +2795,7 @@ NodeGui::onSwitchInputActionTriggered()
         for (std::list<ViewerInstance* >::iterator it = viewers.begin(); it != viewers.end(); ++it) {
             (*it)->renderCurrentFrame(true);
         }
+        update();
         node->getApp()->triggerAutoSave();
     }
 }
@@ -3251,10 +3253,10 @@ ExportGroupTemplateDialog::ExportGroupTemplateDialog(NodeCollection* group,Gui* 
 
 
     QPixmap openPix;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_OPEN_FILE,&openPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_OPEN_FILE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &openPix);
     _imp->openButton = new Button(QIcon(openPix),"",this);
     _imp->openButton->setFocusPolicy(Qt::NoFocus);
-    _imp->openButton->setFixedSize(17, 17);
+    _imp->openButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
     QObject::connect( _imp->openButton, SIGNAL( clicked() ), this, SLOT( onButtonClicked() ) );
 
     _imp->buttons = new QDialogButtonBox(QDialogButtonBox::StandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel),
@@ -3329,6 +3331,8 @@ ExportGroupTemplateDialog::onOkClicked()
     if (pluginLabel.isEmpty()) {
         Natron::errorDialog(tr("Error").toStdString(), tr("You must specify a label to name the script").toStdString());
         return;
+    } else {
+        pluginLabel = Natron::makeNameScriptFriendly(pluginLabel.toStdString()).c_str();
     }
 
     QString pluginID = _imp->idEdit->text();
@@ -3426,7 +3430,7 @@ NodeGui::setColor(double r, double g, double b)
 }
 
 void
-NodeGui::addDefaultPositionInteract(const boost::shared_ptr<Double_Knob>& point)
+NodeGui::addDefaultPositionInteract(const boost::shared_ptr<KnobDouble>& point)
 {
     assert(QThread::currentThread() == qApp->thread());
     if (!_defaultOverlay) {
@@ -3609,7 +3613,10 @@ NodeGui::setPluginIconFilePath(const std::string& filePath)
     if (p.isNull() || !currentSettings->isPluginIconActivatedOnNodeGraph()) {
         return;
     }
-    p = p.scaled(NATRON_PLUGIN_ICON_SIZE,NATRON_PLUGIN_ICON_SIZE,Qt::IgnoreAspectRatio,Qt::SmoothTransformation);
+    int size = NATRON_PLUGIN_ICON_SIZE;
+    if (std::max(p.width(), p.height()) != size) {
+        p = p.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
 
     if (getSettingPanel()) {
         getSettingPanel()->setPluginIcon(p);

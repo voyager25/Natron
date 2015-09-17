@@ -1,22 +1,31 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 
-#ifndef GUIAPPLICATIONMANAGER_H
-#define GUIAPPLICATIONMANAGER_H
+#ifndef _Gui_GuiApplicationManager_h_
+#define _Gui_GuiApplicationManager_h_
 
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <list>
 
@@ -49,6 +58,7 @@
 class QPixmap;
 class QCursor;
 
+class ActionWithShortcut;
 class PluginGroupNode;
 class DockablePanel;
 class KnobI;
@@ -60,24 +70,7 @@ class KeyBoundAction;
 class QAction;
 class NodeSerialization;
 class NodeGuiSerialization;
-
-
-struct NodeClipBoard
-{
-    std::list<boost::shared_ptr<NodeSerialization> > nodes;
-    std::list<boost::shared_ptr<NodeGuiSerialization> > nodesUI;
-    
-    NodeClipBoard()
-    : nodes()
-    , nodesUI()
-    {
-    }
-    
-    bool isEmpty() const
-    {
-        return nodes.empty() && nodesUI.empty();
-    }
-};
+struct NodeClipBoard;
 
 struct PythonUserCommand {
     QString grouping;
@@ -90,6 +83,8 @@ struct GuiApplicationManagerPrivate;
 class GuiApplicationManager
     : public AppManager
 {
+    Q_OBJECT
+    
 public:
 
     GuiApplicationManager();
@@ -109,7 +104,8 @@ public:
         return false;
     }
 
-    void getIcon(Natron::PixmapEnum e,QPixmap* pix) const;
+    void getIcon(Natron::PixmapEnum e, QPixmap* pix) const;
+    void getIcon(Natron::PixmapEnum e, int size, QPixmap* pix) const;
 
     void setKnobClipBoard(bool copyAnimation,
                           const std::list<Variant> & values,
@@ -150,7 +146,10 @@ public:
      * @brief Returns true if the given keyboard symbol and modifiers match the given action.
      * The symbol parameter is to be casted to the Qt::Key enum
      **/
-    bool matchesKeybind(const QString & group,const QString & actionID,const Qt::KeyboardModifiers & modifiers,int symbol) const;
+    bool matchesKeybind(const QString & group,
+                        const QString & actionID,
+                        const Qt::KeyboardModifiers & modifiers,
+                        int symbol) const;
 
     /**
      * @brief Returns true if the given keyboard modifiers and the given mouse button match the given action.
@@ -158,8 +157,7 @@ public:
      **/
     bool matchesMouseShortcut(const QString & group,const QString & actionID,const Qt::KeyboardModifiers & modifiers,int button) const;
 
-    QKeySequence getKeySequenceForAction(const QString & group,const QString & actionID) const;
-    bool getModifiersAndKeyForAction(const QString & group,const QString & actionID,Qt::KeyboardModifiers & modifiers,int & symbol) const;
+    std::list<QKeySequence> getKeySequenceForAction(const QString & group,const QString & actionID) const;
 
     /**
      * @brief Save shortcuts to QSettings
@@ -174,7 +172,7 @@ public:
      * @brief Register an action to the shortcut manager indicating it is using a shortcut.
      * This is used to update the action's shortcut when it gets modified by the user.
      **/
-    void addShortcutAction(const QString & group,const QString & actionID,QAction* action);
+    void addShortcutAction(const QString & group,const QString & actionID,ActionWithShortcut* action);
     void removeShortcutAction(const QString & group,const QString & actionID,QAction* action);
 
     void notifyShortcutChanged(KeyBoundAction* action);
@@ -195,7 +193,7 @@ public:
     
     void clearNodeClipBoard();
     
-    virtual void addCommand(const QString& grouping,const std::string& pythonFunction, Qt::Key key,const Qt::KeyboardModifiers& modifiers);
+    virtual void addCommand(const QString& grouping,const std::string& pythonFunction, Qt::Key key,const Qt::KeyboardModifiers& modifiers) OVERRIDE;
     
     const std::list<PythonUserCommand>& getUserPythonCommands() const;
     
@@ -204,17 +202,21 @@ public Q_SLOTS:
 
     ///Closes the application, asking the user to save each opened project that has unsaved changes
     virtual void exitApp() OVERRIDE FINAL;
+    
+    void onFontconfigCacheUpdateFinished();
 
+    void onFontconfigTimerTriggered();
+    
 private:
 
     virtual void initBuiltinPythonModules() OVERRIDE FINAL;
 
-    void onPluginLoaded(Natron::Plugin* plugin);
+    void onPluginLoaded(Natron::Plugin* plugin) OVERRIDE;
     virtual void ignorePlugin(Natron::Plugin* plugin) OVERRIDE FINAL;
     virtual void onAllPluginsLoaded() OVERRIDE FINAL;
     virtual void loadBuiltinNodePlugins(std::map<std::string,std::vector< std::pair<std::string,double> > >* readersMap,
-                                        std::map<std::string,std::vector< std::pair<std::string,double> > >* writersMap);
-    virtual void initGui() OVERRIDE FINAL;
+                                        std::map<std::string,std::vector< std::pair<std::string,double> > >* writersMap) OVERRIDE;
+    virtual bool initGui(const CLArgs& args) OVERRIDE FINAL;
     virtual AppInstance* makeNewInstance(int appID) const OVERRIDE FINAL;
     virtual void registerGuiMetaTypes() const OVERRIDE FINAL;
     virtual void initializeQApp(int &argc, char **argv)  OVERRIDE FINAL;
@@ -234,4 +236,4 @@ private:
     boost::scoped_ptr<GuiApplicationManagerPrivate> _imp;
 };
 
-#endif // GUIAPPLICATIONMANAGER_H
+#endif // _Gui_GuiApplicationManager_h_

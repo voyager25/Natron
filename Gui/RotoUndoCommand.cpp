@@ -1,17 +1,26 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "RotoUndoCommand.h"
 
@@ -23,14 +32,22 @@ CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 #include "Global/GlobalDefines.h"
-#include "Engine/RotoContext.h"
-#include "Engine/Transform.h"
+
+#include "Engine/Bezier.h"
+#include "Engine/BezierCP.h"
+#include "Engine/FeatherPoint.h"
 #include "Engine/KnobTypes.h"
-#include "Engine/Project.h"
 #include "Engine/Node.h"
-#include "Gui/RotoGui.h"
+#include "Engine/Project.h"
+#include "Engine/RotoContext.h"
+#include "Engine/RotoLayer.h"
+#include "Engine/RotoStrokeItem.h"
+#include "Engine/Transform.h"
+
 #include "Gui/GuiAppInstance.h"
+#include "Gui/RotoGui.h"
 #include "Gui/RotoPanel.h"
+
 
 
 using namespace Natron;
@@ -517,7 +534,7 @@ RemovePointUndoCommand::redo()
             }
         }
         isBezier->setAutoOrientationComputation(true);
-        isBezier->refreshPolygonOrientation();
+        isBezier->refreshPolygonOrientation(true);
     }
 
     for (std::list<boost::shared_ptr<Bezier> >::iterator it = toRemove.begin(); it != toRemove.end(); ++it) {
@@ -602,6 +619,7 @@ AddStrokeUndoCommand::AddStrokeUndoCommand(RotoGui* roto,const boost::shared_ptr
 , _indexInLayer(_layer ? _layer->getChildIndex(_item) : -1)
 {
     assert(_indexInLayer != -1);
+    setText(QObject::tr("Paint Stroke"));
 }
 
 AddStrokeUndoCommand::~AddStrokeUndoCommand()
@@ -618,7 +636,6 @@ AddStrokeUndoCommand::undo()
 {
     _roto->removeCurve(_item);
     _roto->evaluate(true);
-    setText(QObject::tr("Paint Stroke"));
 }
 
 void
@@ -631,7 +648,57 @@ AddStrokeUndoCommand::redo()
         _roto->evaluate(true);
     }
     _firstRedoCalled = true;
+}
+
+
+
+AddMultiStrokeUndoCommand::AddMultiStrokeUndoCommand(RotoGui* roto,const boost::shared_ptr<RotoStrokeItem>& item)
+: QUndoCommand()
+, _roto(roto)
+, _firstRedoCalled(false)
+, _item(item)
+, _layer(item->getParentLayer())
+, _indexInLayer(_layer ? _layer->getChildIndex(_item) : -1)
+, isRemoved(false)
+{
+    assert(_indexInLayer != -1);
     setText(QObject::tr("Paint Stroke"));
+}
+
+AddMultiStrokeUndoCommand::~AddMultiStrokeUndoCommand()
+{
+    /*
+     * At this point, the stroke might get deleted, deleting the attached nodes in the meantime, hence we must ensure that all threads
+     * are deleted so that the ThreadLocalStorage used is correctly cleared.
+     */
+    _item->getContext()->getNode()->getApp()->getProject()->ensureAllProcessingThreadsFinished();
+}
+
+void
+AddMultiStrokeUndoCommand::undo()
+{
+    if (_item->removeLastStroke(&_xCurve, &_yCurve, &_pCurve)) {
+        _roto->removeCurve(_item);
+        isRemoved = true;
+    }
+    
+    _roto->evaluate(true);
+}
+
+void
+AddMultiStrokeUndoCommand::redo()
+{
+    if (_firstRedoCalled) {
+        if (_xCurve) {
+            _item->addStroke(_xCurve, _yCurve, _pCurve);
+        }
+        if (isRemoved) {
+            _roto->getContext()->addItem(_layer, _indexInLayer, _item, RotoItem::eSelectionReasonOverlayInteract);
+        }
+        _roto->evaluate(true);
+    }
+    
+    _firstRedoCalled = true;
 }
 
 MoveTangentUndoCommand::MoveTangentUndoCommand(RotoGui* roto,
@@ -687,9 +754,9 @@ dragTangent(double time,
 {
     Transform::Point3D ltan,rtan,pos;
     ltan.z = rtan.z = pos.z = 1;
-    bool isOnKeyframe = p.getLeftBezierPointAtTime(time, &ltan.x, &ltan.y,true);
-    p.getRightBezierPointAtTime(time, &rtan.x, &rtan.y,true);
-    p.getPositionAtTime(time, &pos.x, &pos.y,true);
+    bool isOnKeyframe = p.getLeftBezierPointAtTime(true,time, &ltan.x, &ltan.y,true);
+    p.getRightBezierPointAtTime(true,time, &rtan.x, &rtan.y,true);
+    p.getPositionAtTime(true,time, &pos.x, &pos.y,true);
     
     pos = Transform::matApply(transform, pos);
     ltan = Transform::matApply(transform, ltan);
@@ -706,7 +773,7 @@ dragTangent(double time,
     }
     double alpha = left ? std::atan2(pos.y - ltan.y,pos.x - ltan.x) : std::atan2(pos.y - rtan.y,pos.x - rtan.x);
     std::set<int> times;
-    p.getKeyframeTimes(&times);
+    p.getKeyframeTimes(true,&times);
 
     if (left) {
         double rightDiffX = breakTangents ? 0 : pos.x + std::cos(alpha) * dist - rtan.x;
@@ -869,8 +936,8 @@ MoveFeatherBarUndoCommand::redo()
     
     Transform::Point3D featherPoint,controlPoint;
     featherPoint.z = controlPoint.z = 1.;
-    p->getPositionAtTime(_time, &controlPoint.x, &controlPoint.y);
-    bool isOnKeyframe = fp->getPositionAtTime(_time, &featherPoint.x, &featherPoint.y);
+    p->getPositionAtTime(true,_time, &controlPoint.x, &controlPoint.y);
+    bool isOnKeyframe = fp->getPositionAtTime(true,_time, &featherPoint.x, &featherPoint.y);
     
     controlPoint = Transform::matApply(transform, controlPoint);
     featherPoint = Transform::matApply(transform, featherPoint);
@@ -908,8 +975,8 @@ MoveFeatherBarUndoCommand::redo()
         }
         
         double leftX,leftY,rightX,rightY,norm;
-        Bezier::leftDerivativeAtPoint(_time, **cur, **prev, transform ,&leftX, &leftY);
-        Bezier::rightDerivativeAtPoint(_time, **cur, **next, transform ,&rightX, &rightY);
+        Bezier::leftDerivativeAtPoint(true,_time, **cur, **prev, transform ,&leftX, &leftY);
+        Bezier::rightDerivativeAtPoint(true,_time, **cur, **next, transform ,&rightX, &rightY);
         norm = sqrt( (rightX - leftX) * (rightX - leftX) + (rightY - leftY) * (rightY - leftY) );
         
         ///normalize derivatives by their norm
@@ -1433,10 +1500,10 @@ MakeEllipseUndoCommand::redo()
             boost::shared_ptr<BezierCP> bottom = _curve->getControlPointAtIndex(2);
             boost::shared_ptr<BezierCP> left = _curve->getControlPointAtIndex(3);
             double topX,topY,rightX,rightY,btmX,btmY,leftX,leftY;
-            top->getPositionAtTime(_time, &topX, &topY);
-            right->getPositionAtTime(_time, &rightX, &rightY);
-            bottom->getPositionAtTime(_time, &btmX, &btmY);
-            left->getPositionAtTime(_time, &leftX, &leftY);
+            top->getPositionAtTime(true,_time, &topX, &topY);
+            right->getPositionAtTime(true,_time, &rightX, &rightY);
+            bottom->getPositionAtTime(true,_time, &btmX, &btmY);
+            left->getPositionAtTime(true,_time, &leftX, &leftY);
             
             _curve->setLeftBezierPoint(0, _time,  (leftX + topX) / 2., topY);
             _curve->setRightBezierPoint(0, _time, (rightX + topX) / 2., topY);
@@ -1863,6 +1930,7 @@ getItemCopyName(RotoPanel* roto,
     return name;
 }
 
+static
 void
 setItemCopyNameRecursive(RotoPanel* panel,
                          const boost::shared_ptr<RotoItem>& item)
@@ -2085,7 +2153,7 @@ DuplicateItemUndoCommand::redo()
 
 LinkToTrackUndoCommand::LinkToTrackUndoCommand(RotoGui* roto,
                                                const SelectedCpList & points,
-                                               const boost::shared_ptr<Double_Knob> & track)
+                                               const boost::shared_ptr<KnobDouble> & track)
     : QUndoCommand()
       , _roto(roto)
       , _points(points)

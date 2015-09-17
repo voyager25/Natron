@@ -1,3 +1,27 @@
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
+
 #include "GuiAppWrapper.h"
 
 #include "Global/Macros.h"
@@ -7,22 +31,23 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-#include "Gui/PythonPanels.h"
-#include "Gui/Gui.h"
-#include "Gui/TabWidget.h"
-#include "Gui/SequenceFileDialog.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/NodeGui.h"
-#include "Gui/ViewerTab.h"
-#include "Gui/ViewerGL.h"
-
+#include "Engine/Node.h"
+#include "Engine/NodeGroup.h"
 #include "Engine/NodeGroupWrapper.h"
 #include "Engine/NodeWrapper.h"
-#include "Engine/NodeGroup.h"
-#include "Engine/Node.h"
-#include "Engine/ViewerInstance.h"
-#include "Engine/TimeLine.h"
+#include "Engine/ParameterWrapper.h" // ColorTuple
 #include "Engine/ScriptObject.h"
+#include "Engine/TimeLine.h"
+#include "Engine/ViewerInstance.h"
+
+#include "Gui/Gui.h"
+#include "Gui/NodeGraph.h"
+#include "Gui/NodeGui.h"
+#include "Gui/PythonPanels.h"
+#include "Gui/SequenceFileDialog.h"
+#include "Gui/TabWidget.h"
+#include "Gui/ViewerGL.h"
+#include "Gui/ViewerTab.h"
 
 GuiApp::GuiApp(AppInstance* app)
 : App(app)
@@ -243,6 +268,151 @@ GuiApp::getSelectedNodes(Group* group) const
         }
     }
     return ret;
+}
+
+
+void
+GuiApp::selectNode(Effect* effect, bool clearPreviousSelection)
+{
+    if (!effect || appPTR->isBackground()) {
+        return;
+    }
+    boost::shared_ptr<NodeCollection> collection = effect->getInternalNode()->getGroup();
+    if (!collection) {
+        return;
+    }
+    
+    boost::shared_ptr<NodeGui> nodeUi = boost::dynamic_pointer_cast<NodeGui>(effect->getInternalNode()->getNodeGui());
+    if (!nodeUi) {
+        return;
+    }
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(collection.get());
+    NodeGraph* graph = 0;
+    if (isGroup) {
+        graph = dynamic_cast<NodeGraph*>(isGroup->getNodeGraph());
+    } else {
+        graph = _app->getGui()->getNodeGraph();
+    }
+    assert(graph);
+    graph->selectNode(nodeUi, !clearPreviousSelection);
+}
+
+void
+GuiApp::setSelection(const std::list<Effect*>& nodes)
+{
+    if (appPTR->isBackground()) {
+        return;
+    }
+    std::list<boost::shared_ptr<NodeGui> > selection;
+    boost::shared_ptr<NodeCollection> collection ;
+    bool printWarn = false;
+    for (std::list<Effect*>::const_iterator it = nodes.begin(); it!=nodes.end(); ++it) {
+        boost::shared_ptr<NodeGui> nodeUi = boost::dynamic_pointer_cast<NodeGui>((*it)->getInternalNode()->getNodeGui());
+        if (!nodeUi) {
+            continue;
+        }
+        if (!collection) {
+            collection = (*it)->getInternalNode()->getGroup();
+        } else {
+            if ((*it)->getInternalNode()->getGroup() != collection) {
+                ///Group mismatch
+                printWarn = true;
+                continue;
+            }
+        }
+        selection.push_back(nodeUi);
+    }
+    if (printWarn) {
+        _app->appendToScriptEditor(QObject::tr("Python: Invalid selection from setSelection(): Some nodes in the list do not belong to the same group.").toStdString());
+    } else {
+        NodeGroup* isGroup = dynamic_cast<NodeGroup*>(collection.get());
+        NodeGraph* graph = 0;
+        if (isGroup) {
+            graph = dynamic_cast<NodeGraph*>(isGroup->getNodeGraph());
+        } else {
+            graph = _app->getGui()->getNodeGraph();
+        }
+        assert(graph);
+        graph->setSelection(selection);
+    }
+    
+}
+
+void
+GuiApp::selectAllNodes(Group* group)
+{
+    if (appPTR->isBackground()) {
+        return;
+    }
+    NodeGraph* graph = 0;
+    boost::shared_ptr<NodeCollection> collection;
+    NodeGroup* isGroup = 0;
+    if (group) {
+        collection = group->getInternalCollection();
+        if (collection) {
+            isGroup = dynamic_cast<NodeGroup*>(collection.get());
+        }
+    }
+    if (isGroup) {
+        graph = dynamic_cast<NodeGraph*>(isGroup->getNodeGraph());
+    } else {
+        graph = _app->getGui()->getNodeGraph();
+    }
+    assert(graph);
+    graph->selectAllNodes(false);
+}
+
+void
+GuiApp::deselectNode(Effect* effect)
+{
+    if (!effect || appPTR->isBackground()) {
+        return;
+    }
+    
+    boost::shared_ptr<NodeCollection> collection = effect->getInternalNode()->getGroup();
+    if (!collection) {
+        return;
+    }
+    
+    boost::shared_ptr<NodeGui> nodeUi = boost::dynamic_pointer_cast<NodeGui>(effect->getInternalNode()->getNodeGui());
+    if (!nodeUi) {
+        return;
+    }
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(collection.get());
+    NodeGraph* graph = 0;
+    if (isGroup) {
+        graph = dynamic_cast<NodeGraph*>(isGroup->getNodeGraph());
+    } else {
+        graph = _app->getGui()->getNodeGraph();
+    }
+    assert(graph);
+    graph->deselectNode(nodeUi);
+}
+
+void
+GuiApp::clearSelection(Group* group)
+{
+    if (appPTR->isBackground()) {
+        return;
+    }
+    
+    NodeGraph* graph = 0;
+    boost::shared_ptr<NodeCollection> collection;
+    NodeGroup* isGroup = 0;
+    if (group) {
+        collection = group->getInternalCollection();
+        if (collection) {
+            isGroup = dynamic_cast<NodeGroup*>(collection.get());
+        }
+    }
+    if (isGroup) {
+        graph = dynamic_cast<NodeGraph*>(isGroup->getNodeGraph());
+    } else {
+        graph = _app->getGui()->getNodeGraph();
+    }
+    assert(graph);
+    graph->clearSelection();
+    
 }
 
 PyViewer*

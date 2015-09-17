@@ -1,16 +1,26 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "NodeWrapper.h"
 
@@ -72,7 +82,9 @@ Effect::canConnectInput(int inputNumber,const Effect* node) const
         return false;
     }
     Natron::Node::CanConnectInputReturnValue ret = _node->canConnectInput(node->getInternalNode(),inputNumber);
-    return ret == Natron::Node::eCanConnectInput_ok;
+    return ret == Natron::Node::eCanConnectInput_ok ||
+    ret == Natron::Node::eCanConnectInput_differentFPS ||
+    ret == Natron::Node::eCanConnectInput_differentPars;
 }
 
 bool
@@ -147,19 +159,19 @@ Param*
 Effect::createParamWrapperForKnob(const boost::shared_ptr<KnobI>& knob)
 {
     int dims = knob->getDimension();
-    boost::shared_ptr<Int_Knob> isInt = boost::dynamic_pointer_cast<Int_Knob>(knob);
-    boost::shared_ptr<Double_Knob> isDouble = boost::dynamic_pointer_cast<Double_Knob>(knob);
-    boost::shared_ptr<Bool_Knob> isBool = boost::dynamic_pointer_cast<Bool_Knob>(knob);
-    boost::shared_ptr<Choice_Knob> isChoice = boost::dynamic_pointer_cast<Choice_Knob>(knob);
-    boost::shared_ptr<Color_Knob> isColor = boost::dynamic_pointer_cast<Color_Knob>(knob);
-    boost::shared_ptr<String_Knob> isString = boost::dynamic_pointer_cast<String_Knob>(knob);
-    boost::shared_ptr<File_Knob> isFile = boost::dynamic_pointer_cast<File_Knob>(knob);
-    boost::shared_ptr<OutputFile_Knob> isOutputFile = boost::dynamic_pointer_cast<OutputFile_Knob>(knob);
-    boost::shared_ptr<Path_Knob> isPath = boost::dynamic_pointer_cast<Path_Knob>(knob);
-    boost::shared_ptr<Button_Knob> isButton = boost::dynamic_pointer_cast<Button_Knob>(knob);
-    boost::shared_ptr<Group_Knob> isGroup = boost::dynamic_pointer_cast<Group_Knob>(knob);
-    boost::shared_ptr<Page_Knob> isPage = boost::dynamic_pointer_cast<Page_Knob>(knob);
-    boost::shared_ptr<Parametric_Knob> isParametric = boost::dynamic_pointer_cast<Parametric_Knob>(knob);
+    boost::shared_ptr<KnobInt> isInt = boost::dynamic_pointer_cast<KnobInt>(knob);
+    boost::shared_ptr<KnobDouble> isDouble = boost::dynamic_pointer_cast<KnobDouble>(knob);
+    boost::shared_ptr<KnobBool> isBool = boost::dynamic_pointer_cast<KnobBool>(knob);
+    boost::shared_ptr<KnobChoice> isChoice = boost::dynamic_pointer_cast<KnobChoice>(knob);
+    boost::shared_ptr<KnobColor> isColor = boost::dynamic_pointer_cast<KnobColor>(knob);
+    boost::shared_ptr<KnobString> isString = boost::dynamic_pointer_cast<KnobString>(knob);
+    boost::shared_ptr<KnobFile> isFile = boost::dynamic_pointer_cast<KnobFile>(knob);
+    boost::shared_ptr<KnobOutputFile> isOutputFile = boost::dynamic_pointer_cast<KnobOutputFile>(knob);
+    boost::shared_ptr<KnobPath> isPath = boost::dynamic_pointer_cast<KnobPath>(knob);
+    boost::shared_ptr<KnobButton> isButton = boost::dynamic_pointer_cast<KnobButton>(knob);
+    boost::shared_ptr<KnobGroup> isGroup = boost::dynamic_pointer_cast<KnobGroup>(knob);
+    boost::shared_ptr<KnobPage> isPage = boost::dynamic_pointer_cast<KnobPage>(knob);
+    boost::shared_ptr<KnobParametric> isParametric = boost::dynamic_pointer_cast<KnobParametric>(knob);
     
     if (isInt) {
         switch (dims) {
@@ -203,6 +215,8 @@ Effect::createParamWrapperForKnob(const boost::shared_ptr<KnobI>& knob)
         return new PageParam(isPage);
     } else if (isParametric) {
         return new ParametricParam(isParametric);
+    } else if (isButton) {
+        return new ButtonParam(isButton);
     }
     return NULL;
 }
@@ -274,6 +288,12 @@ Effect::setColor(double r, double g, double b)
     _node->setColor(r, g, b);
 }
 
+bool
+Effect::isNodeSelected() const
+{
+    return _node->isUserSelected();
+}
+
 void
 Effect::beginChanges()
 {
@@ -289,7 +309,7 @@ Effect::endChanges()
 IntParam*
 UserParamHolder::createIntParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Int_Knob> knob = _holder->createIntKnob(name, label, 1);
+    boost::shared_ptr<KnobInt> knob = _holder->createIntKnob(name, label, 1);
     if (knob) {
         return new IntParam(knob);
     } else {
@@ -300,7 +320,7 @@ UserParamHolder::createIntParam(const std::string& name, const std::string& labe
 Int2DParam*
 UserParamHolder::createInt2DParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Int_Knob> knob = _holder->createIntKnob(name, label, 2);
+    boost::shared_ptr<KnobInt> knob = _holder->createIntKnob(name, label, 2);
     if (knob) {
         return new Int2DParam(knob);
     } else {
@@ -312,7 +332,7 @@ UserParamHolder::createInt2DParam(const std::string& name, const std::string& la
 Int3DParam*
 UserParamHolder::createInt3DParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Int_Knob> knob = _holder->createIntKnob(name, label, 3);
+    boost::shared_ptr<KnobInt> knob = _holder->createIntKnob(name, label, 3);
     if (knob) {
         return new Int3DParam(knob);
     } else {
@@ -324,7 +344,7 @@ UserParamHolder::createInt3DParam(const std::string& name, const std::string& la
 DoubleParam*
 UserParamHolder::createDoubleParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Double_Knob> knob = _holder->createDoubleKnob(name, label, 1);
+    boost::shared_ptr<KnobDouble> knob = _holder->createDoubleKnob(name, label, 1);
     if (knob) {
         return new DoubleParam(knob);
     } else {
@@ -336,7 +356,7 @@ UserParamHolder::createDoubleParam(const std::string& name, const std::string& l
 Double2DParam*
 UserParamHolder::createDouble2DParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Double_Knob> knob = _holder->createDoubleKnob(name, label, 2);
+    boost::shared_ptr<KnobDouble> knob = _holder->createDoubleKnob(name, label, 2);
     if (knob) {
         return new Double2DParam(knob);
     } else {
@@ -347,7 +367,7 @@ UserParamHolder::createDouble2DParam(const std::string& name, const std::string&
 Double3DParam*
 UserParamHolder::createDouble3DParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Double_Knob> knob = _holder->createDoubleKnob(name, label, 3);
+    boost::shared_ptr<KnobDouble> knob = _holder->createDoubleKnob(name, label, 3);
     if (knob) {
         return new Double3DParam(knob);
     } else {
@@ -358,7 +378,7 @@ UserParamHolder::createDouble3DParam(const std::string& name, const std::string&
 BooleanParam*
 UserParamHolder::createBooleanParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Bool_Knob> knob = _holder->createBoolKnob(name, label);
+    boost::shared_ptr<KnobBool> knob = _holder->createBoolKnob(name, label);
     if (knob) {
         return new BooleanParam(knob);
     } else {
@@ -369,7 +389,7 @@ UserParamHolder::createBooleanParam(const std::string& name, const std::string& 
 ChoiceParam*
 UserParamHolder::createChoiceParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Choice_Knob> knob = _holder->createChoiceKnob(name, label);
+    boost::shared_ptr<KnobChoice> knob = _holder->createChoiceKnob(name, label);
     if (knob) {
         return new ChoiceParam(knob);
     } else {
@@ -380,7 +400,7 @@ UserParamHolder::createChoiceParam(const std::string& name, const std::string& l
 ColorParam*
 UserParamHolder::createColorParam(const std::string& name, const std::string& label, bool useAlpha)
 {
-    boost::shared_ptr<Color_Knob> knob = _holder->createColorKnob(name, label, useAlpha ? 4 : 3);
+    boost::shared_ptr<KnobColor> knob = _holder->createColorKnob(name, label, useAlpha ? 4 : 3);
     if (knob) {
         return new ColorParam(knob);
     } else {
@@ -391,7 +411,7 @@ UserParamHolder::createColorParam(const std::string& name, const std::string& la
 StringParam*
 UserParamHolder::createStringParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<String_Knob> knob = _holder->createStringKnob(name, label);
+    boost::shared_ptr<KnobString> knob = _holder->createStringKnob(name, label);
     if (knob) {
         return new StringParam(knob);
     } else {
@@ -402,7 +422,7 @@ UserParamHolder::createStringParam(const std::string& name, const std::string& l
 FileParam*
 UserParamHolder::createFileParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<File_Knob> knob = _holder->createFileKnob(name, label);
+    boost::shared_ptr<KnobFile> knob = _holder->createFileKnob(name, label);
     if (knob) {
         return new FileParam(knob);
     } else {
@@ -413,7 +433,7 @@ UserParamHolder::createFileParam(const std::string& name, const std::string& lab
 OutputFileParam*
 UserParamHolder::createOutputFileParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<OutputFile_Knob> knob = _holder->createOuptutFileKnob(name, label);
+    boost::shared_ptr<KnobOutputFile> knob = _holder->createOuptutFileKnob(name, label);
     if (knob) {
         return new OutputFileParam(knob);
     } else {
@@ -424,7 +444,7 @@ UserParamHolder::createOutputFileParam(const std::string& name, const std::strin
 PathParam*
 UserParamHolder::createPathParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Path_Knob> knob = _holder->createPathKnob(name, label);
+    boost::shared_ptr<KnobPath> knob = _holder->createPathKnob(name, label);
     if (knob) {
         return new PathParam(knob);
     } else {
@@ -435,7 +455,7 @@ UserParamHolder::createPathParam(const std::string& name, const std::string& lab
 ButtonParam*
 UserParamHolder::createButtonParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Button_Knob> knob = _holder->createButtonKnob(name, label);
+    boost::shared_ptr<KnobButton> knob = _holder->createButtonKnob(name, label);
     if (knob) {
         return new ButtonParam(knob);
     } else {
@@ -446,7 +466,7 @@ UserParamHolder::createButtonParam(const std::string& name, const std::string& l
 GroupParam*
 UserParamHolder::createGroupParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Group_Knob> knob = _holder->createGroupKnob(name, label);
+    boost::shared_ptr<KnobGroup> knob = _holder->createGroupKnob(name, label);
     if (knob) {
         return new GroupParam(knob);
     } else {
@@ -457,7 +477,7 @@ UserParamHolder::createGroupParam(const std::string& name, const std::string& la
 PageParam*
 UserParamHolder::createPageParam(const std::string& name, const std::string& label)
 {
-    boost::shared_ptr<Page_Knob> knob = _holder->createPageKnob(name, label);
+    boost::shared_ptr<KnobPage> knob = _holder->createPageKnob(name, label);
     if (knob) {
         return new PageParam(knob);
     } else {
@@ -468,7 +488,7 @@ UserParamHolder::createPageParam(const std::string& name, const std::string& lab
 ParametricParam*
 UserParamHolder::createParametricParam(const std::string& name, const std::string& label, int nbCurves)
 {
-    boost::shared_ptr<Parametric_Knob> knob = _holder->createParametricKnob(name, label, nbCurves);
+    boost::shared_ptr<KnobParametric> knob = _holder->createParametricKnob(name, label, nbCurves);
     if (knob) {
         return new ParametricParam(knob);
     } else {
@@ -497,7 +517,7 @@ UserParamHolder::removeParam(Param* param)
 PageParam*
 Effect::getUserPageParam() const
 {
-    boost::shared_ptr<Page_Knob> page = _node->getLiveInstance()->getOrCreateUserPageKnob();
+    boost::shared_ptr<KnobPage> page = _node->getLiveInstance()->getOrCreateUserPageKnob();
     assert(page);
     return new PageParam(page);
 }
@@ -570,4 +590,20 @@ Effect::setSubGraphEditable(bool editable)
     if (isGroup) {
         isGroup->setSubGraphEditable(editable);
     }
+}
+
+bool
+Effect::addUserPlane(const std::string& planeName, const std::vector<std::string>& channels)
+{
+    if (planeName.empty() ||
+        channels.size() < 1 ||
+        channels.size() > 4) {
+        return false;
+    }
+    std::string compsGlobal;
+    for (std::size_t i = 0; i < channels.size(); ++i) {
+        compsGlobal.append(channels[i]);
+    }
+    Natron::ImageComponents comp(planeName,compsGlobal,channels);
+    return _node->addUserComponents(comp);
 }
