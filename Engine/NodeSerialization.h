@@ -42,12 +42,8 @@ GCC_DIAG_ON(sign-compare)
 #include <boost/serialization/version.hpp>
 #endif
 #include "Engine/KnobSerialization.h"
-<<<<<<< HEAD
-#include "Engine/RotoSerialization.h"
 #include "Engine/TrackerSerialization.h"
-=======
 #include "Engine/RotoContextSerialization.h"
->>>>>>> workshop
 #include "Engine/ImageParamsSerialization.h"
 #include "Engine/AppManager.h"
 

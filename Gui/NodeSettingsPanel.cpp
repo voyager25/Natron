@@ -48,7 +48,7 @@
 #include "Gui/NodeGui.h"
 #include "Gui/RotoPanel.h"
 #include "Gui/Utils.h" // convertFromPlainText
-
+#include "Gui/TrackerPanel.h"
 
 
 using std::make_pair;
@@ -123,6 +123,18 @@ NodeSettingsPanel::initializeRotoPanel()
         return NULL;
     }
 }
+
+
+TrackerPanel*
+NodeSettingsPanel::initializeTrackerPanel()
+{
+    if (getNode()->getNode()->getLiveInstance()->isBuiltinTrackerNode()) {
+        return new TrackerPanel(_nodeGUI.lock(),this);
+    } else {
+        return NULL;
+    }
+}
+
 
 QColor
 NodeSettingsPanel::getCurrentColor() const

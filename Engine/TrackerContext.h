@@ -1,15 +1,29 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
 #ifndef TRACKERCONTEXT_H
 #define TRACKERCONTEXT_H
 
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include <set>
 #include <list>
@@ -26,17 +40,18 @@
 #include <QThread>
 #include <QMutex>
 
-#include "Engine/Rect.h"
+#include "Engine/RectI.h"
+#include "Engine/RectD.h"
 
 namespace Natron {
     class Node;
     class Image;
 }
 class RectI;
-class Double_Knob;
-class Bool_Knob;
-class Button_Knob;
-class Choice_Knob;
+class KnobDouble;
+class KnobBool;
+class KnobButton;
+class KnobChoice;
 class KnobI;
 class ViewerInstance;
 class TimeLine;
@@ -69,17 +84,17 @@ public:
     void setLabel(const std::string& label);
     std::string getLabel() const;
     
-    boost::shared_ptr<Double_Knob> getSearchWindowBottomLeftKnob() const;
-    boost::shared_ptr<Double_Knob> getSearchWindowTopRightKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternTopLeftKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternTopRightKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternBtmRightKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternBtmLeftKnob() const;
-    boost::shared_ptr<Double_Knob> getWeightKnob() const;
-    boost::shared_ptr<Double_Knob> getCenterKnob() const;
-    boost::shared_ptr<Double_Knob> getOffsetKnob() const;
-    boost::shared_ptr<Double_Knob> getCorrelationKnob() const;
-    boost::shared_ptr<Choice_Knob> getMotionModelKnob() const;
+    boost::shared_ptr<KnobDouble> getSearchWindowBottomLeftKnob() const;
+    boost::shared_ptr<KnobDouble> getSearchWindowTopRightKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternTopLeftKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternTopRightKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternBtmRightKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternBtmLeftKnob() const;
+    boost::shared_ptr<KnobDouble> getWeightKnob() const;
+    boost::shared_ptr<KnobDouble> getCenterKnob() const;
+    boost::shared_ptr<KnobDouble> getOffsetKnob() const;
+    boost::shared_ptr<KnobDouble> getCorrelationKnob() const;
+    boost::shared_ptr<KnobChoice> getMotionModelKnob() const;
     
     const std::list<boost::shared_ptr<KnobI> >& getKnobs() const;
     
@@ -148,7 +163,7 @@ class TrackArgsV1
     bool _forward;
     boost::shared_ptr<TimeLine> _timeline;
     ViewerInstance* _viewer;
-    std::vector<Button_Knob*> _buttonInstances;
+    std::vector<KnobButton*> _buttonInstances;
     bool _isUpdateViewerEnabled;
     
     
@@ -176,7 +191,7 @@ public:
                 bool forward,
                 const boost::shared_ptr<TimeLine>& timeline,
                 ViewerInstance* viewer,
-                const std::vector<Button_Knob*>& instances,
+                const std::vector<KnobButton*>& instances,
                 bool updateViewer)
     : _start(start)
     , _end(end)
@@ -232,7 +247,7 @@ public:
         return _viewer;
     }
     
-    const std::vector<Button_Knob*>& getInstances() const
+    const std::vector<KnobButton*>& getInstances() const
     {
         return _buttonInstances;
     }
@@ -327,17 +342,17 @@ public:
     static bool trackStepV1(int trackIndex, const TrackArgsV1& args, int time);
 
     
-    boost::shared_ptr<Double_Knob> getSearchWindowBottomLeftKnob() const;
-    boost::shared_ptr<Double_Knob> getSearchWindowTopRightKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternTopLeftKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternTopRightKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternBtmRightKnob() const;
-    boost::shared_ptr<Double_Knob> getPatternBtmLeftKnob() const;
-    boost::shared_ptr<Double_Knob> getWeightKnob() const;
-    boost::shared_ptr<Double_Knob> getCenterKnob() const;
-    boost::shared_ptr<Double_Knob> getOffsetKnob() const;
-    boost::shared_ptr<Double_Knob> getCorrelationKnob() const;
-    boost::shared_ptr<Choice_Knob> getMotionModelKnob() const;
+    boost::shared_ptr<KnobDouble> getSearchWindowBottomLeftKnob() const;
+    boost::shared_ptr<KnobDouble> getSearchWindowTopRightKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternTopLeftKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternTopRightKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternBtmRightKnob() const;
+    boost::shared_ptr<KnobDouble> getPatternBtmLeftKnob() const;
+    boost::shared_ptr<KnobDouble> getWeightKnob() const;
+    boost::shared_ptr<KnobDouble> getCenterKnob() const;
+    boost::shared_ptr<KnobDouble> getOffsetKnob() const;
+    boost::shared_ptr<KnobDouble> getCorrelationKnob() const;
+    boost::shared_ptr<KnobChoice> getMotionModelKnob() const;
     
     void s_keyframeSetOnTrack(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeSetOnTrack(marker,key); }
     void s_keyframeRemovedOnTrack(const boost::shared_ptr<TrackMarker>& marker,int key) { Q_EMIT keyframeRemovedOnTrack(marker,key); }

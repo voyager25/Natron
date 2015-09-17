@@ -71,16 +71,8 @@ GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #include "Engine/ThreadStorage.h"
 #include "Engine/TimeLine.h"
 #include "Engine/Timer.h"
-<<<<<<< HEAD
-#include "Engine/Settings.h"
-#include "Engine/NodeGuiI.h"
-#include "Engine/NodeGroup.h"
-#include "Engine/BackDrop.h"
-#include "Engine/RotoPaint.h"
 #include "Engine/TrackerContext.h"
-=======
 #include "Engine/ViewerInstance.h"
->>>>>>> workshop
 
 ///The flickering of edges/nodes in the nodegraph will be refreshed
 ///at most every...
@@ -659,16 +651,13 @@ Node::load(const std::string & parentMultiInstanceName,
         throw std::runtime_error("Plug-in does not support 8bits, 16bits or 32bits floating point image processing.");
     }
     
-<<<<<<< HEAD
-    if (isTrackerNodePlugin()) {
-=======
     /*
      Set modifiable props
      */
     refreshDynamicProperties();
     
-    if (isTrackerNode()) {
->>>>>>> workshop
+    if (isTrackerNodePlugin()) {
+
         _imp->isMultiInstance = true;
     }
     

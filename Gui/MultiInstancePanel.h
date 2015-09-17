@@ -219,51 +219,7 @@ private:
     boost::scoped_ptr<TrackerPanelPrivateV1> _imp;
 };
 
-<<<<<<< HEAD
-=======
-struct TrackSchedulerPrivate;
-class TrackScheduler : public QThread
-{
-GCC_DIAG_SUGGEST_OVERRIDE_OFF
-    Q_OBJECT
-GCC_DIAG_SUGGEST_OVERRIDE_ON
-    
-public:
-    
-    TrackScheduler(const TrackerPanel* panel);
-    
-    virtual ~TrackScheduler();
-    
-    /**
-     * @brief Track the selectedInstances, calling the instance change action on each button (either the previous or
-     * next button) in a separate thread. 
-     * @param start the first frame to track, if forward is true then start < end
-     * @param end the next frame after the last frame to track (a la STL iterators), if forward is true then end > start
-     **/
-    void track(int start,int end,bool forward,const std::list<KnobButton*> & selectedInstances);
-    
-    void abortTracking();
-    
-    void quitThread();
-    
-    bool isWorking() const;
-    
-Q_SIGNALS:
-    
-    void trackingStarted();
-    
-    void trackingFinished();
-    
-    void progressUpdate(double progress);
 
-private:
-    
-    virtual void run() OVERRIDE FINAL;
-    
-    boost::scoped_ptr<TrackSchedulerPrivate> _imp;
-    
-};
->>>>>>> workshop
 
 
 #endif // MULTIINSTANCEPANEL_H

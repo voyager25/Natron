@@ -954,35 +954,7 @@ ViewerInstance::getRenderViewerArgsAndCheckCache(SequenceTime time,
     }
     std::string inputToRenderName = outArgs->activeInputToRender->getNode()->getScriptName_mt_safe();
     
-<<<<<<< HEAD
-    outArgs->key.reset(new FrameKey(time,
-                                    viewerHash,
-                                    outArgs->params->gain,
-                                    outArgs->params->gamma,
-                                    outArgs->params->lut,
-                                    (int)outArgs->params->depth,
-                                    channels,
-                                    view,
-                                    outArgs->params->textureRect,
-                                    scale,
-                                    inputToRenderName,
-                                    outArgs->params->layer,
-                                    outArgs->params->alphaLayer.getLayerName() + outArgs->params->alphaChannelName,
-                                    outArgs->params->depth == eImageBitDepthFloat && supportsGLSL()));
-    
-    bool isCached = false;
-    
-    ///we never use the texture cache when the user RoI is enabled, otherwise we would have
-    ///zillions of textures in the cache, each a few pixels different.
-    assert(_imp->uiContext);
-    boost::shared_ptr<Natron::FrameParams> cachedFrameParams;
-    
-    if (!_imp->uiContext->isUserRegionOfInterestEnabled() &&
-        !autoContrast &&
-        !rotoPaintNode &&
-        !isTracking()) {
-        isCached = Natron::getTextureFromCache(*(outArgs->key), &outArgs->params->cachedFrame);
-=======
+
     //When in draft mode first try to get a texture without draft and then try with draft
     int lookups = outArgs->draftModeEnabled ? 2 : 1;
     
@@ -1002,7 +974,6 @@ ViewerInstance::getRenderViewerArgsAndCheckCache(SequenceTime time,
                                         outArgs->params->alphaLayer.getLayerName() + outArgs->params->alphaChannelName,
                                         outArgs->params->depth == eImageBitDepthFloat && supportsGLSL(),
                                         lookup == 1));
->>>>>>> workshop
         
         bool isCached = false;
         
@@ -1011,7 +982,10 @@ ViewerInstance::getRenderViewerArgsAndCheckCache(SequenceTime time,
         assert(_imp->uiContext);
         boost::shared_ptr<Natron::FrameParams> cachedFrameParams;
         
-        if (!outArgs->userRoIEnabled && !outArgs->autoContrast && !rotoPaintNode.get()) {
+        if (!outArgs->userRoIEnabled &&
+            !outArgs->autoContrast &&
+            !rotoPaintNode.get() &&
+            !isTracking()) {
             isCached = Natron::getTextureFromCache(*(outArgs->key), &outArgs->params->cachedFrame);
             
             if (!isCached && lookups == 2 && lookup == 0) {
@@ -1233,20 +1207,11 @@ ViewerInstance::renderViewer_internal(int view,
     ///overload the ViewerCache which may become slowe
     assert(_imp->uiContext);
     RectI lastPaintBboxPixel;
-<<<<<<< HEAD
-    bool currentlyTracking = isTracking();
     std::list<RectD> partialRectsToRender;
     const double par = inArgs.activeInputToRender->getPreferredAspectRatio();
 
-    
-    if (inArgs.forceRender ||
-        _imp->uiContext->isUserRegionOfInterestEnabled() ||
-        autoContrast ||
-        rotoPaintNode ||
-        currentlyTracking) {
-=======
-    if (inArgs.forceRender || inArgs.userRoIEnabled || inArgs.autoContrast || rotoPaintNode.get() != 0) {
->>>>>>> workshop
+    bool currentlyTracking = isTracking();
+    if (inArgs.forceRender || inArgs.userRoIEnabled || inArgs.autoContrast || rotoPaintNode.get() != 0 || currentlyTracking) {
         
         assert(!inArgs.params->cachedFrame);
         //if we are actively painting, re-use the last texture instead of re-drawing everything
@@ -1395,21 +1360,14 @@ ViewerInstance::renderViewer_internal(int view,
     
     
     std::vector<RectI> splitRoi;
-<<<<<<< HEAD
     if (!partialRectsToRender.empty()) {
         for (std::list<RectD>::iterator it = partialRectsToRender.begin(); it!=partialRectsToRender.end(); ++it) {
             RectI pixelRect;
             it->toPixelEnclosing(inArgs.params->mipMapLevel, par, &pixelRect);
             splitRoi.push_back(pixelRect);
         }
-    } else if (inArgs.params->cachedFrame && !isSequentialRender && canAbort && inArgs.activeInputToRender->supportsTiles()) {
-=======
-    if (tilingProgressReportPrefEnabled &&
-        inArgs.params->cachedFrame &&
-        !isSequentialRender &&
-        canAbort &&
-        inArgs.activeInputToRender->supportsTiles()) {
->>>>>>> workshop
+    } else if (tilingProgressReportPrefEnabled && inArgs.params->cachedFrame && !isSequentialRender && canAbort && inArgs.activeInputToRender->supportsTiles()) {
+
         /*
          Split the RoI in tiles and update viewer if rendering takes too much time.
          */
@@ -1690,7 +1648,7 @@ ViewerInstance::renderViewer_internal(int view,
      If we were rendering only partial rectangles, update them all at once
      */
     if (!partialRectsToRender.empty()) {
-        _imp->reportProgress(inArgs.params, unreportedTiles, request);
+        _imp->reportProgress(inArgs.params, unreportedTiles, stats, request);
         
         //If we reply OK, it will append another updateViewer for nothing
         return eStatusReplyDefault;
@@ -2974,7 +2932,6 @@ ViewerInstance::isRenderAbortable(int textureIndex, U64 renderAge) const
 }
 
 void
-<<<<<<< HEAD
 ViewerInstance::setPartialUpdateRects(const std::list<RectD>& rois)
 {
     QMutexLocker k(&_imp->viewerParamsMutex);
@@ -3001,9 +2958,9 @@ ViewerInstance::isTracking() const
     QMutexLocker k(&_imp->viewerParamsMutex);
     return _imp->isTracking;
 }
-=======
+
+void
 ViewerInstance::reportStats(int time, int view, double wallTime, const RenderStatsMap& stats)
 {
     Q_EMIT renderStatsAvailable(time, view, wallTime, stats);
 }
->>>>>>> workshop

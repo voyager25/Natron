@@ -482,15 +482,7 @@ public:
     
     //True if during tracking
     bool isTracking;
-    
-    struct OnGoingRenderInfo
-    {
-        U64 age;
-        bool canAbort;
-    };
-    
-private:
-    
+        
     mutable QMutex renderAgeMutex; // protects renderAge lastRenderAge currentRenderAges
     U64 renderAge[2];
     U64 displayAge[2];

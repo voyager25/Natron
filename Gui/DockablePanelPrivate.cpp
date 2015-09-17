@@ -151,6 +151,7 @@ DockablePanelPrivate::DockablePanelPrivate(DockablePanel* publicI,
 ,_pluginVersionMinor(0)
 ,_pagesEnabled(true)
 ,_iconLabel(0)
+,_trackerPanel(0)
 {
     if (!_undoStack) {
         _undoStack.reset(new QUndoStack());

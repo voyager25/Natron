@@ -49,6 +49,7 @@
 #include "Gui/ScaleSliderQWidget.h"
 #include "Gui/SpinBox.h"
 #include "Gui/TimeLineGui.h"
+#include "Gui/TrackerPanel.h"
 #include "Gui/TrackerGui.h"
 #include "Gui/ViewerGL.h"
 
@@ -344,19 +345,25 @@ ViewerTab::setInfoBarResolution(const Format & f)
 void
 ViewerTab::createTrackerInterface(NodeGui* n)
 {
-    boost::shared_ptr<MultiInstancePanel> multiPanel = n->getMultiInstancePanel();
-    if (!multiPanel) {
-        return;
-    }
+ 
     std::map<NodeGui*,TrackerGui*>::iterator found = _imp->trackerNodes.find(n);
     if (found != _imp->trackerNodes.end()) {
         return;
     }
     
-    boost::shared_ptr<TrackerPanel> trackPanel = boost::dynamic_pointer_cast<TrackerPanel>(multiPanel);
+    TrackerGui* tracker = 0;
+    boost::shared_ptr<MultiInstancePanel> multiPanel = n->getMultiInstancePanel();
+    if (multiPanel) {
+        boost::shared_ptr<TrackerPanelV1> trackPanel = boost::dynamic_pointer_cast<TrackerPanelV1>(multiPanel);
+        assert(trackPanel);
+        tracker = new TrackerGui(trackPanel,this);
+    } else if (n->getNode()->getLiveInstance()->isBuiltinTrackerNode()) {
+        TrackerPanel* panel = n->getTrackerPanel();
+        assert(panel);
+        tracker = new TrackerGui(panel,this);
+    }
+    
 
-    assert(trackPanel);
-    TrackerGui* tracker = new TrackerGui(trackPanel,this);
     std::pair<std::map<NodeGui*,TrackerGui*>::iterator,bool> ret = _imp->trackerNodes.insert( std::make_pair(n,tracker) );
     assert(ret.second);
     if (!ret.second) {

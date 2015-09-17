@@ -1,11 +1,27 @@
-//  Natron
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ *
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
 
+
+// ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
 // "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
 #include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 #include "TrackerContext.h"
 
@@ -167,12 +183,12 @@ struct TrackMarkerPrivate
     boost::weak_ptr<TrackerContext> context;
     
     // Defines the rectangle of the search window, this is in coordinates relative to the marker center point
-    boost::shared_ptr<Double_Knob> searchWindowBtmLeft,searchWindowTopRight;
+    boost::shared_ptr<KnobDouble> searchWindowBtmLeft,searchWindowTopRight;
     
     // The pattern Quad defined by 4 corners relative to the center
-    boost::shared_ptr<Double_Knob> patternTopLeft,patternTopRight,patternBtmRight,patternBtmLeft;
-    boost::shared_ptr<Double_Knob> center,offset,weight,correlation;
-    boost::shared_ptr<Choice_Knob> motionModel;
+    boost::shared_ptr<KnobDouble> patternTopLeft,patternTopRight,patternBtmRight,patternBtmLeft;
+    boost::shared_ptr<KnobDouble> center,offset,weight,correlation;
+    boost::shared_ptr<KnobChoice> motionModel;
     
     std::list<boost::shared_ptr<KnobI> > knobs;
     
@@ -201,14 +217,14 @@ struct TrackMarkerPrivate
     , trackLabel()
     , enabled(true)
     {
-        searchWindowBtmLeft.reset(new Double_Knob(0, kTrackerParamSearchWndBtmLeftLabel, 2, false));
+        searchWindowBtmLeft.reset(new KnobDouble(0, kTrackerParamSearchWndBtmLeftLabel, 2, false));
         searchWindowBtmLeft->setName(kTrackerParamSearchWndBtmLeft);
         searchWindowBtmLeft->populate();
         searchWindowBtmLeft->setDefaultValue(-25, 0);
         searchWindowBtmLeft->setDefaultValue(-25, 1);
         knobs.push_back(searchWindowBtmLeft);
         
-        searchWindowTopRight.reset(new Double_Knob(0, kTrackerParamSearchWndTopRightLabel, 2, false));
+        searchWindowTopRight.reset(new KnobDouble(0, kTrackerParamSearchWndTopRightLabel, 2, false));
         searchWindowTopRight->setName(kTrackerParamSearchWndTopRight);
         searchWindowTopRight->populate();
         searchWindowTopRight->setDefaultValue(25, 0);
@@ -216,45 +232,45 @@ struct TrackMarkerPrivate
         knobs.push_back(searchWindowTopRight);
         
         
-        patternTopLeft.reset(new Double_Knob(0, kTrackerParamPatternTopLeftLabel, 2, false));
+        patternTopLeft.reset(new KnobDouble(0, kTrackerParamPatternTopLeftLabel, 2, false));
         patternTopLeft->setName(kTrackerParamPatternTopLeft);
         patternTopLeft->populate();
         patternTopLeft->setDefaultValue(-15, 0);
         patternTopLeft->setDefaultValue(15, 1);
         knobs.push_back(patternTopLeft);
         
-        patternTopRight.reset(new Double_Knob(0, kTrackerParamPatternTopRightLabel, 2, false));
+        patternTopRight.reset(new KnobDouble(0, kTrackerParamPatternTopRightLabel, 2, false));
         patternTopRight->setName(kTrackerParamPatternTopRight);
         patternTopRight->populate();
         patternTopRight->setDefaultValue(15, 0);
         patternTopRight->setDefaultValue(15, 1);
         knobs.push_back(patternTopRight);
         
-        patternBtmRight.reset(new Double_Knob(0, kTrackerParamPatternBtmRightLabel, 2, false));
+        patternBtmRight.reset(new KnobDouble(0, kTrackerParamPatternBtmRightLabel, 2, false));
         patternBtmRight->setName(kTrackerParamPatternBtmRight);
         patternBtmRight->populate();
         patternBtmRight->setDefaultValue(15, 0);
         patternBtmRight->setDefaultValue(-15, 1);
         knobs.push_back(patternBtmRight);
         
-        patternBtmLeft.reset(new Double_Knob(0, kTrackerParamPatternBtmLeftLabel, 2, false));
+        patternBtmLeft.reset(new KnobDouble(0, kTrackerParamPatternBtmLeftLabel, 2, false));
         patternBtmLeft->setName(kTrackerParamPatternBtmLeft);
         patternBtmLeft->populate();
         patternBtmLeft->setDefaultValue(-15, 0);
         patternBtmLeft->setDefaultValue(-15, 1);
         knobs.push_back(patternBtmLeft);
         
-        center.reset(new Double_Knob(0, kTrackerParamCenterLabel, 2, false));
+        center.reset(new KnobDouble(0, kTrackerParamCenterLabel, 2, false));
         center->setName(kTrackerParamCenter);
         center->populate();
         knobs.push_back(center);
         
-        offset.reset(new Double_Knob(0, kTrackerParamOffsetLabel, 2, false));
+        offset.reset(new KnobDouble(0, kTrackerParamOffsetLabel, 2, false));
         offset->setName(kTrackerParamOffset);
         offset->populate();
         knobs.push_back(offset);
         
-        weight.reset(new Double_Knob(0, kTrackerParamTrackWeightLabel, 1, false));
+        weight.reset(new KnobDouble(0, kTrackerParamTrackWeightLabel, 1, false));
         weight->setName(kTrackerParamTrackWeight);
         weight->populate();
         weight->setDefaultValue(1.);
@@ -263,7 +279,7 @@ struct TrackMarkerPrivate
         weight->setMaximum(1.);
         knobs.push_back(weight);
         
-        motionModel.reset(new Choice_Knob(0, kTrackerParamMotionModelLabel, 1, false));
+        motionModel.reset(new KnobChoice(0, kTrackerParamMotionModelLabel, 1, false));
         motionModel->setName(kTrackerParamMotionModel);
         motionModel->populate();
         {
@@ -274,7 +290,7 @@ struct TrackMarkerPrivate
         motionModel->setDefaultValue(4);
         knobs.push_back(motionModel);
 
-        correlation.reset(new Double_Knob(0, kTrackerParamCorrelationLabel, 1, false));
+        correlation.reset(new KnobDouble(0, kTrackerParamCorrelationLabel, 1, false));
         correlation->setName(kTrackerParamCorrelation);
         correlation->populate();
         knobs.push_back(correlation);
@@ -444,67 +460,67 @@ TrackMarker::getLabel() const
     return _imp->trackLabel;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getSearchWindowBottomLeftKnob() const
 {
     return _imp->searchWindowBtmLeft;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getSearchWindowTopRightKnob() const
 {
     return _imp->searchWindowTopRight;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getPatternTopLeftKnob() const
 {
     return _imp->patternTopLeft;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getPatternTopRightKnob() const
 {
     return _imp->patternTopRight;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getPatternBtmRightKnob() const
 {
     return _imp->patternBtmRight;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getPatternBtmLeftKnob() const
 {
     return _imp->patternBtmLeft;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getWeightKnob() const
 {
     return _imp->weight;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getCenterKnob() const
 {
     return _imp->center;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getOffsetKnob() const
 {
     return _imp->offset;
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackMarker::getCorrelationKnob() const
 {
     return _imp->correlation;
 }
 
-boost::shared_ptr<Choice_Knob>
+boost::shared_ptr<KnobChoice>
 TrackMarker::getMotionModelKnob() const
 {
     return _imp->motionModel;
@@ -854,12 +870,15 @@ TrackMarker::getMarkerImage(int time) const
                                              false, //isSequential
                                              false, //can abort
                                              0, //render Age
-                                             0, // viewer requester
+                                             getContext()->getNode(), // viewer requester
+                                             0,
                                              0, //texture index
                                              node->getApp()->getTimeLine().get(),
                                              NodePtr(),
                                              true, //isAnalysis
-                                             false); //draftMode
+                                             false,  //draftMode
+                                             false, // viewerprogress
+                                             boost::shared_ptr<RenderStats>());
     
     RenderScale scale;
     scale.x = scale.y = 1.;
@@ -1011,10 +1030,10 @@ public:
     void getRedrawAreasNeeded(int time, std::list<RectD>* canonicalRects) const
     {
         for (std::vector<boost::shared_ptr<TrackMarkerAndOptions> >::const_iterator it = _tracks.begin(); it!=_tracks.end(); ++it) {
-            boost::shared_ptr<Double_Knob> searchBtmLeft = (*it)->natronMarker->getSearchWindowBottomLeftKnob();
-            boost::shared_ptr<Double_Knob> searchTopRight = (*it)->natronMarker->getSearchWindowTopRightKnob();
-            boost::shared_ptr<Double_Knob> centerKnob = (*it)->natronMarker->getCenterKnob();
-            boost::shared_ptr<Double_Knob> offsetKnob = (*it)->natronMarker->getOffsetKnob();
+            boost::shared_ptr<KnobDouble> searchBtmLeft = (*it)->natronMarker->getSearchWindowBottomLeftKnob();
+            boost::shared_ptr<KnobDouble> searchTopRight = (*it)->natronMarker->getSearchWindowTopRightKnob();
+            boost::shared_ptr<KnobDouble> centerKnob = (*it)->natronMarker->getCenterKnob();
+            boost::shared_ptr<KnobDouble> offsetKnob = (*it)->natronMarker->getOffsetKnob();
             
             Natron::Point offset,center,btmLeft,topRight;
             offset.x = offsetKnob->getValueAtTime(time, 0);
@@ -1042,14 +1061,14 @@ public:
 void
 TrackArgsV1::getRedrawAreasNeeded(int time, std::list<RectD>* canonicalRects) const
 {
-    for (std::vector<Button_Knob*>::const_iterator it = _buttonInstances.begin(); it!=_buttonInstances.end(); ++it) {
+    for (std::vector<KnobButton*>::const_iterator it = _buttonInstances.begin(); it!=_buttonInstances.end(); ++it) {
         EffectInstance* effect = dynamic_cast<EffectInstance*>((*it)->getHolder());
         assert(effect);
     
-        boost::shared_ptr<Double_Knob> searchBtmLeft = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("searchBoxBtmLeft"));
-        boost::shared_ptr<Double_Knob> searchTopRight = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("searchBoxTopRight"));
-        boost::shared_ptr<Double_Knob> centerKnob = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("center"));
-        boost::shared_ptr<Double_Knob> offsetKnob = boost::dynamic_pointer_cast<Double_Knob>(effect->getKnobByName("offset"));
+        boost::shared_ptr<KnobDouble> searchBtmLeft = boost::dynamic_pointer_cast<KnobDouble>(effect->getKnobByName("searchBoxBtmLeft"));
+        boost::shared_ptr<KnobDouble> searchTopRight = boost::dynamic_pointer_cast<KnobDouble>(effect->getKnobByName("searchBoxTopRight"));
+        boost::shared_ptr<KnobDouble> centerKnob = boost::dynamic_pointer_cast<KnobDouble>(effect->getKnobByName("center"));
+        boost::shared_ptr<KnobDouble> offsetKnob = boost::dynamic_pointer_cast<KnobDouble>(effect->getKnobByName("offset"));
         assert(searchBtmLeft  && searchTopRight && centerKnob && offsetKnob);
         Natron::Point offset,center,btmLeft,topRight;
         offset.x = offsetKnob->getValueAtTime(time, 0);
@@ -1089,7 +1108,7 @@ static void setKnobKeyframesFromMarker(const mv::Marker& mvMarker,
                                        const boost::shared_ptr<TrackMarker>& natronMarker)
 {
     int time = mvMarker.frame;
-    boost::shared_ptr<Double_Knob> correlationKnob = natronMarker->getCorrelationKnob();
+    boost::shared_ptr<KnobDouble> correlationKnob = natronMarker->getCorrelationKnob();
     if (result) {
         correlationKnob->setValueAtTime(time, result->correlation, 0);
     } else {
@@ -1101,7 +1120,7 @@ static void setKnobKeyframesFromMarker(const mv::Marker& mvMarker,
     center.y = (double)mvMarker.center(1);
     
     // Set the center
-    boost::shared_ptr<Double_Knob> centerKnob = natronMarker->getCenterKnob();
+    boost::shared_ptr<KnobDouble> centerKnob = natronMarker->getCenterKnob();
     centerKnob->setValuesAtTime(time, center.x, center.y, Natron::eValueChangedReasonNatronInternalEdited);
     
     Natron::Point topLeftCorner,topRightCorner,btmRightCorner,btmLeftCorner;
@@ -1117,10 +1136,10 @@ static void setKnobKeyframesFromMarker(const mv::Marker& mvMarker,
     btmLeftCorner.x = mvMarker.patch.coordinates(3,0) - center.x;
     btmLeftCorner.y = mvMarker.patch.coordinates(3,1) - center.y;
     
-    boost::shared_ptr<Double_Knob> pntTopLeftKnob = natronMarker->getPatternTopLeftKnob();
-    boost::shared_ptr<Double_Knob> pntTopRightKnob = natronMarker->getPatternTopRightKnob();
-    boost::shared_ptr<Double_Knob> pntBtmLeftKnob = natronMarker->getPatternBtmLeftKnob();
-    boost::shared_ptr<Double_Knob> pntBtmRightKnob = natronMarker->getPatternBtmRightKnob();
+    boost::shared_ptr<KnobDouble> pntTopLeftKnob = natronMarker->getPatternTopLeftKnob();
+    boost::shared_ptr<KnobDouble> pntTopRightKnob = natronMarker->getPatternTopRightKnob();
+    boost::shared_ptr<KnobDouble> pntBtmLeftKnob = natronMarker->getPatternBtmLeftKnob();
+    boost::shared_ptr<KnobDouble> pntBtmRightKnob = natronMarker->getPatternBtmRightKnob();
     
     // Set the pattern Quad
     pntTopLeftKnob->setValuesAtTime(time, topLeftCorner.x, topLeftCorner.y, Natron::eValueChangedReasonNatronInternalEdited);
@@ -1134,10 +1153,10 @@ static void updateLibMvTrackMinimal(const TrackMarker& marker,
                                     bool forward,
                                     mv::Marker* mvMarker)
 {
-    boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
-    boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
-    boost::shared_ptr<Double_Knob> centerKnob = marker.getCenterKnob();
-    boost::shared_ptr<Double_Knob> offsetKnob = marker.getOffsetKnob();
+    boost::shared_ptr<KnobDouble> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
+    boost::shared_ptr<KnobDouble> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
+    boost::shared_ptr<KnobDouble> centerKnob = marker.getCenterKnob();
+    boost::shared_ptr<KnobDouble> offsetKnob = marker.getOffsetKnob();
     mvMarker->reference_frame = marker.getReferenceFrame(time, forward);
     if (marker.isUserKeyframe(time)) {
         mvMarker->source = mv::Marker::MANUAL;
@@ -1172,15 +1191,15 @@ static void natronTrackerToLibMVTracker(bool trackChannels[3],
                                         bool forward,
                                         mv::Marker* mvMarker)
 {
-    boost::shared_ptr<Double_Knob> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
-    boost::shared_ptr<Double_Knob> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
-    boost::shared_ptr<Double_Knob> patternTopLeftKnob = marker.getPatternTopLeftKnob();
-    boost::shared_ptr<Double_Knob> patternTopRightKnob = marker.getPatternTopRightKnob();
-    boost::shared_ptr<Double_Knob> patternBtmRightKnob = marker.getPatternBtmRightKnob();
-    boost::shared_ptr<Double_Knob> patternBtmLeftKnob = marker.getPatternBtmLeftKnob();
-    boost::shared_ptr<Double_Knob> weightKnob = marker.getWeightKnob();
-    boost::shared_ptr<Double_Knob> centerKnob = marker.getCenterKnob();
-    boost::shared_ptr<Double_Knob> offsetKnob = marker.getOffsetKnob();
+    boost::shared_ptr<KnobDouble> searchWindowBtmLeftKnob = marker.getSearchWindowBottomLeftKnob();
+    boost::shared_ptr<KnobDouble> searchWindowTopRightKnob = marker.getSearchWindowTopRightKnob();
+    boost::shared_ptr<KnobDouble> patternTopLeftKnob = marker.getPatternTopLeftKnob();
+    boost::shared_ptr<KnobDouble> patternTopRightKnob = marker.getPatternTopRightKnob();
+    boost::shared_ptr<KnobDouble> patternBtmRightKnob = marker.getPatternBtmRightKnob();
+    boost::shared_ptr<KnobDouble> patternBtmLeftKnob = marker.getPatternBtmLeftKnob();
+    boost::shared_ptr<KnobDouble> weightKnob = marker.getWeightKnob();
+    boost::shared_ptr<KnobDouble> centerKnob = marker.getCenterKnob();
+    boost::shared_ptr<KnobDouble> offsetKnob = marker.getOffsetKnob();
     
     // We don't use the clip in Natron
     mvMarker->clip = 0;
@@ -1317,7 +1336,7 @@ bool
 TrackerContext::trackStepV1(int trackIndex, const TrackArgsV1& args, int time)
 {
     assert(trackIndex >= 0 && trackIndex < (int)args.getInstances().size());
-    Button_Knob* selectedInstance = args.getInstances()[trackIndex];
+    KnobButton* selectedInstance = args.getInstances()[trackIndex];
     selectedInstance->getHolder()->onKnobValueChanged_public(selectedInstance,eValueChangedReasonNatronInternalEdited,time,
                                                              true);
     return true;
@@ -1330,16 +1349,16 @@ struct TrackerContextPrivate
     boost::weak_ptr<Natron::Node> node;
     
     std::list<boost::weak_ptr<KnobI> > knobs,perTrackKnobs;
-    boost::weak_ptr<Bool_Knob> enableTrackRed,enableTrackGreen,enableTrackBlue;
-    boost::weak_ptr<Double_Knob> minCorrelation,maxIterations;
-    boost::weak_ptr<Bool_Knob> bruteForcePreTrack,useNormalizedIntensities;
-    boost::weak_ptr<Double_Knob> preBlurSigma;
-    boost::weak_ptr<Int_Knob> referenceFrame;
+    boost::weak_ptr<KnobBool> enableTrackRed,enableTrackGreen,enableTrackBlue;
+    boost::weak_ptr<KnobDouble> minCorrelation,maxIterations;
+    boost::weak_ptr<KnobBool> bruteForcePreTrack,useNormalizedIntensities;
+    boost::weak_ptr<KnobDouble> preBlurSigma;
+    boost::weak_ptr<KnobInt> referenceFrame;
     
-    boost::weak_ptr<Double_Knob> searchWindowBtmLeft,searchWindowTopRight;
-    boost::weak_ptr<Double_Knob> patternTopLeft,patternTopRight,patternBtmRight,patternBtmLeft;
-    boost::weak_ptr<Double_Knob> center,offset,weight,correlation;
-    boost::weak_ptr<Choice_Knob> motionModel;
+    boost::weak_ptr<KnobDouble> searchWindowBtmLeft,searchWindowTopRight;
+    boost::weak_ptr<KnobDouble> patternTopLeft,patternTopRight,patternBtmRight,patternBtmLeft;
+    boost::weak_ptr<KnobDouble> center,offset,weight,correlation;
+    boost::weak_ptr<KnobChoice> motionModel;
     
     
     mutable QMutex trackerContextMutex;
@@ -1389,10 +1408,10 @@ struct TrackerContextPrivate
         QObject::connect(&scheduler, SIGNAL(trackingFinished()), _publicInterface, SIGNAL(trackingFinished()));
         QObject::connect(&scheduler, SIGNAL(progressUpdate(double)), _publicInterface, SIGNAL(trackingProgress(double)));
         
-        boost::shared_ptr<Page_Knob> settingsPage = Natron::createKnob<Page_Knob>(effect, "Controls", 1 , false);
-        boost::shared_ptr<Page_Knob> transformPage = Natron::createKnob<Page_Knob>(effect, "Transform", 1 , false);
+        boost::shared_ptr<KnobPage> settingsPage = Natron::createKnob<KnobPage>(effect, "Controls", 1 , false);
+        boost::shared_ptr<KnobPage> transformPage = Natron::createKnob<KnobPage>(effect, "Transform", 1 , false);
         
-        boost::shared_ptr<Bool_Knob> enableTrackRedKnob = Natron::createKnob<Bool_Knob>(effect, kTrackerParamTrackRedLabel, 1, false);
+        boost::shared_ptr<KnobBool> enableTrackRedKnob = Natron::createKnob<KnobBool>(effect, kTrackerParamTrackRedLabel, 1, false);
         enableTrackRedKnob->setName(kTrackerParamTrackRed);
         enableTrackRedKnob->setHintToolTip(kTrackerParamTrackRedHint);
         enableTrackRedKnob->setDefaultValue(true);
@@ -1403,7 +1422,7 @@ struct TrackerContextPrivate
         enableTrackRed = enableTrackRedKnob;
         knobs.push_back(enableTrackRedKnob);
         
-        boost::shared_ptr<Bool_Knob> enableTrackGreenKnob = Natron::createKnob<Bool_Knob>(effect, kTrackerParamTrackGreenLabel, 1, false);
+        boost::shared_ptr<KnobBool> enableTrackGreenKnob = Natron::createKnob<KnobBool>(effect, kTrackerParamTrackGreenLabel, 1, false);
         enableTrackGreenKnob->setName(kTrackerParamTrackGreen);
         enableTrackGreenKnob->setHintToolTip(kTrackerParamTrackGreenHint);
         enableTrackGreenKnob->setDefaultValue(true);
@@ -1414,7 +1433,7 @@ struct TrackerContextPrivate
         enableTrackGreen = enableTrackGreenKnob;
         knobs.push_back(enableTrackGreenKnob);
         
-        boost::shared_ptr<Bool_Knob> enableTrackBlueKnob = Natron::createKnob<Bool_Knob>(effect, kTrackerParamTrackBlueLabel, 1, false);
+        boost::shared_ptr<KnobBool> enableTrackBlueKnob = Natron::createKnob<KnobBool>(effect, kTrackerParamTrackBlueLabel, 1, false);
         enableTrackBlueKnob->setName(kTrackerParamTrackBlue);
         enableTrackBlueKnob->setHintToolTip(kTrackerParamTrackBlueHint);
         enableTrackBlueKnob->setDefaultValue(true);
@@ -1424,7 +1443,7 @@ struct TrackerContextPrivate
         enableTrackBlue = enableTrackBlueKnob;
         knobs.push_back(enableTrackBlueKnob);
         
-        boost::shared_ptr<Double_Knob> minCorelKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamMinimumCorrelationLabel, 1, false);
+        boost::shared_ptr<KnobDouble> minCorelKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamMinimumCorrelationLabel, 1, false);
         minCorelKnob->setName(kTrackerParamMinimumCorrelation);
         minCorelKnob->setHintToolTip(kTrackerParamMinimumCorrelationHint);
         minCorelKnob->setAnimationEnabled(false);
@@ -1436,7 +1455,7 @@ struct TrackerContextPrivate
         minCorrelation = minCorelKnob;
         knobs.push_back(minCorelKnob);
         
-        boost::shared_ptr<Double_Knob> maxItKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamMaximumIterationLabel, 1, false);
+        boost::shared_ptr<KnobDouble> maxItKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamMaximumIterationLabel, 1, false);
         maxItKnob->setName(kTrackerParamMaximumIteration);
         maxItKnob->setHintToolTip(kTrackerParamMaximumIterationHint);
         maxItKnob->setAnimationEnabled(false);
@@ -1448,7 +1467,7 @@ struct TrackerContextPrivate
         maxIterations = maxItKnob;
         knobs.push_back(maxItKnob);
         
-        boost::shared_ptr<Bool_Knob> usePretTrackBF = Natron::createKnob<Bool_Knob>(effect, kTrackerParamBruteForcePreTrackLabel, 1, false);
+        boost::shared_ptr<KnobBool> usePretTrackBF = Natron::createKnob<KnobBool>(effect, kTrackerParamBruteForcePreTrackLabel, 1, false);
         usePretTrackBF->setName(kTrackerParamBruteForcePreTrack);
         usePretTrackBF->setHintToolTip(kTrackerParamBruteForcePreTrackHint);
         usePretTrackBF->setDefaultValue(true);
@@ -1459,7 +1478,7 @@ struct TrackerContextPrivate
         bruteForcePreTrack = usePretTrackBF;
         knobs.push_back(usePretTrackBF);
         
-        boost::shared_ptr<Bool_Knob> useNormalizedInt = Natron::createKnob<Bool_Knob>(effect, kTrackerParamNormalizeIntensitiesLabel, 1, false);
+        boost::shared_ptr<KnobBool> useNormalizedInt = Natron::createKnob<KnobBool>(effect, kTrackerParamNormalizeIntensitiesLabel, 1, false);
         useNormalizedInt->setName(kTrackerParamNormalizeIntensities);
         useNormalizedInt->setHintToolTip(kTrackerParamNormalizeIntensitiesHint);
         useNormalizedInt->setDefaultValue(false);
@@ -1469,7 +1488,7 @@ struct TrackerContextPrivate
         useNormalizedIntensities = useNormalizedInt;
         knobs.push_back(useNormalizedInt);
 
-        boost::shared_ptr<Double_Knob> preBlurSigmaKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamPreBlurSigmaLabel, 1, false);
+        boost::shared_ptr<KnobDouble> preBlurSigmaKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamPreBlurSigmaLabel, 1, false);
         preBlurSigmaKnob->setName(kTrackerParamPreBlurSigma);
         preBlurSigmaKnob->setHintToolTip(kTrackerParamPreBlurSigmaHint);
         preBlurSigmaKnob->setAnimationEnabled(false);
@@ -1481,7 +1500,7 @@ struct TrackerContextPrivate
         preBlurSigma = preBlurSigmaKnob;
         knobs.push_back(preBlurSigmaKnob);
         
-        boost::shared_ptr<Int_Knob> referenceFrameKnob = Natron::createKnob<Int_Knob>(effect, kTrackerParamReferenceFrameLabel, 1, false);
+        boost::shared_ptr<KnobInt> referenceFrameKnob = Natron::createKnob<KnobInt>(effect, kTrackerParamReferenceFrameLabel, 1, false);
         referenceFrameKnob->setName(kTrackerParamReferenceFrame);
         referenceFrameKnob->setHintToolTip(kTrackerParamReferenceFrameHint);
         referenceFrameKnob->setAnimationEnabled(false);
@@ -1493,17 +1512,17 @@ struct TrackerContextPrivate
         
         
         //// Per-track knobs
-        boost::shared_ptr<Group_Knob> patternGroup = Natron::createKnob<Group_Knob>(effect, "Pattern-Window", 1 , false);
+        boost::shared_ptr<KnobGroup> patternGroup = Natron::createKnob<KnobGroup>(effect, "Pattern-Window", 1 , false);
         patternGroup->setAsTab();
         patternGroup->setDefaultValue(false);
-        boost::shared_ptr<Group_Knob> searchWindowGroup = Natron::createKnob<Group_Knob>(effect, "Search-Window", 1 , false);
+        boost::shared_ptr<KnobGroup> searchWindowGroup = Natron::createKnob<KnobGroup>(effect, "Search-Window", 1 , false);
         searchWindowGroup->setAsTab();
         searchWindowGroup->setDefaultValue(false);
         
         settingsPage->addKnob(patternGroup);
         settingsPage->addKnob(searchWindowGroup);
         
-        boost::shared_ptr<Double_Knob> sWndBtmLeft = Natron::createKnob<Double_Knob>(effect, kTrackerParamSearchWndBtmLeftLabel, 2, false);
+        boost::shared_ptr<KnobDouble> sWndBtmLeft = Natron::createKnob<KnobDouble>(effect, kTrackerParamSearchWndBtmLeftLabel, 2, false);
         sWndBtmLeft->setName(kTrackerParamSearchWndBtmLeft);
         sWndBtmLeft->setHintToolTip(kTrackerParamSearchWndBtmLeftHint);
         sWndBtmLeft->setDefaultValue(-25,0);
@@ -1519,7 +1538,7 @@ struct TrackerContextPrivate
         knobs.push_back(sWndBtmLeft);
         perTrackKnobs.push_back(sWndBtmLeft);
         
-        boost::shared_ptr<Double_Knob> sWndTopRight = Natron::createKnob<Double_Knob>(effect, kTrackerParamSearchWndTopRightLabel, 2, false);
+        boost::shared_ptr<KnobDouble> sWndTopRight = Natron::createKnob<KnobDouble>(effect, kTrackerParamSearchWndTopRightLabel, 2, false);
         sWndTopRight->setName(kTrackerParamSearchWndTopRight);
         sWndTopRight->setHintToolTip(kTrackerParamSearchWndTopRightHint);
         sWndTopRight->setDefaultValue(25,0);
@@ -1535,7 +1554,7 @@ struct TrackerContextPrivate
         knobs.push_back(sWndTopRight);
         perTrackKnobs.push_back(sWndTopRight);
         
-        boost::shared_ptr<Double_Knob> ptnTopLeft = Natron::createKnob<Double_Knob>(effect, kTrackerParamPatternTopLeftLabel, 2, false);
+        boost::shared_ptr<KnobDouble> ptnTopLeft = Natron::createKnob<KnobDouble>(effect, kTrackerParamPatternTopLeftLabel, 2, false);
         ptnTopLeft->setName(kTrackerParamPatternTopLeft);
         ptnTopLeft->setHintToolTip(kTrackerParamPatternTopLeftHint);
         ptnTopLeft->setDefaultValue(-15,0);
@@ -1547,7 +1566,7 @@ struct TrackerContextPrivate
         knobs.push_back(ptnTopLeft);
         perTrackKnobs.push_back(ptnTopLeft);
         
-        boost::shared_ptr<Double_Knob> ptnTopRight = Natron::createKnob<Double_Knob>(effect, kTrackerParamPatternTopRightLabel, 2, false);
+        boost::shared_ptr<KnobDouble> ptnTopRight = Natron::createKnob<KnobDouble>(effect, kTrackerParamPatternTopRightLabel, 2, false);
         ptnTopRight->setName(kTrackerParamPatternTopRight);
         ptnTopRight->setHintToolTip(kTrackerParamPatternTopRightHint);
         ptnTopRight->setDefaultValue(15,0);
@@ -1559,7 +1578,7 @@ struct TrackerContextPrivate
         knobs.push_back(ptnTopRight);
         perTrackKnobs.push_back(ptnTopRight);
         
-        boost::shared_ptr<Double_Knob> ptnBtmRight = Natron::createKnob<Double_Knob>(effect, kTrackerParamPatternBtmRightLabel, 2, false);
+        boost::shared_ptr<KnobDouble> ptnBtmRight = Natron::createKnob<KnobDouble>(effect, kTrackerParamPatternBtmRightLabel, 2, false);
         ptnBtmRight->setName(kTrackerParamPatternBtmRight);
         ptnBtmRight->setHintToolTip(kTrackerParamPatternBtmRightHint);
         ptnBtmRight->setDefaultValue(15,0);
@@ -1572,7 +1591,7 @@ struct TrackerContextPrivate
         perTrackKnobs.push_back(ptnBtmRight);
 
         
-        boost::shared_ptr<Double_Knob> ptnBtmLeft = Natron::createKnob<Double_Knob>(effect, kTrackerParamPatternBtmLeftLabel, 2, false);
+        boost::shared_ptr<KnobDouble> ptnBtmLeft = Natron::createKnob<KnobDouble>(effect, kTrackerParamPatternBtmLeftLabel, 2, false);
         ptnBtmLeft->setName(kTrackerParamPatternBtmLeft);
         ptnBtmLeft->setHintToolTip(kTrackerParamPatternBtmLeftHint);
         ptnBtmLeft->setDefaultValue(-15,0);
@@ -1583,7 +1602,7 @@ struct TrackerContextPrivate
         knobs.push_back(ptnBtmLeft);
         perTrackKnobs.push_back(ptnBtmLeft);
         
-        boost::shared_ptr<Double_Knob> centerKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamCenterLabel, 2, false);
+        boost::shared_ptr<KnobDouble> centerKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamCenterLabel, 2, false);
         centerKnob->setName(kTrackerParamCenter);
         centerKnob->setHintToolTip(kTrackerParamCenterHint);
         centerKnob->setIsPersistant(false);
@@ -1596,7 +1615,7 @@ struct TrackerContextPrivate
         knobs.push_back(centerKnob);
         perTrackKnobs.push_back(centerKnob);
 
-        boost::shared_ptr<Double_Knob> offsetKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamOffsetLabel, 2, false);
+        boost::shared_ptr<KnobDouble> offsetKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamOffsetLabel, 2, false);
         offsetKnob->setName(kTrackerParamOffset);
         offsetKnob->setHintToolTip(kTrackerParamOffsetHint);
         offsetKnob->setIsPersistant(false);
@@ -1608,7 +1627,7 @@ struct TrackerContextPrivate
         knobs.push_back(offsetKnob);
         perTrackKnobs.push_back(offsetKnob);
         
-        boost::shared_ptr<Double_Knob> weightKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamTrackWeightLabel, 1, false);
+        boost::shared_ptr<KnobDouble> weightKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamTrackWeightLabel, 1, false);
         weightKnob->setName(kTrackerParamTrackWeight);
         weightKnob->setHintToolTip(kTrackerParamTrackWeightHint);
         weightKnob->setAnimationEnabled(false);
@@ -1622,7 +1641,7 @@ struct TrackerContextPrivate
         knobs.push_back(weightKnob);
         perTrackKnobs.push_back(weightKnob);
         
-        boost::shared_ptr<Double_Knob> correlationKnob = Natron::createKnob<Double_Knob>(effect, kTrackerParamCorrelationLabel, 1, false);
+        boost::shared_ptr<KnobDouble> correlationKnob = Natron::createKnob<KnobDouble>(effect, kTrackerParamCorrelationLabel, 1, false);
         correlationKnob->setName(kTrackerParamCorrelation);
         correlationKnob->setHintToolTip(kTrackerParamCorrelationHint);
         correlationKnob->setAnimationEnabled(false);
@@ -1638,7 +1657,7 @@ struct TrackerContextPrivate
         knobs.push_back(correlationKnob);
         perTrackKnobs.push_back(correlationKnob);
         
-        boost::shared_ptr<Choice_Knob> motionModelKnob = Natron::createKnob<Choice_Knob>(effect, kTrackerParamMotionModelLabel, 1, false);
+        boost::shared_ptr<KnobChoice> motionModelKnob = Natron::createKnob<KnobChoice>(effect, kTrackerParamMotionModelLabel, 1, false);
         motionModelKnob->setName(kTrackerParamMotionModel);
         motionModelKnob->setHintToolTip(kTrackerParamMotionModelHint);
         {
@@ -1785,67 +1804,67 @@ TrackerContext::goToNextKeyFrame(int time)
     }
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getSearchWindowBottomLeftKnob() const
 {
     return _imp->searchWindowBtmLeft.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getSearchWindowTopRightKnob() const
 {
     return _imp->searchWindowTopRight.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getPatternTopLeftKnob() const
 {
     return _imp->patternTopLeft.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getPatternTopRightKnob() const
 {
     return _imp->patternTopRight.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getPatternBtmRightKnob() const
 {
     return _imp->patternBtmRight.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getPatternBtmLeftKnob() const
 {
     return _imp->patternBtmLeft.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getWeightKnob() const
 {
     return _imp->weight.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getCenterKnob() const
 {
     return _imp->center.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getOffsetKnob() const
 {
     return _imp->offset.lock();
 }
 
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 TrackerContext::getCorrelationKnob() const
 {
     return _imp->correlation.lock();
 }
 
-boost::shared_ptr<Choice_Knob>
+boost::shared_ptr<KnobChoice>
 TrackerContext::getMotionModelKnob() const
 {
     return _imp->motionModel.lock();
@@ -2349,12 +2368,15 @@ FrameAccessorImpl::GetImage(int /*clip*/,
                                              false, //isSequential
                                              false, //can abort
                                              0, //render Age
-                                             0, // viewer requester
+                                             node, //  requester
+                                             0, // request
                                              0, //texture index
                                              node->getApp()->getTimeLine().get(),
                                              NodePtr(),
                                              true, //isAnalysis
-                                             false); //draftMode
+                                             false,//draftMode
+                                             false, //viewer progress
+                                             boost::shared_ptr<RenderStats>());
 
     
     EffectInstance::RenderRoIArgs args(frame,

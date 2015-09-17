@@ -1,13 +1,27 @@
-//  Natron
-//
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/*
- * Created by Alexandre GAUTHIER-FOICHAT on 6/1/2012.
- * contact: immarespond at gmail dot com
+/* ***** BEGIN LICENSE BLOCK *****
+ * This file is part of Natron <http://www.natron.fr/>,
+ * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
  *
- */
+ * Natron is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * Natron is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
+ * ***** END LICENSE BLOCK ***** */
+
+
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
 
 
 #include "TrackerPanel.h"
@@ -29,12 +43,14 @@
 #include "Engine/Node.h"
 #include "Engine/TimeLine.h"
 
-#include "Gui/DockablePanel.h"
+#include "Gui/NodeSettingsPanel.h"
 #include "Gui/Button.h"
 #include "Gui/ComboBox.h"
 #include "Gui/GuiApplicationManager.h"
 #include "Gui/Label.h"
-#include "Gui/KnobGuiTypes.h"
+#include "Gui/GuiDefines.h"
+#include "Gui/KnobGuiDouble.h"
+#include "Gui/KnobGuiChoice.h"
 #include "Gui/TableModelView.h"
 #include "Gui/Utils.h"
 #include "Gui/NodeGui.h"
@@ -391,11 +407,11 @@ TrackerPanel::TrackerPanel(const boost::shared_ptr<NodeGui>& n,
     trackLayout->addWidget(_imp->totalKeyframes);
     
     QPixmap prevPix,nextPix,addPix,removePix,clearAnimPix;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS_KEY, &prevPix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT_KEY, &nextPix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_USER_KEY, &addPix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_USER_KEY, &removePix);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION, &clearAnimPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS_KEY,NATRON_MEDIUM_BUTTON_ICON_SIZE, &prevPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT_KEY, NATRON_MEDIUM_BUTTON_ICON_SIZE,&nextPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_USER_KEY, NATRON_MEDIUM_BUTTON_ICON_SIZE,&addPix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_REMOVE_USER_KEY,NATRON_MEDIUM_BUTTON_ICON_SIZE, &removePix);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION,NATRON_MEDIUM_BUTTON_ICON_SIZE, &clearAnimPix);
     
     _imp->prevKeyframe = new Button(QIcon(prevPix),"",trackContainer);
     _imp->prevKeyframe->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE,NATRON_MEDIUM_BUTTON_SIZE);
@@ -635,7 +651,7 @@ TrackerPanelPrivate::makeTrackRowItems(const TrackMarker& marker, int row, Track
     ///Motion-model
     {
         ItemData d;
-        boost::shared_ptr<Choice_Knob> motionModel = marker.getMotionModelKnob();
+        boost::shared_ptr<KnobChoice> motionModel = marker.getMotionModelKnob();
         ComboBox* cb = new ComboBox;
         std::vector<std::string> choices,helps;
         TrackerContext::getMotionModelsAndHelps(&choices,&helps);
@@ -658,7 +674,7 @@ TrackerPanelPrivate::makeTrackRowItems(const TrackMarker& marker, int row, Track
     }
     
     //Center X
-    boost::shared_ptr<Double_Knob> center = marker.getCenterKnob();
+    boost::shared_ptr<KnobDouble> center = marker.getCenterKnob();
     {
         ItemData d;
         TableItem* newItem = new TableItem;
@@ -687,7 +703,7 @@ TrackerPanelPrivate::makeTrackRowItems(const TrackMarker& marker, int row, Track
         data.items.push_back(d);
     }
     ///Offset X
-    boost::shared_ptr<Double_Knob> offset = marker.getOffsetKnob();
+    boost::shared_ptr<KnobDouble> offset = marker.getOffsetKnob();
     {
         ItemData d;
         TableItem* newItem = new TableItem;
@@ -717,7 +733,7 @@ TrackerPanelPrivate::makeTrackRowItems(const TrackMarker& marker, int row, Track
     }
     
     ///Correlation
-    boost::shared_ptr<Double_Knob> correlation = marker.getCorrelationKnob();
+    boost::shared_ptr<KnobDouble> correlation = marker.getCorrelationKnob();
     {
         ItemData d;
         TableItem* newItem = new TableItem;
@@ -734,7 +750,7 @@ TrackerPanelPrivate::makeTrackRowItems(const TrackMarker& marker, int row, Track
 
     
     ///Weight
-    boost::shared_ptr<Double_Knob> weight = marker.getWeightKnob();
+    boost::shared_ptr<KnobDouble> weight = marker.getWeightKnob();
     {
         ItemData d;
         TableItem* newItem = new TableItem;
@@ -1000,20 +1016,20 @@ TrackerPanel::onAverageButtonClicked()
     
     boost::shared_ptr<TrackMarker> marker = makeTrackInternal();
     
-    boost::shared_ptr<Double_Knob> centerKnob = marker->getCenterKnob();
+    boost::shared_ptr<KnobDouble> centerKnob = marker->getCenterKnob();
     
 #ifdef AVERAGE_ALSO_PATTERN_QUAD
-    boost::shared_ptr<Double_Knob> topLeftKnob = marker->getPatternTopLeftKnob();
-    boost::shared_ptr<Double_Knob> topRightKnob = marker->getPatternTopRightKnob();
-    boost::shared_ptr<Double_Knob> btmRightKnob = marker->getPatternBtmRightKnob();
-    boost::shared_ptr<Double_Knob> btmLeftKnob = marker->getPatternBtmLeftKnob();
+    boost::shared_ptr<KnobDouble> topLeftKnob = marker->getPatternTopLeftKnob();
+    boost::shared_ptr<KnobDouble> topRightKnob = marker->getPatternTopRightKnob();
+    boost::shared_ptr<KnobDouble> btmRightKnob = marker->getPatternBtmRightKnob();
+    boost::shared_ptr<KnobDouble> btmLeftKnob = marker->getPatternBtmLeftKnob();
 #endif
     
     RangeD keyframesRange;
     keyframesRange.min = INT_MAX;
     keyframesRange.max = INT_MIN;
     for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it != markers.end(); ++it) {
-        boost::shared_ptr<Double_Knob> markCenter = (*it)->getCenterKnob();
+        boost::shared_ptr<KnobDouble> markCenter = (*it)->getCenterKnob();
 
         double mini,maxi;
         bool hasKey = markCenter->getFirstKeyFrameTime(0, &mini);
@@ -1044,13 +1060,13 @@ TrackerPanel::onAverageButtonClicked()
         
         
         for (std::list<boost::shared_ptr<TrackMarker> >::iterator it = markers.begin(); it != markers.end(); ++it) {
-            boost::shared_ptr<Double_Knob> markCenter = (*it)->getCenterKnob();
+            boost::shared_ptr<KnobDouble> markCenter = (*it)->getCenterKnob();
             
 #ifdef AVERAGE_ALSO_PATTERN_QUAD
-            boost::shared_ptr<Double_Knob> markTopLeft = (*it)->getPatternTopLeftKnob();
-            boost::shared_ptr<Double_Knob> markTopRight = (*it)->getPatternTopRightKnob();
-            boost::shared_ptr<Double_Knob> markBtmRight = (*it)->getPatternBtmRightKnob();
-            boost::shared_ptr<Double_Knob> markBtmLeft = (*it)->getPatternBtmLeftKnob();
+            boost::shared_ptr<KnobDouble> markTopLeft = (*it)->getPatternTopLeftKnob();
+            boost::shared_ptr<KnobDouble> markTopRight = (*it)->getPatternTopRightKnob();
+            boost::shared_ptr<KnobDouble> markBtmRight = (*it)->getPatternBtmRightKnob();
+            boost::shared_ptr<KnobDouble> markBtmLeft = (*it)->getPatternBtmLeftKnob();
 #endif
             
             avgCenter.x += markCenter->getValueAtTime(t, 0);
@@ -1120,7 +1136,7 @@ TrackerPanel::onAverageButtonClicked()
 }
 
 static
-boost::shared_ptr<Double_Knob>
+boost::shared_ptr<KnobDouble>
 getCornerPinPoint(Natron::Node* node,
                   bool isFrom,
                   int index)
@@ -1129,7 +1145,7 @@ getCornerPinPoint(Natron::Node* node,
     QString name = isFrom ? QString("from%1").arg(index + 1) : QString("to%1").arg(index + 1);
     boost::shared_ptr<KnobI> knob = node->getKnobByName( name.toStdString() );
     assert(knob);
-    boost::shared_ptr<Double_Knob>  ret = boost::dynamic_pointer_cast<Double_Knob>(knob);
+    boost::shared_ptr<KnobDouble>  ret = boost::dynamic_pointer_cast<KnobDouble>(knob);
     assert(ret);
     return ret;
 }
@@ -1146,7 +1162,7 @@ TrackerPanelPrivate::createCornerPinFromSelection(const std::list<boost::shared_
     
     boost::shared_ptr<TrackerContext> ctx = context.lock();
     
-    boost::shared_ptr<Double_Knob> centers[4];
+    boost::shared_ptr<KnobDouble> centers[4];
     int i = 0;
     for (std::list<boost::shared_ptr<TrackMarker> >::const_iterator it = selection.begin(); it != selection.end(); ++it, ++i) {
         centers[i] = (*it)->getCenterKnob();
@@ -1181,8 +1197,8 @@ TrackerPanelPrivate::createCornerPinFromSelection(const std::list<boost::shared_
     mainInstancePos = cornerPinGui->mapToParent( cornerPinGui->mapFromScene(mainInstancePos) );
     cornerPinGui->refreshPosition( mainInstancePos.x() + node->getSize().width() * 2, mainInstancePos.y() );
     
-    boost::shared_ptr<Double_Knob> toPoints[4];
-    boost::shared_ptr<Double_Knob> fromPoints[4];
+    boost::shared_ptr<KnobDouble> toPoints[4];
+    boost::shared_ptr<KnobDouble> fromPoints[4];
     
     int timeForFromPoints = useTransformRefFrame ? ctx->getTransformReferenceFrame() : app->getTimeLine()->currentFrame();
     
@@ -1214,7 +1230,7 @@ TrackerPanelPrivate::createCornerPinFromSelection(const std::list<boost::shared_
         QString enableName = QString("enable%1").arg(i + 1);
         boost::shared_ptr<KnobI> knob = cornerPin->getKnobByName( enableName.toStdString() );
         assert(knob);
-        Bool_Knob* enableKnob = dynamic_cast<Bool_Knob*>( knob.get() );
+        KnobBool* enableKnob = dynamic_cast<KnobBool*>( knob.get() );
         assert(enableKnob);
         enableKnob->setValue(false, 0);
     }
@@ -1222,7 +1238,7 @@ TrackerPanelPrivate::createCornerPinFromSelection(const std::list<boost::shared_
     if (invert) {
         boost::shared_ptr<KnobI> invertKnob = cornerPin->getKnobByName(kCornerPinInvertParamName);
         assert(invertKnob);
-        Bool_Knob* isBool = dynamic_cast<Bool_Knob*>(invertKnob.get());
+        KnobBool* isBool = dynamic_cast<KnobBool*>(invertKnob.get());
         assert(isBool);
         isBool->setValue(true, 0);
     }
@@ -1521,7 +1537,7 @@ TrackerPanel::onItemDataChanged(TableItem* item)
                     case COL_OFFSET_Y:
                     case COL_WEIGHT:
                     case COL_CORRELATION: {
-                        boost::shared_ptr<Double_Knob> knob = boost::dynamic_pointer_cast<Double_Knob>(_imp->items[it].items[i].knob.lock());
+                        boost::shared_ptr<KnobDouble> knob = boost::dynamic_pointer_cast<KnobDouble>(_imp->items[it].items[i].knob.lock());
                         assert(knob);
                         int dim = _imp->items[it].items[i].dimension;
                         double value = item->data(Qt::DisplayRole).toDouble();

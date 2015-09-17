@@ -56,6 +56,7 @@ class QUndoCommand;
 class QGridLayout;
 class QTabWidget;
 
+class TrackerPanel;
 class KnobI;
 class KnobGui;
 class KnobHolder;
@@ -160,6 +161,9 @@ struct DockablePanelPrivate
     bool _pagesEnabled;
 
     Natron::Label* _iconLabel;
+    
+    TrackerPanel* _trackerPanel;
+
 
     DockablePanelPrivate(DockablePanel* publicI,
                          Gui* gui,

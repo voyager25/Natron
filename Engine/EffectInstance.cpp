@@ -439,12 +439,7 @@ struct EffectInstance::Implementation
     , componentsAvailableMutex()
     , componentsAvailableDirty(true)
     , outputComponentsAvailable()
-<<<<<<< HEAD
-    , renderingTimersMutex()
-    , totalTimeSpentRendering(0.)
     , overlaySlaves()
-=======
->>>>>>> workshop
     {
     }
 
@@ -505,14 +500,9 @@ struct EffectInstance::Implementation
     bool componentsAvailableDirty; /// Set to true when getClipPreferences is called to indicate it must be set again
     EffectInstance::ComponentsAvailableMap outputComponentsAvailable;
     
-<<<<<<< HEAD
-    mutable QMutex renderingTimersMutex;
-    double totalTimeSpentRendering;
-    
+
     std::list< boost::weak_ptr<KnobI> > overlaySlaves;
     
-=======
->>>>>>> workshop
     void runChangedParamCallback(KnobI* k,bool userEdited,const std::string& callback);
     
     void setDuringInteractAction(bool b)

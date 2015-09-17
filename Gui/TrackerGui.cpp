@@ -38,43 +38,32 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
+#include "Engine/AppInstance.h"
+#include "Engine/Curve.h"
 #include "Engine/EffectInstance.h"
 #include "Engine/KnobTypes.h"
 #include "Engine/Node.h"
-<<<<<<< HEAD
-#include "Engine/TrackerContext.h"
-#include "Engine/TimeLine.h"
-#include "Engine/Curve.h"
 #include "Engine/Image.h"
 #include "Engine/Lut.h"
+#include "Engine/TimeLine.h"
 #include "Engine/Transform.h"
+#include "Engine/TrackerContext.h"
 
-#include "Gui/Gui.h"
-#include "Gui/GuiAppInstance.h"
-#include "Gui/GuiApplicationManager.h"
-=======
 
 #include "Gui/ActionShortcuts.h"
->>>>>>> workshop
 #include "Gui/Button.h"
 #include "Gui/GuiApplicationManager.h"
 #include "Gui/GuiDefines.h"
 #include "Gui/GuiMacros.h"
-<<<<<<< HEAD
-#include "Gui/ActionShortcuts.h"
-#include "Gui/NodeGui.h"
-#include "Gui/Utils.h"
-#include "Gui/TrackerPanel.h"
-#include "Gui/NodeGraph.h"
-#include "Gui/Texture.h"
 #include "Gui/TrackerUndoCommand.h"
-=======
+#include "Gui/Texture.h"
+#include "Gui/NodeGui.h"
+#include "Gui/TrackerPanel.h"
 #include "Gui/MultiInstancePanel.h"
 #include "Gui/QtEnumConvert.h"
 #include "Gui/Utils.h"
 #include "Gui/ViewerGL.h"
 #include "Gui/ViewerTab.h"
->>>>>>> workshop
 
 #define POINT_SIZE 5
 #define CROSS_SIZE 6
@@ -332,7 +321,7 @@ TrackerGui::createGui()
     _imp->buttonsLayout->setContentsMargins(3, 2, 0, 0);
     
     QPixmap pixAdd;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_TRACK,&pixAdd);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_ADD_TRACK,NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixAdd);
     
     _imp->addTrackButton = new Button(QIcon(pixAdd),"",_imp->buttonsBar);
     _imp->addTrackButton->setCheckable(true);
@@ -348,18 +337,18 @@ TrackerGui::createGui()
     QObject::connect( _imp->addTrackButton, SIGNAL( clicked(bool) ), this, SLOT( onAddTrackClicked(bool) ) );
     QPixmap pixPrev,pixNext,pixClearAll,pixClearBw,pixClearFw,pixUpdateViewerEnabled,pixUpdateViewerDisabled,pixStop;
     QPixmap bwEnabled,bwDisabled,fwEnabled,fwDisabled;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_REWIND_DISABLED, &bwDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_REWIND_ENABLED, &bwEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS, &pixPrev);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT, &pixNext);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_DISABLED, &fwDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_ENABLED, &fwEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION, &pixClearAll);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_BACKWARD_ANIMATION, &pixClearBw);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_FORWARD_ANIMATION, &pixClearFw);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_REFRESH_ACTIVE, &pixUpdateViewerEnabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_REFRESH, &pixUpdateViewerDisabled);
-    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_STOP, &pixStop);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_REWIND_DISABLED,NATRON_MEDIUM_BUTTON_ICON_SIZE, &bwDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_REWIND_ENABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE,&bwEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PREVIOUS, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixPrev);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_NEXT, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixNext);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_DISABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE,&fwDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_ENABLED, NATRON_MEDIUM_BUTTON_ICON_SIZE,&fwEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_ALL_ANIMATION, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixClearAll);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_BACKWARD_ANIMATION, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixClearBw);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_CLEAR_FORWARD_ANIMATION, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixClearFw);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_REFRESH_ACTIVE, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixUpdateViewerEnabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_VIEWER_REFRESH, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixUpdateViewerDisabled);
+    appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_STOP, NATRON_MEDIUM_BUTTON_ICON_SIZE,&pixStop);
     
     QIcon bwIcon;
     bwIcon.addPixmap(bwEnabled,QIcon::Normal,QIcon::On);
@@ -467,6 +456,7 @@ TrackerGui::createGui()
     
     _imp->centerViewerButton = new Button(QIcon(centerViewerPix),"",_imp->buttonsBar);
     _imp->centerViewerButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->centerViewerButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
     _imp->centerViewerButton->setCheckable(true);
     _imp->centerViewerButton->setChecked(false);
     _imp->centerViewerButton->setDown(false);
@@ -494,6 +484,7 @@ TrackerGui::createGui()
         
         _imp->createKeyOnMoveButton = new Button(QIcon(createKeyOnMovePix), "", _imp->buttonsBar);
         _imp->createKeyOnMoveButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+        _imp->createKeyOnMoveButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         _imp->createKeyOnMoveButton->setToolTip(Natron::convertFromPlainText(tr("When enabled, adjusting a track on the viewer will create a new keyframe"), Qt::WhiteSpaceNormal));
         _imp->createKeyOnMoveButton->setCheckable(true);
         _imp->createKeyOnMoveButton->setChecked(true);
@@ -509,6 +500,7 @@ TrackerGui::createGui()
         corrIc.addPixmap(hideCorrPix, QIcon::Normal, QIcon::Off);
         _imp->showCorrelationButton = new Button(corrIc, "", _imp->buttonsBar);
         _imp->showCorrelationButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+        _imp->showCorrelationButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         _imp->showCorrelationButton->setToolTip(Natron::convertFromPlainText(tr("When enabled, the correlation score of each tracked frame will be displayed on "
                                                                                 "the viewer, with lower correlations close to green and greater correlations "
                                                                                 "close to red."), Qt::WhiteSpaceNormal));
@@ -531,12 +523,14 @@ TrackerGui::createGui()
         
         _imp->setKeyFrameButton = new Button(QIcon(addKeyPix), "", keyframeContainer);
         _imp->setKeyFrameButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+        _imp->setKeyFrameButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         _imp->setKeyFrameButton->setToolTip(Natron::convertFromPlainText(tr("Set a keyframe for the pattern for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->setKeyFrameButton,SIGNAL( clicked(bool) ),this,SLOT( onSetKeyframeButtonClicked() ) );
         keyframeLayout->addWidget(_imp->setKeyFrameButton);
         
         _imp->removeKeyFrameButton = new Button(QIcon(removeKeyPix), "", keyframeContainer);
         _imp->removeKeyFrameButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+        _imp->removeKeyFrameButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         _imp->removeKeyFrameButton->setToolTip(Natron::convertFromPlainText(tr("Remove a keyframe for the pattern for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->removeKeyFrameButton,SIGNAL( clicked(bool) ),this,SLOT( onRemoveKeyframeButtonClicked() ) );
         keyframeLayout->addWidget(_imp->removeKeyFrameButton);
@@ -549,18 +543,17 @@ TrackerGui::createGui()
         appPTR->getIcon(Natron::NATRON_PIXMAP_RESTORE_DEFAULTS_ENABLED, &resetPix);
         _imp->resetOffsetButton = new Button(QIcon(resetOffsetPix), "", _imp->buttonsBar);
         _imp->resetOffsetButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+        _imp->resetOffsetButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         _imp->resetOffsetButton->setToolTip(Natron::convertFromPlainText(tr("Resets the offset for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->resetOffsetButton,SIGNAL( clicked(bool) ),this,SLOT( onResetOffsetButtonClicked() ) );
         _imp->buttonsLayout->addWidget(_imp->resetOffsetButton);
         
         _imp->resetTrackButton = new Button(QIcon(resetPix), "", _imp->buttonsBar);
         _imp->resetTrackButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+        _imp->resetTrackButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
         _imp->resetTrackButton->setToolTip(Natron::convertFromPlainText(tr("Resets animation for the selected tracks"), Qt::WhiteSpaceNormal));
         QObject::connect( _imp->resetTrackButton,SIGNAL( clicked(bool) ),this,SLOT( onResetTrackButtonClicked() ) );
         _imp->buttonsLayout->addWidget(_imp->resetTrackButton);
-        
-       
-
         
     }
     
@@ -652,7 +645,7 @@ TrackerGui::drawOverlays(double time,
                     ///Draw a custom interact, indicating the track isn't selected
                     boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
                     assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-                    Double_Knob* dblKnob = dynamic_cast<Double_Knob*>( newInstanceKnob.get() );
+                    KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
                     assert(dblKnob);
                     
                     //GLProtectMatrix p(GL_PROJECTION); // useless (we do two glTranslate in opposite directions)
@@ -697,7 +690,6 @@ TrackerGui::drawOverlays(double time,
             if (!_imp->panel->getNode()->getOverlayColor(&markerColor[0], &markerColor[1], &markerColor[2])) {
                 markerColor[0] = markerColor[1] = markerColor[2] = 0.8;
             }
-<<<<<<< HEAD
             
             std::vector<boost::shared_ptr<TrackMarker> > allMarkers;
             std::list<boost::shared_ptr<TrackMarker> > selectedMarkers;
@@ -718,15 +710,15 @@ TrackerGui::drawOverlays(double time,
                 std::list<boost::shared_ptr<TrackMarker> >::iterator foundSelected = std::find(selectedMarkers.begin(),selectedMarkers.end(),*it);
                 bool isSelected = foundSelected != selectedMarkers.end();
                 
-                boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
-                boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
-                boost::shared_ptr<Double_Knob> correlationKnob = (*it)->getCorrelationKnob();
-                boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
-                boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
-                boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
-                boost::shared_ptr<Double_Knob> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
-                boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
-                boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
+                boost::shared_ptr<KnobDouble> centerKnob = (*it)->getCenterKnob();
+                boost::shared_ptr<KnobDouble> offsetKnob = (*it)->getOffsetKnob();
+                boost::shared_ptr<KnobDouble> correlationKnob = (*it)->getCorrelationKnob();
+                boost::shared_ptr<KnobDouble> ptnTopLeft = (*it)->getPatternTopLeftKnob();
+                boost::shared_ptr<KnobDouble> ptnTopRight = (*it)->getPatternTopRightKnob();
+                boost::shared_ptr<KnobDouble> ptnBtmRight = (*it)->getPatternBtmRightKnob();
+                boost::shared_ptr<KnobDouble> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
+                boost::shared_ptr<KnobDouble> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
+                boost::shared_ptr<KnobDouble> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
                 
                 if (!isSelected) {
                     ///Draw a custom interact, indicating the track isn't selected
@@ -872,52 +864,7 @@ TrackerGui::drawOverlays(double time,
                             }
                         }
                     }
-                    for (int i = floorTime - 1; i > (floorTime - MAX_CENTER_POINTS_DISPLAYED); --i) {
-                        KeyFrame k;
-                        if (xCurve->getKeyFrameWithTime(i, &k)) {
-                            std::pair<Natron::Point,double>& p = centerPoints[k.getTime()];
-                            p.first.x = k.getValue();
-                            p.first.y = INT_MIN;
-                            
-                            if (yCurve->getKeyFrameWithTime(i, &k)) {
-                                p.first.y = k.getValue();
-                            }
-                            if (showErrorColor && errorCurve->getKeyFrameWithTime(i, &k)) {
-                                p.second = k.getValue();
-                            }
-                        }
-=======
-            if (it->second) {
-                ///The track is selected, use the plug-ins interact
-                Natron::EffectInstance* effect = instance->getLiveInstance();
-                assert(effect);
-                effect->setCurrentViewportForOverlays_public( _imp->viewer->getViewer() );
-                effect->drawOverlay_public(time, scaleX,scaleY);
-            } else {
-                ///Draw a custom interact, indicating the track isn't selected
-                boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
-                assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-                KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
-                assert(dblKnob);
-
-                //GLProtectMatrix p(GL_PROJECTION); // useless (we do two glTranslate in opposite directions)
-                for (int l = 0; l < 2; ++l) {
-                    // shadow (uses GL_PROJECTION)
-                    glMatrixMode(GL_PROJECTION);
-                    int direction = (l == 0) ? 1 : -1;
-                    // translate (1,-1) pixels
-                    glTranslated(direction * pixelScaleX / 256, -direction * pixelScaleY / 256, 0);
-                    glMatrixMode(GL_MODELVIEW);
-
-                    if (l == 0) {
-                        glColor4d(0., 0., 0., 1.);
-                    } else {
-                        glColor4f(1., 1., 1., 1.);
->>>>>>> workshop
-                    }
-
-                  
-                    
+          
                     for (int l = 0; l < 2; ++l) {
                         // shadow (uses GL_PROJECTION)
                         glMatrixMode(GL_PROJECTION);
@@ -1283,7 +1230,6 @@ drawEllipse(double x, double y, double radiusX, double radiusY, int l, double r,
     glPopMatrix();
 }
 
-<<<<<<< HEAD
 void
 TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pixelScale,
                                              const Natron::Point& ptnCenter,
@@ -1301,19 +1247,7 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
     
     RectD textureRectCanonical;
     computeSelectedMarkerCanonicalRect(&textureRectCanonical);
-=======
-    double selectionTol = pixelScale.first * 10.;
-    for (std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> >::const_iterator it = instances.begin(); it != instances.end(); ++it) {
-        
-        boost::shared_ptr<Node> instance = it->first.lock();
-        boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
-        assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-        KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
-        assert(dblKnob);
-        double x,y;
-        x = dblKnob->getValueAtTime(time, 0);
-        y = dblKnob->getValueAtTime(time, 1);
->>>>>>> workshop
+
 
     
     const TextureRect& texRect = selectedMarkerTexture->getTextureRect();
@@ -1427,8 +1361,7 @@ TrackerGuiPrivate::drawSelectedMarkerTexture(const std::pair<double,double>& pix
     
 }
 
-<<<<<<< HEAD
-static bool isNearbyPoint(const boost::shared_ptr<Double_Knob>& knob,
+static bool isNearbyPoint(const boost::shared_ptr<KnobDouble>& knob,
                           ViewerGL* viewer,
                           double xWidget, double yWidget,
                           double toleranceWidget,
@@ -1441,21 +1374,6 @@ static bool isNearbyPoint(const boost::shared_ptr<Double_Knob>& knob,
     if (p.x() <= (xWidget + toleranceWidget) && p.x() >= (xWidget - toleranceWidget) &&
         p.y() <= (yWidget + toleranceWidget) && p.y() >= (yWidget - toleranceWidget)) {
         return true;
-=======
-    if (_imp->clickToAddTrackEnabled && !didSomething) {
-        boost::shared_ptr<Node> newInstance = _imp->panel->createNewInstance(true);
-        boost::shared_ptr<KnobI> newInstanceKnob = newInstance->getKnobByName("center");
-        assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-        KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
-        assert(dblKnob);
-        dblKnob->beginChanges();
-        dblKnob->blockValueChanges();
-        dblKnob->setValueAtTime(time, pos.x(), 0);
-        dblKnob->setValueAtTime(time, pos.y(), 1);
-        dblKnob->unblockValueChanges();
-        dblKnob->endChanges();
-        didSomething = true;
->>>>>>> workshop
     }
     return false;
 }
@@ -1525,7 +1443,7 @@ TrackerGui::penDown(double time,
             boost::shared_ptr<Node> instance = it->first.lock();
             boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
             assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-            Double_Knob* dblKnob = dynamic_cast<Double_Knob*>( newInstanceKnob.get() );
+            KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
             assert(dblKnob);
             double x,y;
             x = dblKnob->getValueAtTime(time, 0);
@@ -1545,7 +1463,7 @@ TrackerGui::penDown(double time,
             boost::shared_ptr<Node> newInstance = _imp->panelv1->createNewInstance(true);
             boost::shared_ptr<KnobI> newInstanceKnob = newInstance->getKnobByName("center");
             assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-            Double_Knob* dblKnob = dynamic_cast<Double_Knob*>( newInstanceKnob.get() );
+            KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
             assert(dblKnob);
             dblKnob->beginChanges();
             dblKnob->blockValueChanges();
@@ -1571,15 +1489,15 @@ TrackerGui::penDown(double time,
             
             bool isSelected = context->isMarkerSelected((*it));
             
-            boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
-            boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
-            boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
-            boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
-            boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
-            boost::shared_ptr<Double_Knob> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
+            boost::shared_ptr<KnobDouble> centerKnob = (*it)->getCenterKnob();
+            boost::shared_ptr<KnobDouble> offsetKnob = (*it)->getOffsetKnob();
+            boost::shared_ptr<KnobDouble> ptnTopLeft = (*it)->getPatternTopLeftKnob();
+            boost::shared_ptr<KnobDouble> ptnTopRight = (*it)->getPatternTopRightKnob();
+            boost::shared_ptr<KnobDouble> ptnBtmRight = (*it)->getPatternBtmRightKnob();
+            boost::shared_ptr<KnobDouble> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
             
-            boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
-            boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
+            boost::shared_ptr<KnobDouble> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
+            boost::shared_ptr<KnobDouble> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
             
             
             QPointF centerPoint;
@@ -1745,7 +1663,7 @@ TrackerGui::penDown(double time,
         
         if (_imp->clickToAddTrackEnabled && !didSomething) {
             boost::shared_ptr<TrackMarker> marker = context->createMarker();
-            boost::shared_ptr<Double_Knob> centerKnob = marker->getCenterKnob();
+            boost::shared_ptr<KnobDouble> centerKnob = marker->getCenterKnob();
             centerKnob->setValuesAtTime(time, pos.x(), pos.y(), Natron::eValueChangedReasonNatronInternalEdited);
             _imp->panel->pushUndoCommand(new AddTrackCommand(marker,context));
             didSomething = true;
@@ -1791,11 +1709,11 @@ TrackerGui::penDoubleClicked(double /*time*/,
 void
 TrackerGuiPrivate::transformPattern(double time, TrackerMouseStateEnum state, const Natron::Point& delta)
 {
-    boost::shared_ptr<Double_Knob> searchWndTopRight,searchWndBtmLeft;
-    boost::shared_ptr<Double_Knob> patternCorners[4];
+    boost::shared_ptr<KnobDouble> searchWndTopRight,searchWndBtmLeft;
+    boost::shared_ptr<KnobDouble> patternCorners[4];
     boost::shared_ptr<TrackerContext> context = panel->getContext();
-    boost::shared_ptr<Double_Knob> centerKnob = context->getCenterKnob();
-    boost::shared_ptr<Double_Knob> offsetKnob = context->getOffsetKnob();
+    boost::shared_ptr<KnobDouble> centerKnob = context->getCenterKnob();
+    boost::shared_ptr<KnobDouble> offsetKnob = context->getOffsetKnob();
     
     bool transformPatternCorners = state != eMouseStateDraggingOuterBtmLeft &&
     state != eMouseStateDraggingOuterBtmRight &&
@@ -2100,16 +2018,16 @@ TrackerGui::penMotion(double time,
             
             bool isSelected = context->isMarkerSelected((*it));
             
-            boost::shared_ptr<Double_Knob> centerKnob = (*it)->getCenterKnob();
-            boost::shared_ptr<Double_Knob> offsetKnob = (*it)->getOffsetKnob();
+            boost::shared_ptr<KnobDouble> centerKnob = (*it)->getCenterKnob();
+            boost::shared_ptr<KnobDouble> offsetKnob = (*it)->getOffsetKnob();
             
-            boost::shared_ptr<Double_Knob> ptnTopLeft = (*it)->getPatternTopLeftKnob();
-            boost::shared_ptr<Double_Knob> ptnTopRight = (*it)->getPatternTopRightKnob();
-            boost::shared_ptr<Double_Knob> ptnBtmRight = (*it)->getPatternBtmRightKnob();
-            boost::shared_ptr<Double_Knob> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
+            boost::shared_ptr<KnobDouble> ptnTopLeft = (*it)->getPatternTopLeftKnob();
+            boost::shared_ptr<KnobDouble> ptnTopRight = (*it)->getPatternTopRightKnob();
+            boost::shared_ptr<KnobDouble> ptnBtmRight = (*it)->getPatternBtmRightKnob();
+            boost::shared_ptr<KnobDouble> ptnBtmLeft = (*it)->getPatternBtmLeftKnob();
             
-            boost::shared_ptr<Double_Knob> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
-            boost::shared_ptr<Double_Knob> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
+            boost::shared_ptr<KnobDouble> searchWndTopRight = (*it)->getSearchWindowTopRightKnob();
+            boost::shared_ptr<KnobDouble> searchWndBtmLeft = (*it)->getSearchWindowBottomLeftKnob();
             
             
             QPointF centerPoint;
@@ -2284,8 +2202,8 @@ TrackerGui::penMotion(double time,
             didSomething = true;
         }
         
-        boost::shared_ptr<Double_Knob> centerKnob,offsetKnob,searchWndTopRight,searchWndBtmLeft;
-        boost::shared_ptr<Double_Knob> patternCorners[4];
+        boost::shared_ptr<KnobDouble> centerKnob,offsetKnob,searchWndTopRight,searchWndBtmLeft;
+        boost::shared_ptr<KnobDouble> patternCorners[4];
         if (_imp->interactMarker) {
             centerKnob = context->getCenterKnob();
             offsetKnob = context->getOffsetKnob();
@@ -2610,10 +2528,10 @@ TrackerGui::penMotion(double time,
                 assert(marker);
                 RectD markerMagRect;
                 _imp->computeSelectedMarkerCanonicalRect(&markerMagRect);
-                boost::shared_ptr<Double_Knob> centerKnob = marker->getCenterKnob();
-                boost::shared_ptr<Double_Knob> offsetKnob = marker->getOffsetKnob();
-                boost::shared_ptr<Double_Knob> searchBtmLeft = marker->getSearchWindowBottomLeftKnob();
-                boost::shared_ptr<Double_Knob> searchTopRight = marker->getSearchWindowTopRightKnob();
+                boost::shared_ptr<KnobDouble> centerKnob = marker->getCenterKnob();
+                boost::shared_ptr<KnobDouble> offsetKnob = marker->getOffsetKnob();
+                boost::shared_ptr<KnobDouble> searchBtmLeft = marker->getSearchWindowBottomLeftKnob();
+                boost::shared_ptr<KnobDouble> searchTopRight = marker->getSearchWindowTopRightKnob();
                 
                 Natron::Point center,offset,btmLeft,topRight;
                 center.x = centerKnob->getValueAtTime(time, 0);
@@ -2896,7 +2814,6 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
     }
     double l,r,b,t;
     _imp->viewer->getViewer()->getSelectionRectangle(l, r, b, t);
-<<<<<<< HEAD
     
     if (_imp->panelv1) {
         std::list<Natron::Node*> currentSelection;
@@ -2906,7 +2823,7 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
             boost::shared_ptr<Node> instance = it->first.lock();
             boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
             assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-            Double_Knob* dblKnob = dynamic_cast<Double_Knob*>( newInstanceKnob.get() );
+            KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
             assert(dblKnob);
             double x,y;
             x = dblKnob->getValue(0);
@@ -2916,25 +2833,7 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
                 assert( std::find( currentSelection.begin(),currentSelection.end(),instance.get() ) == currentSelection.end() );
                 currentSelection.push_back( instance.get() );
             }
-=======
 
-    std::list<Natron::Node*> currentSelection;
-    const std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> > & instances = _imp->panel->getInstances();
-    for (std::list<std::pair<boost::weak_ptr<Natron::Node>,bool> >::const_iterator it = instances.begin(); it != instances.end(); ++it) {
-        
-        boost::shared_ptr<Node> instance = it->first.lock();
-        boost::shared_ptr<KnobI> newInstanceKnob = instance->getKnobByName("center");
-        assert(newInstanceKnob); //< if it crashes here that means the parameter's name changed in the OpenFX plug-in.
-        KnobDouble* dblKnob = dynamic_cast<KnobDouble*>( newInstanceKnob.get() );
-        assert(dblKnob);
-        double x,y;
-        x = dblKnob->getValue(0);
-        y = dblKnob->getValue(1);
-        if ( (x >= l) && (x <= r) && (y >= b) && (y <= t) ) {
-            ///assert that the node is really not part of the selection
-            assert( std::find( currentSelection.begin(),currentSelection.end(),instance.get() ) == currentSelection.end() );
-            currentSelection.push_back( instance.get() );
->>>>>>> workshop
         }
         _imp->panelv1->selectNodes( currentSelection, (_imp->controlDown > 0) );
     } else {
@@ -2946,7 +2845,7 @@ TrackerGui::updateSelectionFromSelectionRectangle(bool onRelease)
             if (!allMarkers[i]->isEnabled()) {
                 continue;
             }
-            boost::shared_ptr<Double_Knob> center = allMarkers[i]->getCenterKnob();
+            boost::shared_ptr<KnobDouble> center = allMarkers[i]->getCenterKnob();
             double x,y;
             x = center->getValue(0);
             y = center->getValue(1);

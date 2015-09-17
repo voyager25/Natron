@@ -1733,11 +1733,7 @@ struct TrackerPanelPrivateV1
 
     void createCornerPinFromSelection(const std::list<Node*> & selection,bool linked,bool useTransformRefFrame,bool invert);
     
-<<<<<<< HEAD
-    bool getTrackInstancesForButton(std::vector<Button_Knob*>* trackButtons,const std::string& buttonName);
-=======
-    bool getTrackInstancesForButton(std::list<KnobButton*>* trackButtons,const std::string& buttonName);
->>>>>>> workshop
+    bool getTrackInstancesForButton(std::vector<KnobButton*>* trackButtons,const std::string& buttonName);
 };
 
 TrackerPanelV1::TrackerPanelV1(const boost::shared_ptr<NodeGui> & node)
@@ -1861,11 +1857,7 @@ TrackerPanelV1::initializeExtraKnobs()
 }
 
 void
-<<<<<<< HEAD
-TrackerPanelV1::setIconForButton(Button_Knob* knob)
-=======
-TrackerPanel::setIconForButton(KnobButton* knob)
->>>>>>> workshop
+TrackerPanelV1::setIconForButton(KnobButton* knob)
 {
     const std::string name = knob->getName();
 
@@ -1961,16 +1953,13 @@ TrackerPanelV1::onAverageTracksButtonClicked()
 } // onAverageTracksButtonClicked
 
 void
-<<<<<<< HEAD
-TrackerPanelV1::onButtonTriggered(Button_Knob* button)
-=======
-TrackerPanel::onButtonTriggered(KnobButton* button)
->>>>>>> workshop
+TrackerPanelV1::onButtonTriggered(KnobButton* button)
 {
     std::string name = button->getName();
     
     assert(button);
-    EffectInstance* effect = dynamic_cast<EffectInstance*>(button->getHolder());
+    
+    EffectInstance* effect = getMainInstance()->getLiveInstance();
     assert(effect);
     std::list<ViewerInstance*> viewers;
     effect->getNode()->hasViewersConnected(&viewers);
@@ -1991,25 +1980,6 @@ TrackerPanel::onButtonTriggered(KnobButton* button)
     }
 }
 
-<<<<<<< HEAD
-
-=======
-static void
-handleTrackNextAndPrevious(KnobButton* selectedInstance,
-                           SequenceTime currentFrame)
-{
-//        ///When a reason of eValueChangedReasonUserEdited is given, the tracker plug-in will move the timeline so just send it
-//        ///upon the last track if we want to update the viewer
-//        Natron::ValueChangedReasonEnum reason;
-//        if (updateViewer) {
-//            reason = next == selectedInstances.end() ? eValueChangedReasonNatronGuiEdited : eValueChangedReasonNatronInternalEdited;
-//        } else {
-//            reason = eValueChangedReasonNatronInternalEdited;
-//        }
-        selectedInstance->getHolder()->onKnobValueChanged_public(selectedInstance,eValueChangedReasonNatronInternalEdited,currentFrame,
-                                                                 true);
-}
->>>>>>> workshop
 
 void
 TrackerPanelV1::onTrackingStarted()
@@ -2043,11 +2013,7 @@ TrackerPanelV1::onTrackingProgressUpdate(double progress)
 }
 
 bool
-<<<<<<< HEAD
-TrackerPanelPrivateV1::getTrackInstancesForButton(std::vector<Button_Knob*>* trackButtons,const std::string& buttonName)
-=======
-TrackerPanelPrivate::getTrackInstancesForButton(std::list<KnobButton*>* trackButtons,const std::string& buttonName)
->>>>>>> workshop
+TrackerPanelPrivateV1::getTrackInstancesForButton(std::vector<KnobButton*>* trackButtons,const std::string& buttonName)
 {
     std::list<Node*> selectedInstances;
     
@@ -2081,11 +2047,7 @@ TrackerPanelV1::trackBackward(ViewerInstance* viewer)
     assert(QThread::currentThread() == qApp->thread());
     
 
-<<<<<<< HEAD
-    std::vector<Button_Knob*> instanceButtons;
-=======
-    std::list<KnobButton*> instanceButtons;
->>>>>>> workshop
+    std::vector<KnobButton*> instanceButtons;
     if (!_imp->getTrackInstancesForButton(&instanceButtons, kNatronParamTrackingPrevious)) {
         return false;
     }
@@ -2106,11 +2068,7 @@ TrackerPanelV1::trackForward(ViewerInstance* viewer)
     assert(QThread::currentThread() == qApp->thread());
     
     
-<<<<<<< HEAD
-    std::vector<Button_Knob*> instanceButtons;
-=======
-    std::list<KnobButton*> instanceButtons;
->>>>>>> workshop
+    std::vector<KnobButton*> instanceButtons;
     if (!_imp->getTrackInstancesForButton(&instanceButtons, kNatronParamTrackingNext)) {
         return false;
     }
@@ -2144,11 +2102,7 @@ TrackerPanelV1::trackPrevious(ViewerInstance* viewer)
 
         return false;
     }
-<<<<<<< HEAD
-    std::vector<Button_Knob*> instanceButtons;
-=======
-    std::list<KnobButton*> instanceButtons;
->>>>>>> workshop
+    std::vector<KnobButton*> instanceButtons;
     if (!_imp->getTrackInstancesForButton(&instanceButtons, kNatronParamTrackingPrevious)) {
         return false;
     }
@@ -2174,11 +2128,7 @@ TrackerPanelV1::trackNext(ViewerInstance* viewer)
         
         return false;
     }
-<<<<<<< HEAD
-    std::vector<Button_Knob*> instanceButtons;
-=======
-    std::list<KnobButton*> instanceButtons;
->>>>>>> workshop
+    std::vector<KnobButton*> instanceButtons;
     if (!_imp->getTrackInstancesForButton(&instanceButtons, kNatronParamTrackingNext)) {
         return false;
     }
@@ -2454,267 +2404,3 @@ TrackerPanelV1::showMenuForInstance(Natron::Node* instance)
         centerKnob->copyAnimationToClipboard();
     }
 }
-
-<<<<<<< HEAD
-=======
-
-struct TrackArgs
-{
-    int start,end;
-    bool forward;
-    std::list<KnobButton*> instances;
-};
-
-struct TrackSchedulerPrivate
-{
-    const TrackerPanel* panel;
-    
-    QMutex argsMutex;
-    TrackArgs curArgs,requestedArgs;
-    
-    mutable QMutex mustQuitMutex;
-    bool mustQuit;
-    QWaitCondition mustQuitCond;
-    
-    mutable QMutex abortRequestedMutex;
-    int abortRequested;
-    QWaitCondition abortRequestedCond;
-    
-    QMutex startRequesstMutex;
-    int startRequests;
-    QWaitCondition startRequestsCond;
-    
-    mutable QMutex isWorkingMutex;
-    bool isWorking;
-    
-    
-    TrackSchedulerPrivate(const TrackerPanel* panel)
-    : panel(panel)
-    , argsMutex()
-    , curArgs()
-    , requestedArgs()
-    , mustQuitMutex()
-    , mustQuit(false)
-    , mustQuitCond()
-    , abortRequestedMutex()
-    , abortRequested(0)
-    , abortRequestedCond()
-    , startRequesstMutex()
-    , startRequests(0)
-    , startRequestsCond()
-    , isWorkingMutex()
-    , isWorking(false)
-    {
-        
-    }
-    
-    bool checkForExit()
-    {
-        QMutexLocker k(&mustQuitMutex);
-        if (mustQuit) {
-            mustQuit = false;
-            mustQuitCond.wakeAll();
-            return true;
-        }
-        return false;
-    }
-    
-};
-
-
-TrackScheduler::TrackScheduler(const TrackerPanel* panel)
-: QThread()
-, _imp(new TrackSchedulerPrivate(panel))
-{
-    setObjectName("TrackScheduler");
-}
-
-TrackScheduler::~TrackScheduler()
-{
-    
-}
-
-bool
-TrackScheduler::isWorking() const
-{
-    QMutexLocker k(&_imp->isWorkingMutex);
-    return _imp->isWorking;
-}
-
-void
-TrackScheduler::run()
-{
-    for (;;) {
-        
-        ///Check for exit of the thread
-        if (_imp->checkForExit()) {
-            return;
-        }
-        
-        ///Flag that we're working
-        {
-            QMutexLocker k(&_imp->isWorkingMutex);
-            _imp->isWorking = true;
-        }
-        
-        ///Copy the requested args to the args used for processing
-        {
-            QMutexLocker k(&_imp->argsMutex);
-            _imp->curArgs = _imp->requestedArgs;
-        }
-        
-        boost::shared_ptr<TimeLine> timeline = _imp->panel->getApp()->getTimeLine();
-
-        int end = _imp->curArgs.end;
-        int start = _imp->curArgs.start;
-        int cur = start;
-        
-        int framesCount = _imp->curArgs.forward ? (end - start) : (start - end);
-        
-        bool reportProgress = _imp->curArgs.instances.size() > 1 || framesCount > 1;
-        if (reportProgress) {
-            Q_EMIT trackingStarted();
-        }
-        
-        while (cur != end) {
-            
-            
-            ///Launch parallel thread for each track using the global thread pool
-            QtConcurrent::map(_imp->curArgs.instances,
-                              boost::bind(&handleTrackNextAndPrevious,
-                                          _1,
-                                          cur)).waitForFinished();
-            
-            
-            double progress;
-            if (_imp->curArgs.forward) {
-                ++cur;
-                progress = (double)(cur - start) / framesCount;
-            } else {
-                --cur;
-                progress = (double)(start - cur) / framesCount;
-            }
-            
-            ///Ok all tracks are finished now for this frame, refresh viewer if needed
-            bool updateViewer = _imp->panel->isUpdateViewerOnTrackingEnabled();
-            if (updateViewer) {
-                timeline->seekFrame(cur, true, 0, Natron::eTimelineChangeReasonUserSeek);
-            }
-
-            if (reportProgress) {
-                ///Notify we progressed of 1 frame
-                Q_EMIT progressUpdate(progress);
-            }
-            
-            ///Check for abortion
-            {
-                QMutexLocker k(&_imp->abortRequestedMutex);
-                if (_imp->abortRequested > 0) {
-                    _imp->abortRequested = 0;
-                    _imp->abortRequestedCond.wakeAll();
-                    break;
-                }
-            }
-
-        }
-        
-        if (reportProgress) {
-            Q_EMIT trackingFinished();
-        }
-        
-        ///Flag that we're no longer working
-        {
-            QMutexLocker k(&_imp->isWorkingMutex);
-            _imp->isWorking = false;
-        }
-        
-        ///Make sure we really reset the abort flag
-        {
-            QMutexLocker k(&_imp->abortRequestedMutex);
-            if (_imp->abortRequested > 0) {
-                _imp->abortRequested = 0;
-                
-            }
-        }
-        
-        ///Sleep or restart if we've requests in the queue
-        {
-            QMutexLocker k(&_imp->startRequesstMutex);
-            while (_imp->startRequests <= 0) {
-                _imp->startRequestsCond.wait(&_imp->startRequesstMutex);
-            }
-            _imp->startRequests = 0;
-        }
-        
-    }
-}
-
-void
-TrackScheduler::track(int startingFrame,int end,bool forward, const std::list<KnobButton*> & selectedInstances)
-{
-    if ((forward && startingFrame >= end) || (!forward && startingFrame <= end)) {
-        Q_EMIT trackingFinished();
-        return;
-    }
-    {
-        QMutexLocker k(&_imp->argsMutex);
-        _imp->requestedArgs.start = startingFrame;
-        _imp->requestedArgs.end = end;
-        _imp->requestedArgs.forward = forward;
-        _imp->requestedArgs.instances = selectedInstances;
-    }
-    if (isRunning()) {
-        QMutexLocker k(&_imp->startRequesstMutex);
-        ++_imp->startRequests;
-        _imp->startRequestsCond.wakeAll();
-    } else {
-        start();
-    }
-}
-
-
-void TrackScheduler::abortTracking()
-{
-    if (!isRunning() || !isWorking()) {
-        return;
-    }
-    
-    
-    {
-        QMutexLocker k(&_imp->abortRequestedMutex);
-        ++_imp->abortRequested;
-        _imp->abortRequestedCond.wakeAll();
-    }
-    
-}
-
-void
-TrackScheduler::quitThread()
-{
-    if (!isRunning()) {
-        return;
-    }
-    
-    abortTracking();
-    
-    {
-        QMutexLocker k(&_imp->mustQuitMutex);
-        _imp->mustQuit = true;
-
-        {
-            QMutexLocker k(&_imp->startRequesstMutex);
-            ++_imp->startRequests;
-            _imp->startRequestsCond.wakeAll();
-        }
-        
-        while (_imp->mustQuit) {
-            _imp->mustQuitCond.wait(&_imp->mustQuitMutex);
-        }
-
-    }
-
-    
-    wait();
-    
-}
->>>>>>> workshop
