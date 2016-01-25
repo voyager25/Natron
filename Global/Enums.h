@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #define NATRON_GLOBAL_ENUMS_H
 
 #include "Global/Macros.h"
+
 #include <QFlags>
 CLANG_DIAG_OFF(deprecated)
 #include <QMetaType>
@@ -47,6 +48,7 @@ enum TimelineChangeReasonEnum
     eTimelineChangeReasonPlaybackSeek = 1,
     eTimelineChangeReasonCurveEditorSeek = 2,
     eTimelineChangeReasonDopeSheetEditorSeek = 3,
+    eTimelineChangeReasonOtherSeek
 };
 
 enum StatusEnum
@@ -278,6 +280,7 @@ enum PixmapEnum
     
     NATRON_PIXMAP_MERGE_ATOP,
     NATRON_PIXMAP_MERGE_AVERAGE,
+    NATRON_PIXMAP_MERGE_COLOR,
     NATRON_PIXMAP_MERGE_COLOR_BURN,
     NATRON_PIXMAP_MERGE_COLOR_DODGE,
     NATRON_PIXMAP_MERGE_CONJOINT_OVER,
@@ -289,10 +292,13 @@ enum PixmapEnum
     NATRON_PIXMAP_MERGE_FREEZE,
     NATRON_PIXMAP_MERGE_FROM,
     NATRON_PIXMAP_MERGE_GEOMETRIC,
+    NATRON_PIXMAP_MERGE_GRAIN_EXTRACT,
+    NATRON_PIXMAP_MERGE_GRAIN_MERGE,
     NATRON_PIXMAP_MERGE_HARD_LIGHT,
+    NATRON_PIXMAP_MERGE_HUE,
     NATRON_PIXMAP_MERGE_HYPOT,
     NATRON_PIXMAP_MERGE_IN,
-    NATRON_PIXMAP_MERGE_INTERPOLATED,
+    NATRON_PIXMAP_MERGE_LUMINOSITY,
     NATRON_PIXMAP_MERGE_MASK,
     NATRON_PIXMAP_MERGE_MATTE,
     NATRON_PIXMAP_MERGE_MAX,
@@ -305,6 +311,7 @@ enum PixmapEnum
     NATRON_PIXMAP_MERGE_PINLIGHT,
     NATRON_PIXMAP_MERGE_PLUS,
     NATRON_PIXMAP_MERGE_REFLECT,
+    NATRON_PIXMAP_MERGE_SATURATION,
     NATRON_PIXMAP_MERGE_SCREEN,
     NATRON_PIXMAP_MERGE_SOFT_LIGHT,
     NATRON_PIXMAP_MERGE_STENCIL,
@@ -327,13 +334,16 @@ enum PixmapEnum
     NATRON_PIXMAP_INTERP_CURVE_Z,
 };
 
+
+    
 ///This enum is used when dealing with parameters which have their value edited
 enum ValueChangedReasonEnum
 {
     //A user change to the knob triggered the call, gui will not be refreshed but instanceChangedAction called
     eValueChangedReasonUserEdited = 0,
     
-    //A plugin change triggered the call, gui will be refreshed but instanceChangedAction not called
+    //A plugin change triggered the call, gui will be refreshed and instanceChangedAction called. This is stricly reserved
+    //to calls made directly from an OpenFX plug-in
     eValueChangedReasonPluginEdited ,
     
     // Natron gui called setValue itself, instanceChangedAction will be called (with a reason of User edited) AND knob gui refreshed
@@ -440,7 +450,8 @@ enum DisplayChannelsEnum
     eDisplayChannelsG,
     eDisplayChannelsB,
     eDisplayChannelsA,
-    eDisplayChannelsY
+    eDisplayChannelsY,
+    eDisplayChannelsMatte,
 };
     
     /** @brief Enumerates the contexts a plugin can be used in */
@@ -471,50 +482,7 @@ enum RotoStrokeType
     eRotoStrokeTypeBurn,
 };
 
-///Keep this in sync with @openfx-supportext/ofxsMerging.h
-enum MergingFunctionEnum
-{
-    eMergeATop = 0,
-    eMergeAverage,
-    eMergeColor,
-    eMergeColorBurn,
-    eMergeColorDodge,
-    eMergeConjointOver,
-    eMergeCopy,
-    eMergeDifference,
-    eMergeDisjointOver,
-    eMergeDivide,
-    eMergeExclusion,
-    eMergeFreeze,
-    eMergeFrom,
-    eMergeGeometric,
-    eMergeGrainExtract,
-    eMergeGrainMerge,
-    eMergeHardLight,
-    eMergeHue,
-    eMergeHypot,
-    eMergeIn,
-   // eMergeInterpolated,
-    eMergeLuminosity,
-    eMergeMask,
-    eMergeMatte,
-    eMergeMax,
-    eMergeMin,
-    eMergeMinus,
-    eMergeMultiply,
-    eMergeOut,
-    eMergeOver,
-    eMergeOverlay,
-    eMergePinLight,
-    eMergePlus,
-    eMergeReflect,
-    eMergeSaturation,
-    eMergeScreen,
-    eMergeSoftLight,
-    eMergeStencil,
-    eMergeUnder,
-    eMergeXOR
-};
+
   
 enum RenderSafetyEnum
 {

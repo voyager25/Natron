@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,18 +36,11 @@ CLANG_DIAG_ON(deprecated)
 #include <QVector>
 #include <QMutex>
 
-#include "Engine/Knob.h"
-
 #include "Global/GlobalDefines.h"
+#include "Engine/Knob.h"
+#include "Engine/EngineFwd.h"
 
-class Curve;
-class ChoiceExtraData;
-class OverlaySupport;
-class StringAnimationManager;
-class BezierCP;
-namespace Natron {
-class Node;
-}
+
 /******************************KnobInt**************************************/
 
 class KnobInt
@@ -60,15 +53,15 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobInt(holder, description, dimension,declaredByPlugin);
+        return new KnobInt(holder, label, dimension, declaredByPlugin);
     }
 
     KnobInt(KnobHolder* holder,
-             const std::string &description,
+             const std::string &label,
              int dimension,
              bool declaredByPlugin);
 
@@ -113,15 +106,15 @@ class KnobBool
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobBool(holder, description, dimension,declaredByPlugin);
+        return new KnobBool(holder, label, dimension, declaredByPlugin);
     }
 
     KnobBool(KnobHolder* holder,
-              const std::string &description,
+              const std::string &label,
               int dimension,
               bool declaredByPlugin);
 
@@ -155,23 +148,23 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 
 public:
 
-    enum NormalizedStateEnum
+    enum ValueIsNormalizedEnum
     {
-        eNormalizedStateNone = 0, ///< indicating that the dimension holds a  non-normalized value.
-        eNormalizedStateX, ///< indicating that the dimension holds a value normalized against the X dimension of the project format
-        eNormalizedStateY ///< indicating that the dimension holds a value normalized against the Y dimension of the project format
+        eValueIsNormalizedNone = 0, ///< indicating that the dimension holds a  non-normalized value.
+        eValueIsNormalizedX, ///< indicating that the dimension holds a value normalized against the X dimension of the project format
+        eValueIsNormalizedY ///< indicating that the dimension holds a value normalized against the Y dimension of the project format
     };
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobDouble(holder, description, dimension,declaredByPlugin);
+        return new KnobDouble(holder, label, dimension, declaredByPlugin);
     }
 
     KnobDouble(KnobHolder* holder,
-                const std::string &description,
+                const std::string &label,
                 int dimension,
                 bool declaredByPlugin );
 
@@ -194,32 +187,25 @@ public:
 
     static const std::string & typeNameStatic();
 
-    NormalizedStateEnum getNormalizedState(int dimension) const
-    {
-        assert(dimension < 2 && dimension >= 0);
-        if (dimension == 0) {
-            return _normalizationXY.first;
-        } else {
-            return _normalizationXY.second;
-        }
+    ValueIsNormalizedEnum getValueIsNormalized(int dimension) const {
+        return _valueIsNormalized[dimension];
     }
 
-    void setNormalizedState(int dimension,
-                            NormalizedStateEnum state)
-    {
-        assert(dimension < 2 && dimension >= 0);
-        if (dimension == 0) {
-            _normalizationXY.first = state;
-        } else {
-            _normalizationXY.second = state;
-        }
+    void setValueIsNormalized(int dimension,
+                              ValueIsNormalizedEnum state) {
+        _valueIsNormalized[dimension] = state;
     }
     
-    void setSpatial(bool spatial);
-    bool getIsSpatial() const;
+    void setSpatial(bool spatial) {
+        _spatial = spatial;
+    }
+    
+    bool getIsSpatial() const {
+        return _spatial;
+    }
 
     /**
-     * @brief Normalize the default values, set the _defaultStoredNormalized to true and
+     * @brief Normalize the default values, set the _defaultValuesAreNormalized to true and
      * calls setDefaultValue with the good parameters.
      * Later when restoring the default values, this flag will be used to know whether we need
      * to denormalize the default stored values to the set the "live" values.
@@ -245,33 +231,26 @@ public:
      * see http://openfx.sourceforge.net/Documentation/1.3/ofxProgrammingReference.html#kOfxParamPropDefaultCoordinateSystem
      * and http://openfx.sourceforge.net/Documentation/1.3/ofxProgrammingReference.html#APIChanges_1_2_SpatialParameters
      **/
-    void setDefaultValuesNormalized(int dims,double defaults[]);
-
-    /**
-     * @brief Same as setDefaultValuesNormalized but for 1 dimensional doubles
-     **/
-    void setDefaultValuesNormalized(double def)
-    {
-        double d[1];
-
-        d[0] = def;
-        setDefaultValuesNormalized(1,d);
+    void setDefaultValuesAreNormalized(bool normalized) {
+        _defaultValuesAreNormalized = normalized;
     }
 
     /**
      * @brief Returns whether the default values are stored normalized or not.
      **/
-    bool areDefaultValuesNormalized() const;
+    bool getDefaultValuesAreNormalized() const {
+        return _defaultValuesAreNormalized;
+    }
 
     /**
      * @brief Denormalize the given value according to the RoD of the attached effect's input's RoD.
-     * WARNING: Can only be called once setNormalizedState has been called!
+     * WARNING: Can only be called once setValueIsNormalized has been called!
      **/
     void denormalize(int dimension,double time,double* value) const;
 
     /**
      * @brief Normalize the given value according to the RoD of the attached effect's input's RoD.
-     * WARNING: Can only be called once setNormalizedState has been called!
+     * WARNING: Can only be called once setValueIsNormalized has been called!
      **/
     void normalize(int dimension,double time,double* value) const;
 
@@ -300,11 +279,11 @@ public:
 
     void restoreTracks(const std::list <SerializedTrack> & tracks,const std::list<boost::shared_ptr<Natron::Node> > & activeNodes);
 
-    void setHasNativeOverlayHandle(bool handle);
+    void setHasHostOverlayHandle(bool handle);
     
-    bool getHasNativeOverlayHandle() const;
+    bool getHasHostOverlayHandle() const;
     
-    virtual bool useNativeOverlayHandle() const OVERRIDE { return getHasNativeOverlayHandle(); }
+    virtual bool useHostOverlayHandle() const OVERRIDE { return getHasHostOverlayHandle(); }
     
 public Q_SLOTS:
 
@@ -333,14 +312,21 @@ private:
 
     /// to support ofx deprecated normalizd params:
     /// the first and second dimensions of the double param( hence a pair ) have a normalized state.
-    /// BY default they have eNormalizedStateNone
-    std::pair<NormalizedStateEnum, NormalizedStateEnum> _normalizationXY;
+    /// BY default they have eValueIsNormalizedNone
+    /// if the double type is one of
+    /// - kOfxParamDoubleTypeNormalisedX - normalised size wrt to the project's X dimension (1D only),
+    /// - kOfxParamDoubleTypeNormalisedXAbsolute - normalised absolute position on the X axis (1D only)
+    /// - kOfxParamDoubleTypeNormalisedY - normalised size wrt to the project's Y dimension(1D only),
+    /// - kOfxParamDoubleTypeNormalisedYAbsolute - normalised absolute position on the Y axis (1D only)
+    /// - kOfxParamDoubleTypeNormalisedXY - normalised to the project's X and Y size (2D only),
+    /// - kOfxParamDoubleTypeNormalisedXYAbsolute - normalised to the projects X and Y size, and is an absolute position on the image plane,
+    std::vector<ValueIsNormalizedEnum> _valueIsNormalized;
 
     ///For double params respecting the kOfxParamCoordinatesNormalised
     ///This tells us that only the default value is stored normalized.
     ///This SHOULD NOT bet set for old deprecated < OpenFX 1.2 normalized parameters.
-    bool _defaultStoredNormalized;
-    bool _hasNativeOverlayHandle;
+    bool _defaultValuesAreNormalized;
+    bool _hasHostOverlayHandle;
     static const std::string _typeNameStr;
 };
 
@@ -352,15 +338,15 @@ class KnobButton
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobButton(holder, description, dimension,declaredByPlugin);
+        return new KnobButton(holder, label, dimension, declaredByPlugin);
     }
 
     KnobButton(KnobHolder* holder,
-                const std::string &description,
+                const std::string &label,
                 int dimension,
                 bool declaredByPlugin);
     static const std::string & typeNameStatic();
@@ -411,15 +397,15 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobChoice(holder, description, dimension,declaredByPlugin);
+        return new KnobChoice(holder, label, dimension, declaredByPlugin);
     }
 
     KnobChoice(KnobHolder* holder,
-                const std::string &description,
+                const std::string &label,
                 int dimension,
                 bool declaredByPlugin);
 
@@ -427,6 +413,10 @@ public:
 
     /*Must be called right away after the constructor.*/
     void populateChoices( const std::vector<std::string> &entries, const std::vector<std::string> &entriesHelp = std::vector<std::string>() );
+    
+    void resetChoices();
+    
+    void appendChoice(const std::string& entry, const std::string& help = std::string());
     
     std::vector<std::string> getEntries_mt_safe() const;
     const std::string& getEntry(int v) const;
@@ -469,18 +459,30 @@ public:
     ValueChangedReturnCodeEnum setValueFromLabel(const std::string & value,
                                                  int dimension,
                                                  bool turnOffAutoKeying = false);
+    
     /// set the KnobChoice default value from the label
     void setDefaultValueFromLabel(const std::string & value,int dimension = 0);
 
+public Q_SLOTS:
+    
+    void onOriginalKnobPopulated();
+    void onOriginalKnobEntriesReset();
+    void onOriginalKnobEntryAppend(const QString& text,const QString& help);
+    
 Q_SIGNALS:
 
     void populated();
+    void entriesReset();
+    void entryAppended(QString,QString);
 
 private:
 
 
     virtual bool canAnimate() const OVERRIDE FINAL;
     virtual const std::string & typeName() const OVERRIDE FINAL;
+    virtual void handleSignalSlotsForAliasLink(const boost::shared_ptr<KnobI>& alias,bool connect) OVERRIDE FINAL;
+    
+    
 private:
     
     mutable QMutex _entriesMutex;
@@ -499,15 +501,15 @@ class KnobSeparator
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobSeparator(holder, description, dimension,declaredByPlugin);
+        return new KnobSeparator(holder, label, dimension, declaredByPlugin);
     }
 
     KnobSeparator(KnobHolder* holder,
-                   const std::string &description,
+                   const std::string &label,
                    int dimension,
                    bool declaredByPlugin);
     static const std::string & typeNameStatic();
@@ -540,15 +542,15 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobColor(holder, description, dimension,declaredByPlugin);
+        return new KnobColor(holder, label, dimension, declaredByPlugin);
     }
 
     KnobColor(KnobHolder* holder,
-               const std::string &description,
+               const std::string &label,
                int dimension,
                bool declaredByPlugin);
     
@@ -610,15 +612,15 @@ public:
 
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobString(holder, description, dimension,declaredByPlugin);
+        return new KnobString(holder, label, dimension, declaredByPlugin);
     }
 
     KnobString(KnobHolder* holder,
-                const std::string &description,
+                const std::string &label,
                 int dimension,
                 bool declaredByPlugin);
 
@@ -654,13 +656,18 @@ public:
     {
         return _richText;
     }
-
-    void setAsLabel()
+    
+    void setAsCustomHTMLText(bool custom) {
+        _customHtmlText = custom;
+    }
+    
+    bool isCustomHTMLText() const
     {
-        setAnimationEnabled(false); //< labels cannot animate
-        _isLabel = true;
+        return _customHtmlText;
     }
 
+    void setAsLabel();
+    
     bool isLabel() const
     {
         return _isLabel;
@@ -691,6 +698,7 @@ private:
     static const std::string _typeNameStr;
     bool _multiLine;
     bool _richText;
+    bool _customHtmlText;
     bool _isLabel;
     bool _isCustom;
 };
@@ -709,23 +717,23 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobGroup(holder, description, dimension,declaredByPlugin);
+        return new KnobGroup(holder, label, dimension, declaredByPlugin);
     }
 
     KnobGroup(KnobHolder* holder,
-               const std::string &description,
+               const std::string &label,
                int dimension,
                bool declaredByPlugin);
 
     void addKnob(boost::shared_ptr<KnobI> k);
     void removeKnob(KnobI* k);
     
-    void moveOneStepUp(KnobI* k);
-    void moveOneStepDown(KnobI* k);
+    bool moveOneStepUp(KnobI* k);
+    bool moveOneStepDown(KnobI* k);
     
     void insertKnob(int index, const boost::shared_ptr<KnobI>& k);
 
@@ -759,23 +767,23 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobPage(holder, description, dimension,declaredByPlugin);
+        return new KnobPage(holder, label, dimension, declaredByPlugin);
     }
 
     KnobPage(KnobHolder* holder,
-              const std::string &description,
+              const std::string &label,
               int dimension,
               bool declaredByPlugin);
 
     void addKnob(const boost::shared_ptr<KnobI>& k);
     
 
-    void moveOneStepUp(KnobI* k);
-    void moveOneStepDown(KnobI* k);
+    bool moveOneStepUp(KnobI* k);
+    bool moveOneStepDown(KnobI* k);
     
     void removeKnob(KnobI* k);
     
@@ -812,15 +820,15 @@ GCC_DIAG_SUGGEST_OVERRIDE_ON
 public:
 
     static KnobHelper * BuildKnob(KnobHolder* holder,
-                                  const std::string &description,
+                                  const std::string &label,
                                   int dimension,
                                   bool declaredByPlugin = true)
     {
-        return new KnobParametric(holder, description, dimension,declaredByPlugin);
+        return new KnobParametric(holder, label, dimension, declaredByPlugin);
     }
 
     KnobParametric(KnobHolder* holder,
-                    const std::string &description,
+                    const std::string &label,
                     int dimension,
                     bool declaredByPlugin );
 
@@ -903,7 +911,7 @@ private:
     virtual const std::string & typeName() const OVERRIDE FINAL;
     virtual void cloneExtraData(KnobI* other,int dimension = -1) OVERRIDE FINAL;
     virtual bool cloneExtraDataAndCheckIfChanged(KnobI* other,int dimension = -1) OVERRIDE FINAL;
-    virtual void cloneExtraData(KnobI* other, SequenceTime offset, const RangeD* range,int dimension = -1) OVERRIDE FINAL;
+    virtual void cloneExtraData(KnobI* other, double offset, const RangeD* range,int dimension = -1) OVERRIDE FINAL;
     static const std::string _typeNameStr;
 };
 

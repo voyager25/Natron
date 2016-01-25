@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,8 @@
 // ***** END PYTHON BLOCK *****
 
 #include "GuiAppWrapper.h"
+
+#include <stdexcept>
 
 #include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
@@ -250,6 +252,9 @@ GuiApp::getSelectedNodes(Group* group) const
                 if (graph_i) {
                     graph = dynamic_cast<NodeGraph*>(graph_i);
                     assert(graph);
+                    if (!graph) {
+                        throw std::logic_error("");
+                    }
                 }
             }
         }
@@ -258,13 +263,14 @@ GuiApp::getSelectedNodes(Group* group) const
         graph = _app->getGui()->getNodeGraph();
     }
     assert(graph);
-    if (graph) {
-        const std::list<boost::shared_ptr<NodeGui> >& nodes = graph->getSelectedNodes();
-        for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
-            NodePtr node = (*it)->getNode();
-            if (node->isActivated() && !node->getParentMultiInstance()) {
-                ret.push_back(new Effect(node));
-            }
+    if (!graph) {
+        throw std::logic_error("");
+    }
+    const std::list<boost::shared_ptr<NodeGui> >& nodes = graph->getSelectedNodes();
+    for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
+        NodePtr node = (*it)->getNode();
+        if (node->isActivated() && !node->getParentMultiInstance()) {
+            ret.push_back(new Effect(node));
         }
     }
     return ret;
@@ -294,6 +300,9 @@ GuiApp::selectNode(Effect* effect, bool clearPreviousSelection)
         graph = _app->getGui()->getNodeGraph();
     }
     assert(graph);
+    if (!graph) {
+        throw std::logic_error("");
+    }
     graph->selectNode(nodeUi, !clearPreviousSelection);
 }
 
@@ -333,6 +342,9 @@ GuiApp::setSelection(const std::list<Effect*>& nodes)
             graph = _app->getGui()->getNodeGraph();
         }
         assert(graph);
+        if (!graph) {
+            throw std::logic_error("");
+        }
         graph->setSelection(selection);
     }
     
@@ -359,6 +371,9 @@ GuiApp::selectAllNodes(Group* group)
         graph = _app->getGui()->getNodeGraph();
     }
     assert(graph);
+    if (!graph) {
+        throw std::logic_error("");
+    }
     graph->selectAllNodes(false);
 }
 
@@ -386,6 +401,9 @@ GuiApp::deselectNode(Effect* effect)
         graph = _app->getGui()->getNodeGraph();
     }
     assert(graph);
+    if (!graph) {
+        throw std::logic_error("");
+    }
     graph->deselectNode(nodeUi);
 }
 
@@ -411,6 +429,9 @@ GuiApp::clearSelection(Group* group)
         graph = _app->getGui()->getNodeGraph();
     }
     assert(graph);
+    if (!graph) {
+        throw std::logic_error("");
+    }
     graph->clearSelection();
     
 }
@@ -440,6 +461,18 @@ GuiApp::getUserPanel(const std::string& scriptName) const
         return 0;
     }
     return dynamic_cast<PyPanel*>(w->getWidget());
+}
+
+void
+GuiApp::renderBlocking(Effect* writeNode,int firstFrame, int lastFrame,int frameStep)
+{
+    renderInternal(true, writeNode, firstFrame, lastFrame, frameStep);
+}
+
+void
+GuiApp::renderBlocking(const std::list<Effect*>& effects,const std::list<int>& firstFrames,const std::list<int>& lastFrames,const std::list<int>& frameSteps)
+{
+    renderInternal(true, effects, firstFrames, lastFrames, frameSteps);
 }
 
 PyViewer::PyViewer(const boost::shared_ptr<Natron::Node>& node)

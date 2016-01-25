@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -109,7 +109,7 @@ void
 KnobGuiBool::createWidget(QHBoxLayout* layout)
 {
     _checkBox = new Bool_CheckBox( layout->parentWidget() );
-    onLabelChanged();
+    onLabelChangedInternal();
     //_checkBox->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
     QObject::connect( _checkBox, SIGNAL( clicked(bool) ), this, SLOT( onCheckBoxStateChanged(bool) ) );
     QObject::connect( this, SIGNAL( labelClicked(bool) ), this, SLOT( onLabelClicked(bool) ) );
@@ -127,8 +127,10 @@ KnobGuiBool::~KnobGuiBool()
 
 void KnobGuiBool::removeSpecificGui()
 {
-    _checkBox->setParent(0);
-    delete _checkBox;
+    _checkBox->hide();
+    _checkBox->deleteLater();
+    _checkBox = 0;
+    
 }
 
 void
@@ -162,9 +164,9 @@ KnobGuiBool::reflectAnimationLevel(int /*dimension*/,
 }
 
 void
-KnobGuiBool::onLabelChanged()
+KnobGuiBool::onLabelChangedInternal()
 {
-    const std::string& label = _knob.lock()->getDescription();
+    const std::string& label = _knob.lock()->getLabel();
     if (label == "R" || label == "r" || label == "red") {
         QColor color;
         color.setRgbF(0.851643,0.196936,0.196936);
@@ -189,6 +191,9 @@ KnobGuiBool::onLabelChanged()
 void
 KnobGuiBool::onLabelClicked(bool b)
 {
+    if (_checkBox->getReadOnly()) {
+        return;
+    }
     _checkBox->setChecked(b);
     pushUndoCommand( new KnobUndoCommand<bool>(this,_knob.lock()->getValue(0),b, 0, false) );
 }
@@ -216,9 +221,9 @@ KnobGuiBool::setEnabled()
 {
     boost::shared_ptr<KnobBool> knob = _knob.lock();
 
-    bool b = knob->isEnabled(0)  && !knob->isSlave(0) && knob->getExpression(0).empty();
+    bool b = knob->isEnabled(0)  && knob->getExpression(0).empty();
 
-    _checkBox->setEnabled(b);
+    _checkBox->setReadOnly(!b);
 }
 
 void

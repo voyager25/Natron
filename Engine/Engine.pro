@@ -1,6 +1,6 @@
 # ***** BEGIN LICENSE BLOCK *****
 # This file is part of Natron <http://www.natron.fr/>,
-# Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+# Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
 #
 # Natron is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ INCLUDEPATH += $$PWD/..
 INCLUDEPATH += $$PWD/../Global
 INCLUDEPATH += $$PWD/../libs/SequenceParsing
 
-gbreakpad: INCLUDEPATH += $$PWD/../google-breakpad/src
+INCLUDEPATH += $$PWD/../google-breakpad/src
 
 #To overcome wrongly generated #include <...> by shiboken
 INCLUDEPATH += $$PWD
@@ -69,12 +69,6 @@ win32-msvc* {
         } else {
                 QMAKE_LFLAGS += /MACHINE:X86
 	}
-}
-
-# XCode clang 3.5 without optimization generates code that crashes
-#(Natron on OSX, XCode 6, Spaceship_Natron.ntp)
-*-xcode {
-  #QMAKE_CXXFLAGS += -O1
 }
 
 SOURCES += \
@@ -95,6 +89,7 @@ SOURCES += \
     EffectInstance.cpp \
     EffectInstancePrivate.cpp \
     EffectInstanceRenderRoI.cpp \
+    ExistenceCheckThread.cpp \
     FileDownloader.cpp \
     FileSystemModel.cpp \
     FitCurve.cpp \
@@ -144,6 +139,7 @@ SOURCES += \
     ParallelRenderArgs.cpp \
     Plugin.cpp \
     PluginMemory.cpp \
+    PrecompNode.cpp \
     ProcessHandler.cpp \
     Project.cpp \
     ProjectPrivate.cpp \
@@ -167,8 +163,10 @@ SOURCES += \
     TextureRect.cpp \
     TimeLine.cpp \
     Timer.cpp \
+    TLSHolder.cpp \
     Transform.cpp \
     ViewerInstance.cpp \
+    ../Global/ProcInfo.cpp \
     ../libs/SequenceParsing/SequenceParsing.cpp \
     NatronEngine/natronengine_module_wrapper.cpp \
     NatronEngine/natron_wrapper.cpp \
@@ -200,6 +198,7 @@ SOURCES += \
     NatronEngine/group_wrapper.cpp \
     NatronEngine/beziercurve_wrapper.cpp \
     NatronEngine/itembase_wrapper.cpp \
+    NatronEngine/imagelayer_wrapper.cpp \
     NatronEngine/layer_wrapper.cpp \
     NatronEngine/roto_wrapper.cpp \
     NatronEngine/groupparam_wrapper.cpp \
@@ -208,7 +207,8 @@ SOURCES += \
     NatronEngine/pycoreapplication_wrapper.cpp \
     NatronEngine/userparamholder_wrapper.cpp \
     NatronEngine/rectd_wrapper.cpp \
-    NatronEngine/recti_wrapper.cpp
+    NatronEngine/recti_wrapper.cpp \
+    NatronEngine/separatorparam_wrapper.cpp
 
 HEADERS += \
     AppInstance.h \
@@ -236,6 +236,8 @@ HEADERS += \
     DiskCacheNode.h \
     EffectInstance.h \
     EffectInstancePrivate.h \
+    ExistenceCheckThread.h \
+    EngineFwd.h \
     FeatherPoint.h \
     FileDownloader.h \
     FileSystemModel.h \
@@ -274,6 +276,7 @@ HEADERS += \
     LRUHashTable.h \
     Lut.h \
     MemoryFile.h \
+    MergingEnum.h \
     Node.h \
     NodeGroup.h \
     NodeGroupSerialization.h \
@@ -286,9 +289,9 @@ HEADERS += \
     NodeSerialization.h \
     NoOpBase.h \
     OfxClipInstance.h \
+    OfxEffectInstance.h \
     OfxHost.h \
     OfxImageEffectInstance.h \
-    OfxEffectInstance.h \
     OfxOverlayInteract.h \
     OfxMemory.h \
     OfxParamInstance.h \
@@ -300,6 +303,7 @@ HEADERS += \
     ParallelRenderArgs.h \
     Plugin.h \
     PluginMemory.h \
+    PrecompNode.h \
     ProcessHandler.h \
     Project.h \
     ProjectPrivate.h \
@@ -334,7 +338,10 @@ HEADERS += \
     TextureRectSerialization.h \
     ThreadStorage.h \
     TimeLine.h \
+    TimeLineKeyFrames.h \
     Timer.h \
+    TLSHolder.h \
+    TLSHolderImpl.h \
     Transform.h \
     Variant.h \
     VariantSerialization.h \
@@ -347,6 +354,7 @@ HEADERS += \
     ../Global/KeySymbols.h \
     ../Global/Macros.h \
     ../Global/MemoryInfo.h \
+    ../Global/ProcInfo.h \
     ../Global/QtCompat.h \
     ../libs/SequenceParsing/SequenceParsing.h \
     ../libs/OpenFX/include/ofxCore.h \
@@ -401,6 +409,7 @@ HEADERS += \
     NatronEngine/group_wrapper.h \
     NatronEngine/beziercurve_wrapper.h \
     NatronEngine/itembase_wrapper.h \
+    NatronEngine/imagelayer_wrapper.h \
     NatronEngine/layer_wrapper.h \
     NatronEngine/roto_wrapper.h \
     NatronEngine/groupparam_wrapper.h \
@@ -409,7 +418,8 @@ HEADERS += \
     NatronEngine/pycoreapplication_wrapper.h \
     NatronEngine/userparamholder_wrapper.h \
     NatronEngine/rectd_wrapper.h \
-    NatronEngine/recti_wrapper.h
+    NatronEngine/recti_wrapper.h \
+    NatronEngine/separatorparam_wrapper.h
 
 
 OTHER_FILES += \

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,9 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
-#include <map>
-
 #include "Global/Macros.h"
+
+#include <map>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
@@ -48,22 +48,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/DockablePanelI.h"
 
 #include "Gui/DockablePanel.h"
-
-class KnobI;
-class KnobGui;
-class KnobHolder;
-class NodeGui;
-class Gui;
-class KnobPage;
-class QVBoxLayout;
-class Button;
-class QUndoStack;
-class QUndoCommand;
-class QGridLayout;
-class RotoPanel;
-class MultiInstancePanel;
-class QTabWidget;
-class KnobGroup;
+#include "Gui/GuiFwd.h"
 
 
 class NodeSettingsPanel

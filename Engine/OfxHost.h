@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,23 +39,17 @@ CLANG_DIAG_ON(unknown-pragmas)
 #include <ofxhImageEffectAPI.h>
 
 #include "Global/Enums.h"
+#include "Engine/EngineFwd.h"
+
 
 //#define MULTI_THREAD_SUITE_USES_THREAD_SAFE_MUTEX_ALLOCATION
 
-class AbstractOfxEffectInstance;
-class AppInstance;
-class QMutex;
-class NodeSerialization;
-class GlobalOFXTLS;
-class KnobSerialization;
 namespace Natron {
-class OfxImageEffectInstance;
-class Node;
-class Plugin;
     
 struct OfxHostPrivate;
 class OfxHost
     : public OFX::Host::ImageEffect::Host
+    , private OFX::Host::Property::GetHook
 {
 public:
 
@@ -64,6 +58,8 @@ public:
     virtual ~OfxHost();
 
     void setProperties();
+    
+    void setOfxHostOSHandle(void* handle);
 
     /// Create a new instance of an image effect plug-in.
     ///
@@ -103,7 +99,7 @@ public:
                                            va_list args) OVERRIDE;
     /// clearPersistentMessage
     virtual OfxStatus clearPersistentMessage() OVERRIDE;
-    virtual void loadingStatus(const std::string &) OVERRIDE;
+    virtual void loadingStatus(bool loading, const std::string & pluginId, int versionMajor, int versionMinor) OVERRIDE;
     virtual bool pluginSupported(OFX::Host::ImageEffect::ImageEffectPlugin *plugin, std::string &reason) const OVERRIDE;
 
     ///fetch the parametric parameters suite or returns the base class version
@@ -145,7 +141,6 @@ public:
                                                 bool disableRenderScaleSupport,
                                                                  bool *hasUsedFileDialog);
 
-    void addPathToLoadOFXPlugins(const std::string path);
 
     /*Reads OFX plugin cache and scan plugins directories
        to load them all.*/
@@ -156,17 +151,40 @@ public:
 
     void setThreadAsActionCaller(Natron::OfxImageEffectInstance* instance, bool actionCaller);
     
-    static OFX::Host::ImageEffect::Descriptor* getPluginContextAndDescribe(OFX::Host::ImageEffect::ImageEffectPlugin* plugin,
-                                                                           Natron::ContextEnum* ctx);
+    OFX::Host::ImageEffect::Descriptor* getPluginContextAndDescribe(OFX::Host::ImageEffect::ImageEffectPlugin* plugin,
+                                                                    Natron::ContextEnum* ctx);
     
-    GlobalOFXTLS& getCurrentThreadTLS();
-
+    
+    /**
+     * @brief A application-wide TLS struct containing all stuff needed to workaround OFX poor specs:
+     * missing image effect handles etc...
+     **/
+    struct OfxHostTLSData
+    {
+        Natron::OfxImageEffectInstance* lastEffectCallingMainEntry;
+        
+        ///Stored as int, because we need -1; list because we need it recursive for the multiThread func
+        std::list<int> threadIndexes;
+        
+        OfxHostTLSData()
+        : lastEffectCallingMainEntry(0)
+        , threadIndexes()
+        {
+            
+        }
+    };
+    typedef boost::shared_ptr<OfxHostTLSData> OfxHostDataTLSPtr;
+    
+    OfxHostDataTLSPtr getTLSData() const;
     
 private:
     
     /*Writes all plugins loaded and their descriptors to
      the OFX plugin cache. (called by the destructor) */
     void writeOFXCache();
+
+    // get the virutals for viewport size, pixel scale, background colour
+    const std::string &getStringProperty(const std::string &name, int n) const OFX_EXCEPTION_SPEC OVERRIDE;
 
     boost::scoped_ptr<OfxHostPrivate> _imp;
 };

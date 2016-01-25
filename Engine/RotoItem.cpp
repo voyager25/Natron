@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -373,7 +373,11 @@ RotoItem::setScriptName(const std::string & name)
     boost::shared_ptr<RotoContext> c = _imp->context.lock();
     if (c) {
         if (!oldNameEmpty) {
-            c->changeItemScriptName(oldFullName, newFullName);
+            RotoStrokeItem* isStroke = dynamic_cast<RotoStrokeItem*>(this);
+            ///Strokes are unsupported in Python currently
+            if (!isStroke) {
+                c->changeItemScriptName(oldFullName, newFullName);
+            }
         }
         c->onItemScriptNameChanged(shared_from_this());
     }

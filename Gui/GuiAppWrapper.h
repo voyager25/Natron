@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,26 +16,24 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef GUIAPPWRAPPER_H
 #define GUIAPPWRAPPER_H
 
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
+
+#include "Global/Macros.h"
+
 #include "Engine/AppInstanceWrapper.h"
 #include "Engine/ParameterWrapper.h" // ColorTuple
+#include "Engine/EngineFwd.h"
 
 #include "Gui/GuiAppInstance.h"
+#include "Gui/GuiFwd.h"
 
-class PyModalDialog;
-class PyPanel;
-class PyTabWidget;
-class QWidget;
-class Effect;
-class Group;
-class ViewerTab;
-
-namespace Natron {
-class Node;
-}
 
 class PyViewer
 {
@@ -145,6 +143,9 @@ public:
     PyViewer* getViewer(const std::string& scriptName) const;
     
     PyPanel* getUserPanel(const std::string& scriptName) const;
+    
+    void renderBlocking(Effect* writeNode,int firstFrame, int lastFrame,int frameStep = 1);
+    void renderBlocking(const std::list<Effect*>& effects,const std::list<int>& firstFrames,const std::list<int>& lastFrames,const std::list<int>& frameSteps);
 
 };
 

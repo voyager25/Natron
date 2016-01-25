@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -429,7 +429,7 @@ static void createElementsForKnob(QTreeWidgetItem* parent,KnobGui* kgui,boost::s
     
     QTreeWidgetItem* knobItem = new QTreeWidgetItem(parent);
     knobItem->setExpanded(true);
-    knobItem->setText( 0,k->getDescription().c_str() );
+    knobItem->setText( 0, k->getLabel().c_str() );
     
     boost::shared_ptr<CurveGui> knobCurve;
     bool hideKnob = true;
@@ -437,10 +437,10 @@ static void createElementsForKnob(QTreeWidgetItem* parent,KnobGui* kgui,boost::s
     if (k->getDimension() == 1) {
                 
         if (kgui) {
-            knobCurve.reset(new KnobCurveGui(curveWidget,kgui->getCurve(0),kgui,0,k->getDescription().c_str(),QColor(255,255,255),1.));
+            knobCurve.reset(new KnobCurveGui(curveWidget, kgui->getCurve(0), kgui, 0, k->getLabel().c_str(), QColor(255,255,255),1.));
         } else {
             
-            knobCurve.reset(new KnobCurveGui(curveWidget,k->getCurve(0,true),k,rotoctx,0,k->getDescription().c_str(),QColor(255,255,255),1.));
+            knobCurve.reset(new KnobCurveGui(curveWidget, k->getCurve(0,true), k, rotoctx, 0, k->getLabel().c_str(), QColor(255,255,255),1.));
         }
         curveWidget->addCurveAndSetColor(knobCurve);
         
@@ -456,7 +456,7 @@ static void createElementsForKnob(QTreeWidgetItem* parent,KnobGui* kgui,boost::s
             QTreeWidgetItem* dimItem = new QTreeWidgetItem(knobItem);
             dimItem->setExpanded(true);
             dimItem->setText( 0,k->getDimensionName(j).c_str() );
-            QString curveName = QString( k->getDescription().c_str() ) + "." + QString( k->getDimensionName(j).c_str() );
+            QString curveName = QString( k->getLabel().c_str() ) + "." + QString( k->getDimensionName(j).c_str() );
             
             NodeCurveEditorElement* elem;
             boost::shared_ptr<KnobCurveGui> dimCurve;
@@ -748,8 +748,8 @@ NodeCurveEditorElement::NodeCurveEditorElement(QTreeWidget *tree,
 {
     if (internalKnob) {
         boost::shared_ptr<KnobSignalSlotHandler> handler = internalKnob->getSignalSlotHandler();
-        QObject::connect( handler.get(),SIGNAL( keyFrameSet(SequenceTime,int,int,bool) ),this,SLOT( checkVisibleState() ) );
-        QObject::connect( handler.get(),SIGNAL( keyFrameRemoved(SequenceTime,int,int) ),this,SLOT( checkVisibleState() ) );
+        QObject::connect( handler.get(),SIGNAL( keyFrameSet(double,int,int,bool) ),this,SLOT( checkVisibleState() ) );
+        QObject::connect( handler.get(),SIGNAL( keyFrameRemoved(double,int,int) ),this,SLOT( checkVisibleState() ) );
         QObject::connect( handler.get(),SIGNAL( animationRemoved(int) ),this,SLOT( checkVisibleState() ) );
     }
     if (curve) {
@@ -1177,13 +1177,19 @@ RotoItemEditorContext::onNameChanged(const QString & name)
 void
 RotoItemEditorContext::onKeyframeAdded()
 {
-    _imp->widget->update();
+    _imp->widget->getCurveWidget()->onCurveChanged();
 }
 
 void
 RotoItemEditorContext::onKeyframeRemoved()
 {
-    _imp->widget->update();
+    _imp->widget->getCurveWidget()->onCurveChanged();
+}
+
+void
+RotoItemEditorContext::onShapeCloned()
+{
+    _imp->widget->getCurveWidget()->onCurveChanged();
 }
 
 static void recursiveSelectElement(const std::list<NodeCurveEditorElement*>& elements,
@@ -1295,6 +1301,7 @@ BezierEditorContext::BezierEditorContext(QTreeWidget* tree,
     
     QObject::connect(curve.get(), SIGNAL(keyframeSet(double)), this, SLOT(onKeyframeAdded()));
     QObject::connect(curve.get(), SIGNAL(keyframeRemoved(double)), this, SLOT(onKeyframeRemoved()));
+    QObject::connect(curve.get(), SIGNAL(cloned()), this, SLOT(onShapeCloned()));
     
     boost::shared_ptr<RotoContext> roto = context->getNode()->getNode()->getRotoContext();
     _imp->animCurve.reset(new BezierCPCurveGui(cw, curve, roto, getName(), QColor(255,255,255), 1.));
@@ -1378,7 +1385,7 @@ RotoCurveEditorContext::RotoCurveEditorContext(CurveEditor* widget,
 
     QObject::connect( rotoCtx.get(),SIGNAL( itemRemoved(boost::shared_ptr<RotoItem>,int) ),this,
                      SLOT( onItemRemoved(boost::shared_ptr<RotoItem>,int) ) );
-    QObject::connect( rotoCtx.get(),SIGNAL( itemInserted(int) ),this,SLOT( itemInserted(int) ) );
+    QObject::connect( rotoCtx.get(),SIGNAL( itemInserted(int,int) ),this,SLOT( itemInserted(int,int) ) );
     QObject::connect( rotoCtx.get(),SIGNAL( itemLabelChanged(boost::shared_ptr<RotoItem>) ),this,SLOT( onItemNameChanged(boost::shared_ptr<RotoItem>) ) );
     
     std::list<boost::shared_ptr<RotoDrawableItem> > curves = rotoCtx->getCurvesByRenderOrder();
@@ -1454,7 +1461,7 @@ RotoCurveEditorContext::onItemRemoved(const boost::shared_ptr<RotoItem>& item, i
 }
 
 void
-RotoCurveEditorContext::itemInserted(int)
+RotoCurveEditorContext::itemInserted(int,int)
 {
     boost::shared_ptr<RotoContext> roto = _imp->node->getNode()->getRotoContext();
     assert(roto);
@@ -1542,15 +1549,23 @@ CurveEditor::keyPressEvent(QKeyEvent* e)
         _imp->filterEdit->setFocus();
     } else {
         accept = false;
-        QWidget::keyPressEvent(e);
     }
     if (accept) {
         takeClickFocus();
         e->accept();
     } else {
-        handleUnCaughtKeyPressEvent();
+        handleUnCaughtKeyPressEvent(e);
+        QWidget::keyPressEvent(e);
     }
 }
+
+void
+CurveEditor::keyReleaseEvent(QKeyEvent* e)
+{
+    handleUnCaughtKeyUpEvent(e);
+    QWidget::keyReleaseEvent(e);
+}
+
 
 void
 CurveEditor::enterEvent(QEvent* e)

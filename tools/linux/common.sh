@@ -1,7 +1,7 @@
 #!/bin/sh
 # ***** BEGIN LICENSE BLOCK *****
 # This file is part of Natron <http://www.natron.fr/>,
-# Copyright (C) 2015 INRIA and Alexandre Gauthier
+# Copyright (C) 2016 INRIA and Alexandre Gauthier
 #
 # Natron is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,11 +24,11 @@
 
 #THE FOLLOWING CAN BE MODIFIED TO CONFIGURE RELEASE BUILDS
 #----------------------------------------------------------
-NATRON_GIT_TAG=tags/2.0.0-RC1
-IOPLUG_GIT_TAG=tags/2.0.0-RC1
-MISCPLUG_GIT_TAG=tags/2.0.0-RC1
-ARENAPLUG_GIT_TAG=tags/2.0.0-RC1
-CVPLUG_GIT_TAG=tags/2.0.0-RC1
+NATRON_GIT_TAG=tags/2.0.0-RC5
+IOPLUG_GIT_TAG=tags/Natron-2.0.0-RC5
+MISCPLUG_GIT_TAG=tags/Natron-2.0.0-RC5
+ARENAPLUG_GIT_TAG=tags/Natron-2.0.0-RC5
+CVPLUG_GIT_TAG=tags/Natron-2.0.0-RC5
 #----------------------------------------------------------
 
 
@@ -50,7 +50,7 @@ GIT_OCIO_CONFIG_TAR=https://github.com/MrKepzie/OpenColorIO-Configs/archive/Natr
 COLOR_PROFILES_VERSION=2.0.0
 
 # bump timestamp on SDK changes, important!
-CORELIBS_VERSION=20151006
+CORELIBS_VERSION=20151103
 
 # SDK
 #
@@ -85,6 +85,9 @@ if [ -f $CWD/repo.sh ]; then
 else
     REPO_DEST=localhost
     REPO_URL=http://localhost
+    REPO_SYM_URL=root@betelgeuse.inrialpes.fr #for internal testing
+    REPO_SYM_PORT=-P2121
+    REPO_SYM_PATH=/home/uploads
 fi
 
 #Dist repo is expected to be layout as such:
@@ -107,45 +110,47 @@ THIRD_PARTY_SRC_URL=http://downloads.natron.fr/Third_Party_Sources
 GIT_OPENCV=https://github.com/devernay/openfx-opencv.git
 GIT_ARENA=https://github.com/olear/openfx-arena.git
 
-#Installer is a fork of qtifw to fix a few bugs (TODO update/move to v2 upstream when we move to CY2016+ (qt5))
+#Installer is a fork of qtifw to fix a few bugs (TODO update/move to v2 upstream)
 GIT_INSTALLER=https://github.com/olear/qtifw.git
-
+GIT_BREAKPAD=https://github.com/MrKepzie/google-breakpad
 GIT_NATRON=https://github.com/MrKepzie/Natron.git
 GIT_IO=https://github.com/MrKepzie/openfx-io.git
 GIT_MISC=https://github.com/devernay/openfx-misc.git
 
 QT4_TAR=qt-everywhere-opensource-src-4.8.7.tar.gz
-#QT5_TAR=qt-everywhere-opensource-src-5.4.1.tar.gz # CY2016+
+QT5_TAR=qt-everywhere-opensource-src-5.6.0-alpha.tar.xz
 CV_TAR=opencv-2.4.11.zip
 EIGEN_TAR=eigen-eigen-bdd17ee3b1b3.tar.gz
 YASM_TAR=yasm-1.3.0.tar.gz
 CMAKE_TAR=cmake-3.1.2.tar.gz
 PY2_TAR=Python-2.7.10.tar.xz
-PY3_TAR=Python-3.4.3.tar.xz # CY2017+?
+PY3_TAR=Python-3.4.3.tar.xz
 JPG_TAR=jpegsrc.v9a.tar.gz
 OJPG_TAR=openjpeg-1.5.2.tar.gz
-PNG_TAR=libpng-1.2.53.tar.gz
-TIF_TAR=tiff-4.0.4.tar.gz
+PNG_TAR=libpng-1.2.54.tar.xz
+TIF_TAR=tiff-4.0.6.tar.gz
 ILM_TAR=ilmbase-2.2.0.tar.gz
 EXR_TAR=openexr-2.2.0.tar.gz
 GLEW_TAR=glew-1.12.0.tgz
 BOOST_TAR=boost_1_55_0.tar.bz2
-CAIRO_TAR=cairo-1.14.2.tar.xz
-FFMPEG_TAR=ffmpeg-2.7.2.tar.bz2
+CAIRO_TAR=cairo-1.14.6.tar.xz
+FFMPEG_TAR=ffmpeg-2.8.4.tar.xz
 OCIO_TAR=OpenColorIO-1.0.9.tar.gz
-OIIO_TAR=oiio-Release-1.5.18.tar.gz
-PYSIDE_TAR=pyside-qt4.8+1.2.2.tar.bz2
-SHIBOK_TAR=shiboken-1.2.2.tar.bz2
+OIIO_TAR=oiio-Release-1.6.9.tar.gz
+PYSIDE_TAR=pyside-qt4.8+1.2.2.tar.bz2 #TODO bump to 1.2.4
+PYSIDE2_TAR=#
+SHIBOK_TAR=shiboken-1.2.2.tar.bz2 #TODO bump to 1.2.4
+SHIBOK2_TAR=#
 LIBXML_TAR=libxml2-2.9.2.tar.gz
 LIBXSLT_TAR=libxslt-1.1.28.tar.gz
 SEE_TAR=SeExpr-rel-1.0.1.tar.gz
 LIBRAW_TAR=LibRaw-0.16.0.tar.gz
-PIX_TAR=pixman-0.32.6.tar.gz
+PIX_TAR=pixman-0.32.8.tar.gz
 LCMS_TAR=lcms2-2.6.tar.gz
-MAGICK_TAR=openfx-ImageMagick-6.8.10-1.tar.gz # (tmp) fork for use with openfx
-#SSL_TAR=openssl-1.0.0r.tar.gz #TODO ssl support in installer
+MAGICK_TAR=ImageMagick-6.9.2-10.tar.xz
+SSL_TAR=openssl-1.0.0s.tar.gz
 JASP_TAR=jasper-1.900.1.zip
-NATRON_API_DOC=https://media.readthedocs.org/pdf/natron/workshop/natron.pdf # TODO generate own?
+NATRON_API_DOC=https://media.readthedocs.org/pdf/natron/workshop/natron.pdf
 LAME_TAR=lame-3.99.5.tar.gz
 OGG_TAR=libogg-1.3.2.tar.gz
 VORBIS_TAR=libvorbis-1.3.5.tar.gz
@@ -156,8 +161,8 @@ SPEEX_TAR=speex-1.2rc1.tar.gz
 OPUS_TAR=opus-1.1.tar.gz
 DIRAC_TAR=schroedinger-1.0.11.tar.gz
 ORC_TAR=orc-0.4.23.tar.xz
-X264_TAR=x264-snapshot-20150725-2245.tar.bz2 #GPL-only
-XVID_TAR=xvidcore-1.3.4.tar.gz #GPL-only
+X264_TAR=x264-snapshot-20150725-2245.tar.bz2
+XVID_TAR=xvidcore-1.3.4.tar.gz
 ICU_TAR=icu4c-55_1-src.tgz
 ZLIB_TAR=zlib-1.2.8.tar.gz
 EXPAT_TAR=expat-2.1.0.tar.gz
@@ -171,6 +176,8 @@ BZIP_TAR=bzip2-1.0.6.tar.gz
 CROCO_TAR=libcroco-0.6.8.tar.xz
 SVG_TAR=librsvg-2.40.10.tar.xz
 GDK_TAR=gdk-pixbuf-2.32.1.tar.xz
+ELF_TAR=patchelf-0.8.tar.bz2
+ZIP_TAR=libzip-1.0.1.tar.xz
 
 TC_GCC=4.8.5
 TC_MPC=1.0.1
@@ -190,14 +197,14 @@ CLOOG_TAR=cloog-$TC_CLOOG.tar.gz
 # Check distro and version. CentOS/RHEL 6.4 only!
 
 if [ ! -f /etc/redhat-release ]; then
-    echo "Wrong distro, stupid :P"
-    exit 1
+    echo "SDK has been designed for CentOS/RHEL, use at OWN risk!"
+    sleep 5
 else
     RHEL_MAJOR=`cat /etc/redhat-release | cut -d" " -f3 | cut -d "." -f1`
     RHEL_MINOR=`cat /etc/redhat-release | cut -d" " -f3 | cut -d "." -f2`
     if [ "$RHEL_MAJOR" != "6" ] || [ "$RHEL_MINOR" != "4" ]; then
-        echo "Wrong distro version, 6.4 only at the moment!"
-        exit 1
+        echo "Wrong version of CentOS/RHEL, 6.4 is the only tested version!"
+        sleep 5
     fi
 fi
 

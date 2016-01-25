@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,17 +22,14 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
-#include <csignal>
+
 #include <cstdio>  // perror
 #include <cstdlib> // exit
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
 #include "Global/Macros.h"
-
-#if defined(__NATRON_UNIX__)
-#include <sys/signal.h>
-#endif
 
 #include <QCoreApplication>
 
@@ -40,8 +37,7 @@
 
 #include "Gui/GuiApplicationManager.h"
 
-static void setShutDownSignal(int signalId);
-static void handleShutDownSignal(int signalId);
+
 
 int
 main(int argc,
@@ -53,9 +49,6 @@ main(int argc,
     if (args.getError() > 0) {
         return 1;
     }
-
-    setShutDownSignal(SIGINT);   // shut down on ctrl-c
-    setShutDownSignal(SIGTERM);   // shut down on killall
 
     if (args.isBackgroundMode()) {
         
@@ -78,26 +71,4 @@ main(int argc,
     }
 } // main
 
-void
-setShutDownSignal(int signalId)
-{
-#if defined(__NATRON_UNIX__)
-    struct sigaction sa;
-    sa.sa_flags = 0;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = handleShutDownSignal;
-    if (sigaction(signalId, &sa, NULL) == -1) {
-        std::perror("setting up termination signal");
-        std::exit(1);
-    }
-#else
-    std::signal(signalId, handleShutDownSignal);
-#endif
-}
-
-void
-handleShutDownSignal( int /*signalId*/ )
-{
-    QCoreApplication::exit(0);
-}
 

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,8 +26,10 @@
 // ***** END PYTHON BLOCK *****
 
 #include "Engine/OutputEffectInstance.h"
+#include "Engine/EngineFwd.h"
 
 struct DiskCacheNodePrivate;
+
 class DiskCacheNode : public Natron::OutputEffectInstance
 {
 public:
@@ -66,7 +68,7 @@ public:
         return "DiskCache";
     }
 
-    virtual std::string getDescription() const OVERRIDE FINAL WARN_UNUSED_RETURN
+    virtual std::string getPluginDescription() const OVERRIDE FINAL WARN_UNUSED_RETURN
     {
         return "This node caches all images of the connected input node onto the disk with full 32bit floating point raw data. "
     "When an image is found in the cache, " NATRON_APPLICATION_NAME " will then not request the input branch to render out that image. "
@@ -130,7 +132,7 @@ public:
 
 private:
 
-    virtual void knobChanged(KnobI* k, Natron::ValueChangedReasonEnum reason, int view, SequenceTime time,
+    virtual void knobChanged(KnobI* k, Natron::ValueChangedReasonEnum reason, int view, double time,
                              bool originatedFromMainThread) OVERRIDE FINAL;
 
     virtual Natron::StatusEnum render(const RenderActionArgs& args) OVERRIDE WARN_UNUSED_RETURN;

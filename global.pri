@@ -1,6 +1,6 @@
 # ***** BEGIN LICENSE BLOCK *****
 # This file is part of Natron <http://www.natron.fr/>,
-# Copyright (C) 2015 INRIA and Alexandre Gauthier
+# Copyright (C) 2016 INRIA and Alexandre Gauthier
 #
 # Natron is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,6 +21,9 @@ DEFINES += OFX_EXTENSIONS_NUKE OFX_EXTENSIONS_TUTTLE OFX_EXTENSIONS_VEGAS OFX_SU
 DEFINES += OFX_SUPPORTS_MULTITHREAD
 DEFINES += OFX_SUPPORTS_DIALOG
 
+#Commented-out because many plug-in vendors do not implement it correctly
+#DEFINES += OFX_SUPPORTS_DIALOG_V1
+
 *g++* | *clang* {
 #See https://bugreports.qt.io/browse/QTBUG-35776 we cannot use
 # QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO
@@ -33,6 +36,8 @@ DEFINES += OFX_SUPPORTS_DIALOG
         DEFINES *= NDEBUG
         QMAKE_CXXFLAGS += -O2 -g
         QMAKE_CXXFLAGS -= -O3
+        #Remove the -s flag passed in release mode by qmake so binaries don't get stripped
+        QMAKE_LFLAGS_RELEASE =
     }
 }
 
@@ -51,6 +56,12 @@ CONFIG(debug, debug|release){
     DEFINES *= NDEBUG
 }
 
+#Always enable breakpad, to disable just launch Natron-bin and not Natron
+#Commenting this will prevent Natron from even using breakpad
+
+!disable-breakpad {
+    DEFINES += NATRON_USE_BREAKPAD
+}
 
 CONFIG(noassertions) {
 #See http://doc.qt.io/qt-4.8/debug.html
@@ -105,7 +116,7 @@ unix:LIBS += $$QMAKE_LIBS_DYNLOAD
 *g++* {
   QMAKE_CXXFLAGS += -ftemplate-depth-1024
   QMAKE_CFLAGS_WARN_ON += -Wextra -Wmissing-prototypes -Wmissing-declarations -Wno-multichar
-  QMAKE_CXXFLAGS_WARN_ON += -Wextra -Wmissing-declarations -Wno-multichar
+  QMAKE_CXXFLAGS_WARN_ON += -Wextra -Wno-multichar
   GCCVer = $$system($$QMAKE_CXX --version)
   contains(GCCVer,[0-3]\\.[0-9]+.*) {
   } else {
@@ -162,9 +173,11 @@ macx {
 }
 
 # CONFIG+=nopch disables precompiled headers
-!nopch:!macx|!universal {
-  # precompiled headers don't work with multiple archs
-  CONFIG += precompile_header
+!nopch {
+  !macx|!universal {
+    # precompiled headers don't work with multiple archs
+    CONFIG += precompile_header
+  }
 }
 
 !macx {
@@ -286,7 +299,7 @@ unix {
          # QtGui include are needed because it looks for Qt::convertFromPlainText which is defined in
          # qtextdocument.h in the QtGui module.
          INCLUDEPATH += $$system(env PKG_CONFIG_PATH=$$PYSIDE_PKG_CONFIG_PATH pkg-config --variable=includedir pyside)/QtGui
-         INCLUDEPATH += $$system(pkg-config --variable=includedir QtGui)
+         INCLUDEPATH += $$system(env PKG_CONFIG_PATH=$${QMAKE_LIBDIR_QT}/pkgconfig pkg-config --variable=includedir QtGui)
          LIBS += $$system(env PKG_CONFIG_PATH=$$PYSIDE_PKG_CONFIG_PATH pkg-config --libs pyside)
        }
      }
@@ -344,6 +357,4 @@ coverage {
   QMAKE_CLEAN += $(OBJECTS_DIR)/*.gcda $(OBJECTS_DIR)/*.gcno
 }
 
-gbreakpad {
-  DEFINES += NATRON_USE_BREAKPAD
-}
+

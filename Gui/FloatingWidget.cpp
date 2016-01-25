@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,9 +51,8 @@ FloatingWidget::FloatingWidget(Gui* gui,
     setAttribute(Qt::WA_DeleteOnClose, true);
     if (gui) {
         boost::shared_ptr<Project> project = gui->getApp()->getProject();
-        QObject::connect(project.get(),SIGNAL(projectNameChanged(QString)), this, SLOT(onProjectNameChanged(QString)));
-        QString projectName = project->getProjectName();
-        setWindowTitle(projectName);
+        QObject::connect(project.get(),SIGNAL(projectNameChanged(QString, bool)), this, SLOT(onProjectNameChanged(QString, bool)));
+        onProjectNameChanged(project->getProjectPath(), false);
     }
     _layout = new QVBoxLayout(this);
     _layout->setContentsMargins(0, 0, 0, 0);
@@ -63,9 +62,13 @@ FloatingWidget::FloatingWidget(Gui* gui,
 }
 
 void
-FloatingWidget::onProjectNameChanged(const QString& name)
+FloatingWidget::onProjectNameChanged(const QString& filePath, bool modified)
 {
-    setWindowTitle(name);
+   // handles window title and appearance formatting
+    // http://doc.qt.io/qt-4.8/qwidget.html#windowModified-prop
+    setWindowModified(modified);
+    // http://doc.qt.io/qt-4.8/qwidget.html#windowFilePath-prop
+    setWindowFilePath(filePath);
 }
 
 static void

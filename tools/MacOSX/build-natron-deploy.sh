@@ -1,7 +1,7 @@
 #!/bin/bash
 # ***** BEGIN LICENSE BLOCK *****
 # This file is part of Natron <http://www.natron.fr/>,
-# Copyright (C) 2015 INRIA and Alexandre Gauthier
+# Copyright (C) 2016 INRIA and Alexandre Gauthier
 #
 # Natron is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,6 +17,10 @@
 # along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
 # ***** END LICENSE BLOCK *****
 
+# TAG=...: Date to timestamp symbols
+# DUMP_SYMS=...: Absolute path to binary of dump_syms
+# SYMBOLS_PATH=...: Absolute path to the dst symbols
+# DISABLE_BREAKPAD=1: When set, automatic crash reporting (google-breakpad support) will be disabled
 if [ $# -ne 1 ]; then
     echo "$0: Make a Natron.app that doesn't depend on MacPorts (can be used out of the build system too)"
     echo "Usage: $0 App/Natron.app"
@@ -33,8 +37,14 @@ HOMEBREW="/brew2/local"
 LOCAL="/usr/local"
 PYVER="2.7"
 SBKVER="1.2"
+QTDIR="${MACPORTS}/libexec/qt4"
+## all Qt frameworks:
+QT_LIBS="Qt3Support QtCLucene QtCore QtDBus QtDeclarative QtDesigner QtDesignerComponents QtGui QtHelp QtMultimedia QtNetwork QtOpenGL QtScript QtScriptTools QtSql QtSvg QtTest QtUiTools QtWebKit QtXml QtXmlPatterns"
+## Qt frameworks used by Natron + PySide + Qt plugins:
+#QT_LIBS="Qt3Support QtCLucene QtCore QtDBus QtDeclarative QtDesigner QtGui QtHelp QtMultimedia QtNetwork QtOpenGL QtScript QtScriptTools QtSql QtSvg QtTest QtUiTools QtWebKit QtXml QtXmlPatterns"
+STRIP=1
 
-macdeployqt "${package}" || exit 1
+"$QTDIR"/bin/macdeployqt "${package}" -no-strip || exit 1
 
 binary="$package/Contents/MacOS/Natron"
 libdir="Frameworks"
@@ -43,6 +53,12 @@ pkglib="$package/Contents/$libdir"
 if [ ! -x "$binary" ]; then
    echo "Error: $binary does not exist or is not an executable"
    exit 1
+fi
+
+# macdeployqt doesn't deal correctly with libs in ${MACPORTS}/lib/libgcc : handle them manually
+LIBGCC=0
+if otool -L "$binary" |fgrep "${MACPORTS}/lib/libgcc"; then
+    LIBGCC=1
 fi
 
 #Copy and change exec_path of the whole Python framework with libraries
@@ -72,7 +88,12 @@ if [ ! -d "${DYNLOAD}" ]; then
     echo "lib-dynload not present"
     exit 1
 fi
-for mplib in `for i in "${DYNLOAD}"/*.so; do otool -L $i | fgrep "${MACPORTS}"; done |sort|uniq |awk '{print $1}'`; do
+
+MPLIBS0=`for i in "${DYNLOAD}"/*.so; do otool -L $i | fgrep "${MACPORTS}/lib" |fgrep -v ':'; done |sort|uniq |awk '{print $1}'`
+# also add first-level and second-level dependencies 
+MPLIBS1=`for i in $MPLIBS0; do echo $i; otool -L $i | fgrep "${MACPORTS}/lib" |fgrep -v ':'; done |sort|uniq |awk '{print $1}'`
+MPLIBS=`for i in $MPLIBS1; do echo $i; otool -L $i | fgrep "${MACPORTS}/lib" |fgrep -v ':'; done |sort|uniq |awk '{print $1}'`
+for mplib in $MPLIBS; do
     if [ ! -f "$mplib" ]; then
         echo "missing python lib-dynload depend $mplib"
         exit 1
@@ -80,18 +101,62 @@ for mplib in `for i in "${DYNLOAD}"/*.so; do otool -L $i | fgrep "${MACPORTS}"; 
     lib=`echo $mplib | awk -F / '{print $NF}'`
     if [ ! -f "$pkglib/${lib}" ]; then
         cp "$mplib" "$pkglib/${lib}"
+        chmod +w "$pkglib/${lib}"
     fi
+    install_name_tool -id "@executable_path/../Frameworks/$lib" "$pkglib/$lib"
     for deplib in "${DYNLOAD}"/*.so; do
         install_name_tool -change "${mplib}" "@executable_path/../Frameworks/$lib" "$deplib"
     done
 done
 
+# also fix newly-installed libs
+for mplib in $MPLIBS; do
+    lib=`echo $mplib | awk -F / '{print $NF}'`
+    for mplibsub in $MPLIBS; do
+	deplib=`echo $mplibsub | awk -F / '{print $NF}'`
+        install_name_tool -change "${mplib}" "@executable_path/../Frameworks/$lib" "$pkglib/$deplib"
+    done
+done
 
-# macdeployqt doesn't deal correctly with libs in ${MACPORTS}/lib/libgcc : handle them manually
-LIBGCC=0
-if otool -L "$binary" |fgrep "${MACPORTS}/lib/libgcc"; then
-    LIBGCC=1
+# qt4-mac@4.8.7_2 doesn't deploy plugins correctly. macdeployqt Natron.app -verbose=2 gives:
+# Log: Deploying plugins from "/opt/local/libexec/qt4/Library/Framew/plugins" 
+# see https://trac.macports.org/ticket/49344
+if [ ! -d "${package}/Contents/PlugIns" -a -d "$QTDIR/share/plugins" ]; then
+    echo "Warning: Qt plugins not copied by macdeployqt, see https://trac.macports.org/ticket/49344. Copying them now."
+    cp -r "$QTDIR/share/plugins" "${package}/Contents/PlugIns" || exit 1
+    for binary in "${package}/Contents/PlugIns"/*/*.dylib; do
+        chmod +w "$binary"
+        for lib in libjpeg.9.dylib libmng.1.dylib libtiff.5.dylib libQGLViewer.2.dylib; do
+            install_name_tool -change "${MACPORTS}/lib/$lib" "@executable_path/../Frameworks/$lib" "$binary"
+        done
+        for f in $QT_LIBS; do
+            install_name_tool -change "${QTDIR}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
+        done
+        if otool -L "$binary" | fgrep "${MACPORTS}"; then
+            echo "Error: MacPorts libraries remaining in $binary, please check"
+            exit 1
+        fi
+    done
 fi
+# Now, because plugins were not installed (see see https://trac.macports.org/ticket/49344 ),
+# their dependencies were not installed either (e.g. QtSvg and QtXml for imageformats/libqsvg.dylib)
+# Besides, PySide may also load othe Qt Frameworks. We have to make sure they are all present
+for qtlib in $QT_LIBS; do
+    if [ ! -d "${package}/Contents/Frameworks/${qtlib}.framework" ]; then
+        binary="${package}/Contents/Frameworks/${qtlib}.framework/Versions/4/${qtlib}"
+        mkdir -p `dirname "${binary}"`
+        cp "${QTDIR}/Library/Frameworks/${qtlib}.framework/Versions/4/${qtlib}" "${binary}"
+        chmod +w "${binary}"
+        install_name_tool -id "@executable_path/../Frameworks/${qtlib}.framework/Versions/4/${qtlib}" "$binary"
+        for f in $QT_LIBS; do
+            install_name_tool -change "${QTDIR}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
+        done
+        for lib in libcrypto.1.0.0.dylib libdbus-1.3.dylib libpng16.16.dylib libssl.1.0.0.dylib libz.1.dylib; do
+            install_name_tool -change "${MACPORTS}/lib/$lib" "@executable_path/../Frameworks/$lib" "$binary"
+        done
+    fi
+done
+
 if [ "$LIBGCC" = "1" ]; then
     for l in gcc_s.1 gomp.1 stdc++.6; do
         lib=lib${l}.dylib
@@ -101,7 +166,7 @@ if [ "$LIBGCC" = "1" ]; then
     for l in gcc_s.1 gomp.1 stdc++.6; do
         lib=lib${l}.dylib
         install_name_tool -change "${MACPORTS}/lib/libgcc/$lib" "@executable_path/../Frameworks/$lib" "$binary"
-        for deplib in "$pkglib/"*.dylib; do
+        for deplib in "$pkglib/"*.dylib "$pkglib/"*.framework/Versions/4/*; do
             install_name_tool -change "${MACPORTS}/lib/libgcc/$lib" "@executable_path/../Frameworks/$lib" "$deplib"
         done
     done
@@ -117,19 +182,24 @@ for f in Python; do
     install_name_tool -change "${MACPORTS}/Library/Frameworks/${f}.framework/Versions/${PYVER}/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/${PYVER}/${f}" "$binary"
 done
 
-if otool -L "${package}/Contents/MacOS/Natron"  |fgrep "${MACPORTS}"; then
+# fix library ids
+pushd "$pkglib"
+for deplib in *.framework/Versions/*/* lib*.dylib; do
+    install_name_tool -id "@executable_path/../Frameworks/${deplib}" "$deplib"
+done
+popd
+
+if otool -L "$binary" | fgrep "${MACPORTS}"; then
     echo "Error: MacPorts libraries remaining in $binary, please check"
     exit 1
 fi
+for deplib in "$pkglib/"*.framework/Versions/*/* "$pkglib/"lib*.dylib; do
+    if otool -L "$deplib" | fgrep "${MACPORTS}"; then
+        echo "Error: MacPorts libraries remaining in $deplib, please check"
+        exit 1
+    fi
+done
 
-mv "${package}/Contents/PlugIns" "${package}/Contents/Plugins" || exit 1
-rm "${package}/Contents/Resources/qt.conf" || exit 1
-
-#Make a qt.conf file in Contents/Resources/
-cat > "${package}/Contents/Resources/qt.conf" <<EOF
-[Paths]
-Plugins = Plugins
-EOF
 
 cp "Gui/Resources/Stylesheets/mainstyle.qss" "${package}/Contents/Resources/" || exit 1
 
@@ -141,8 +211,8 @@ for l in boost_serialization-mt boost_thread-mt boost_system-mt expat.1 cairo.2 
     lib=lib${l}.dylib
     install_name_tool -change "${MACPORTS}/lib/$lib" "@executable_path/../Frameworks/$lib" "$binary"
 done
-for f in QtNetwork QtCore; do
-    install_name_tool -change "${MACPORTS}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
+for f in $QT_LIBS; do
+    install_name_tool -change "${QTDIR}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
 done
 if [ "$LIBGCC" = "1" ]; then
     for l in gcc_s.1 stdc++.6; do
@@ -167,8 +237,8 @@ fi
 if [ -f "CrashReporter/NatronCrashReporter" ]; then
     binary="${package}/Contents/MacOS/NatronCrashReporter"
     cp "CrashReporter/NatronCrashReporter" "$binary"
-    for f in QtGui QtNetwork QtCore; do
-        install_name_tool -change "${MACPORTS}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
+    for f in $QT_LIBS; do
+        install_name_tool -change "${QTDIR}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
     done
     if [ "$LIBGCC" = "1" ]; then
         for l in gcc_s.1 gomp.1 stdc++.6; do
@@ -186,8 +256,8 @@ fi
 if [ -f "CrashReporterCLI/NatronRendererCrashReporter" ]; then
     binary="${package}/Contents/MacOS/NatronRendererCrashReporter"
     cp "CrashReporterCLI/NatronRendererCrashReporter" "$binary"
-    for f in QtNetwork QtCore; do
-        install_name_tool -change "${MACPORTS}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
+    for f in $QT_LIBS; do
+        install_name_tool -change "${QTDIR}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
     done
     if [ "$LIBGCC" = "1" ]; then
         for l in gcc_s.1 gomp.1 stdc++.6; do
@@ -207,27 +277,38 @@ PYSIDE="Frameworks/Python.framework/Versions/${PYVER}/lib/python${PYVER}/site-pa
 rm -rf "${package}/Contents/${PYSIDE}"
 cp -r "${MACPORTS}/Library/${PYSIDE}" "${package}/Contents/${PYSIDE}" || exit 1
 
-QT_LIBS="QtCore QtGui QtNetwork QtOpenGL QtDeclarative QtHelp QtMultimedia QtScript QtScriptTools QtSql QtSvg QtTest QtUiTools QtXml QtWebKit QtXmlPatterns"
 
 for qtlib in $QT_LIBS ;do
     binary="${package}/Contents/${PYSIDE}/${qtlib}.so"
-    install_name_tool -id "@executable_path/../${PYSIDE}/${qtlib}.so" "$binary"
-    for f in $QT_LIBS; do
-        install_name_tool -change "${MACPORTS}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
-    done
-
-    for l in  pyside-python${PYVER}.${SBKVER} shiboken-python${PYVER}.${SBKVER}; do
-        dylib="lib${l}.dylib"
-        install_name_tool -change "${MACPORTS}/lib/$dylib" "@executable_path/../Frameworks/$dylib" "$binary"
-    done
-    if [ "$LIBGCC" = "1" ]; then
-        for l in gcc_s.1 gomp.1 stdc++.6; do
-            lib="lib${l}.dylib"
-            install_name_tool -change "/usr/lib/$lib" "@executable_path/../Frameworks/$lib" "$binary"
+    if [ -f "$binary" ]; then
+        install_name_tool -id "@executable_path/../${PYSIDE}/${qtlib}.so" "$binary"
+        for f in $QT_LIBS; do
+            install_name_tool -change "${QTDIR}/Library/Frameworks/${f}.framework/Versions/4/${f}" "@executable_path/../Frameworks/${f}.framework/Versions/4/${f}" "$binary"
         done
+
+        for l in  pyside-python${PYVER}.${SBKVER} shiboken-python${PYVER}.${SBKVER}; do
+            dylib="lib${l}.dylib"
+            install_name_tool -change "${MACPORTS}/lib/$dylib" "@executable_path/../Frameworks/$dylib" "$binary"
+        done
+        if [ "$LIBGCC" = "1" ]; then
+            for l in gcc_s.1 gomp.1 stdc++.6; do
+                lib="lib${l}.dylib"
+                install_name_tool -change "/usr/lib/$lib" "@executable_path/../Frameworks/$lib" "$binary"
+            done
+        fi
+        
+        if otool -L "$binary" |fgrep "${MACPORTS}"; then
+            echo "Error: MacPorts libraries remaining in $binary, please check"
+            exit 1
+        fi
     fi
 done
 
+# generate a pseudo-random string which has the same length as $MACPORTS
+RANDSTR="R7bUU6jiFvqrPy6zLVPwIC3b93R2b1RG2qD3567t8hC3b93R2b1RG2qD3567t8h"
+MACRAND=${RANDSTR:0:${#MACPORTS}}
+HOMEBREWRAND=${RANDSTR:0:${#HOMEBREW}}
+LOCALRAND=${RANDSTR:0:${#LOCAL}}
 
 
 for bin in Natron NatronRenderer NatronCrashReporter NatronRendererCrashReporter; do
@@ -325,17 +406,65 @@ for bin in Natron NatronRenderer NatronCrashReporter NatronRendererCrashReporter
                 fi
             done
         fi
-
-        # and now, obfuscate all the default paths in dynamic libraries
-        # and ImageMagick modules and config files
-
-        # generate a pseudo-random string which has the same length as $MACPORTS
-        RANDSTR="R7bUU6jiFvqrPy6zLVPwIC3b93R2b1RG2qD3567t8hC3b93R2b1RG2qD3567t8h"
-        MACRAND=${RANDSTR:0:${#MACPORTS}}
-        HOMEBREWRAND=${RANDSTR:0:${#HOMEBREW}}
-        LOCALRAND=${RANDSTR:0:${#LOCAL}}
-        find $pkglib -type f -exec sed -e "s@$MACPORTS@$MACRAND@g" -e "s@$HOMEBREW@$HOMEBREWRAND@g" -e "s@$LOCAL@$LOCALRAND@g" -i "" {} \;
         sed -e "s@$MACPORTS@$MACRAND@g" -e "s@$HOMEBREW@$HOMEBREWRAND@g" -e "s@$LOCAL@$LOCALRAND@g" -i "" "$binary"
-
     fi
 done
+
+
+# and now, obfuscate all the default paths in dynamic libraries
+# and ImageMagick modules and config files
+
+find $pkglib -type f -exec sed -e "s@$MACPORTS@$MACRAND@g" -e "s@$HOMEBREW@$HOMEBREWRAND@g" -e "s@$LOCAL@$LOCALRAND@g" -i "" {} \;
+
+for bin in Natron NatronRenderer; do
+
+    binary="$package/Contents/MacOS/$bin";
+    #Dump symbols for breakpad before stripping
+    if [ "$DISABLE_BREAKPAD" != "1" ]; then
+		DSYM_64=${bin}x86_64.dSYM
+		DSYM_32=${bin}i386.dSYM
+        dsymutil -arch x86_64 -o $DSYM_64 "$binary"
+        dsymutil -arch i386 -o $DSYM_32 "$binary"
+        $DUMP_SYMS -a x86_64 -g $DSYM_64 "$binary"  > "$SYMBOLS_PATH/Natron-${TAG}-Mac-x86_64.sym"
+        $DUMP_SYMS -a i386 -g $DSYM_32 "$binary"  > "$SYMBOLS_PATH/Natron-${TAG}-Mac-i386.sym"
+		rm -rf $DSYM_64;
+		rm -rf $DSYM_32;
+    fi
+done
+
+if [ "$STRIP" = 1 ]; then
+    for bin in Natron NatronRenderer NatronCrashReporter NatronRendererCrashReporter; do
+        binary="$package/Contents/MacOS/$bin";
+
+        if [ -x "$binary" ]; then
+            echo "* stripping $binary";
+            # Retain the original binary for QA and use with the util 'atos'
+            #mv -f "$binary" "${binary}_FULL";
+            if lipo "$binary" -verify_arch i386 x86_64; then
+                # Extract each arch into a "thin" binary for stripping
+		lipo "$binary" -thin x86_64 -output "${binary}_x86_64";
+		lipo "$binary" -thin i386   -output "${binary}_i386";
+
+
+                # Perform desired stripping on each thin binary.  
+                strip -S -x -r "${binary}_i386";
+                strip -S -x -r "${binary}_x86_64";
+
+                # Make the new universal binary from our stripped thin pieces.
+                lipo -arch i386 "${binary}_i386" -arch x86_64 "${binary}_x86_64" -create -output "${binary}";
+
+                # We're now done with the temp thin binaries, so chuck them.
+                rm -f "${binary}_i386";
+                rm -f "${binary}_x86_64";
+	    fi
+            #rm -f "${binary}_FULL";
+        fi
+    done
+fi
+
+if [ "$DISABLE_BREAKPAD" != "1" ]; then
+    mv "$package/Contents/MacOS/Natron" "$package/Contents/MacOS/Natron-bin" || exit 1
+    mv "$package/Contents/MacOS/NatronCrashReporter" "$package/Contents/MacOS/Natron" || exit 1
+    mv "$package/Contents/MacOS/NatronRenderer" "$package/Contents/MacOS/NatronRenderer-bin" || exit 1
+    mv "$package/Contents/MacOS/NatronRendererCrashReporter" "$package/Contents/MacOS/NatronRenderer" || exit 1
+fi

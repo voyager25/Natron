@@ -1,6 +1,6 @@
 # ***** BEGIN LICENSE BLOCK *****
 # This file is part of Natron <http://www.natron.fr/>,
-# Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+# Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
 #
 # Natron is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -84,7 +84,6 @@ SOURCES += \
     CurveWidgetDialogs.cpp \
     CurveWidgetPrivate.cpp \
     CustomParamInteract.cpp \
-    DefaultOverlays.cpp \
     DockablePanel.cpp \
     DockablePanelPrivate.cpp \
     DockablePanelTabWidget.cpp \
@@ -93,9 +92,11 @@ SOURCES += \
     DopeSheetEditorUndoRedo.cpp \
     DopeSheetHierarchyView.cpp \
     DopeSheetEditor.cpp \
+    DotGui.cpp \
     Edge.cpp \
     EditExpressionDialog.cpp \
     EditScriptDialog.cpp \
+    ExportGroupTemplateDialog.cpp \
     FloatingWidget.cpp \
     QtEnumConvert.cpp \
     Gui.cpp \
@@ -113,6 +114,7 @@ SOURCES += \
     GuiAppWrapper.cpp \
     GuiPrivate.cpp \
     Histogram.cpp \
+    HostOverlay.cpp \
     InfoViewerWidget.cpp \
     KnobGui.cpp \
     KnobGui10.cpp \
@@ -156,6 +158,7 @@ SOURCES += \
     NodeGraph45.cpp \
     NodeGraphPrivate.cpp \
     NodeGraphPrivate10.cpp \
+    NodeGraphTextItem.cpp \
     NodeGraphUndoRedo.cpp \
     NodeGui.cpp \
     NodeGuiSerialization.cpp \
@@ -163,6 +166,7 @@ SOURCES += \
     PanelWidget.cpp \
     PickKnobDialog.cpp \
     PreferencesPanel.cpp \
+    PreviewThread.cpp \
     ProjectGui.cpp \
     ProjectGuiSerialization.cpp \
     PropertiesBinWrapper.cpp \
@@ -184,6 +188,7 @@ SOURCES += \
     SerializableWindow.cpp \
     ShortCutEditor.cpp \
     SpinBox.cpp \
+    SpinBoxValidator.cpp \
     SplashScreen.cpp \
     Splitter.cpp \
     TabGroup.cpp \
@@ -234,7 +239,6 @@ HEADERS += \
     CurveWidgetDialogs.h \
     CurveWidgetPrivate.h \
     CustomParamInteract.h \
-    DefaultOverlays.h \
     DockablePanel.h \
     DockablePanelPrivate.h \
     DockablePanelTabWidget.h \
@@ -243,23 +247,27 @@ HEADERS += \
     DopeSheetEditorUndoRedo.h \
     DopeSheetHierarchyView.h \
     DopeSheetEditor.h \
+    DotGui.h \
     Edge.h \
     EditExpressionDialog.h \
     EditScriptDialog.h \
+    ExportGroupTemplateDialog.h \
     FileTypeMainWindow_win.h \
     FloatingWidget.h \
     QtEnumConvert.h \
     GroupBoxLabel.h \
     Gui.h \
-    GuiDefines.h \
     GuiApplicationManager.h \
     GuiApplicationManagerPrivate.h \
     GuiAppInstance.h \
     GuiAppWrapper.h \
+    GuiDefines.h \
+    GuiFwd.h \
     GuiMacros.h \
     GuiPrivate.h \
     GlobalGuiWrapper.h \
     Histogram.h \
+    HostOverlay.h \
     InfoViewerWidget.h \
     KnobGui.h \
     KnobGuiFactory.h \
@@ -289,6 +297,7 @@ HEADERS += \
     NodeCreationDialog.h \
     NodeGraph.h \
     NodeGraphPrivate.h \
+    NodeGraphTextItem.h \
     NodeGraphUndoRedo.h \
     NodeGui.h \
     NodeGuiSerialization.h \
@@ -296,6 +305,7 @@ HEADERS += \
     PanelWidget.h \
     PickKnobDialog.h \
     PreferencesPanel.h \
+    PreviewThread.h \
     ProjectGui.h \
     ProjectGuiSerialization.h \
     PropertiesBinWrapper.h \
@@ -319,6 +329,7 @@ HEADERS += \
     SerializableWindow.h \
     ShortCutEditor.h \
     SpinBox.h \
+    SpinBoxValidator.h \
     SplashScreen.h \
     Splitter.h \
     TabGroup.h \

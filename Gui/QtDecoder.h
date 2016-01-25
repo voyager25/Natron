@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +25,13 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
+#ifdef NATRON_ENABLE_QT_IO_NODES
+
 #include <vector>
 #include <string>
 
-#include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QtCore/QMutex>
@@ -36,16 +39,9 @@ CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/EffectInstance.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-namespace Color {
-class Lut;
-}
-}
 
-class KnobFile;
-class KnobChoice;
-class KnobInt;
 class QtReader
     : public Natron::EffectInstance
 {
@@ -79,7 +75,7 @@ public:
     virtual std::string getPluginID() const OVERRIDE;
     virtual std::string getPluginLabel() const OVERRIDE;
     virtual void getPluginGrouping(std::list<std::string>* grouping) const OVERRIDE FINAL;
-    virtual std::string getDescription() const OVERRIDE;
+    virtual std::string getPluginDescription() const OVERRIDE;
     virtual Natron::StatusEnum getRegionOfDefinition(U64 hash,double time,
                                                  const RenderScale & scale,
                                                  int view,
@@ -106,7 +102,7 @@ public:
     }
 
     virtual Natron::StatusEnum render(const RenderActionArgs& args) OVERRIDE;
-    virtual void knobChanged(KnobI* k, Natron::ValueChangedReasonEnum reason, int view, SequenceTime time,
+    virtual void knobChanged(KnobI* k, Natron::ValueChangedReasonEnum reason, int view, double time,
                              bool originatedFromMainThread) OVERRIDE FINAL;
     virtual Natron::RenderSafetyEnum renderThreadSafety() const OVERRIDE
     {
@@ -145,5 +141,7 @@ private:
     boost::shared_ptr<KnobInt> _timeOffset;
     bool _settingFrameRange;
 };
+
+#endif // NATRON_ENABLE_QT_IO_NODES
 
 #endif /* defined(NATRON_READERS_READQT_H_) */

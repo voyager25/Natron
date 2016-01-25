@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,11 +52,13 @@ GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #include "Engine/Image.h"
 #include "Engine/ImageParams.h"
 #include "Engine/Interpolation.h"
+#include "Engine/Project.h"
 #include "Engine/KnobSerialization.h"
 #include "Engine/RenderStats.h"
 #include "Engine/RotoDrawableItemSerialization.h"
 #include "Engine/RotoLayer.h"
 #include "Engine/RotoStrokeItem.h"
+#include "Engine/RotoContext.h"
 #include "Engine/Settings.h"
 #include "Engine/TimeLine.h"
 #include "Engine/Transform.h"
@@ -87,9 +89,6 @@ GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 // http://www.davidrevoy.com/article182/calibrating-wacom-stylus-pressure-on-krita
 #define ROTO_PRESSURE_LEVELS 512
 
-#ifndef M_PI
-#define M_PI        3.14159265358979323846264338327950288   /* pi             */
-#endif
 
 using namespace Natron;
 
@@ -137,7 +136,7 @@ RotoDrawableItem::setNodesThreadSafetyForRotopainting()
     assert(boost::dynamic_pointer_cast<RotoStrokeItem>(boost::dynamic_pointer_cast<RotoDrawableItem>(shared_from_this())));
     
     getContext()->getNode()->setRenderThreadSafety(Natron::eRenderSafetyInstanceSafe);
-    getContext()->getNode()->setWhileCreatingPaintStroke(true);
+    getContext()->setWhileCreatingPaintStrokeOnMergeNodes(true);
     if (_imp->effectNode) {
         _imp->effectNode->setWhileCreatingPaintStroke(true);
         _imp->effectNode->setRenderThreadSafety(Natron::eRenderSafetyInstanceSafe);
@@ -162,7 +161,7 @@ RotoDrawableItem::createNodes(bool connectNodes)
     
     const std::list<boost::shared_ptr<KnobI> >& knobs = getKnobs();
     for (std::list<boost::shared_ptr<KnobI> >::const_iterator it = knobs.begin(); it != knobs.end(); ++it) {
-        QObject::connect((*it)->getSignalSlotHandler().get(), SIGNAL(updateDependencies(int,int)), this, SLOT(onRotoKnobChanged(int,int)));
+        QObject::connect((*it)->getSignalSlotHandler().get(), SIGNAL(valueChanged(int,int)), this, SLOT(onRotoKnobChanged(int,int)));
     }
     
     boost::shared_ptr<RotoContext> context = getContext();
@@ -189,6 +188,7 @@ RotoDrawableItem::createNodes(bool connectNodes)
     } else {
         type = eRotoStrokeTypeSolid;
     }
+  
     switch (type) {
         case Natron::eRotoStrokeTypeBlur:
             pluginId = PLUGINID_OFX_BLURCIMG;
@@ -527,7 +527,7 @@ RotoDrawableItem::rotoKnobChanged(const boost::shared_ptr<KnobI>& knob, Natron::
         type = eRotoStrokeTypeSolid;
     }
 
-    if (reason == Natron::eValueChangedReasonSlaveRefresh) {
+    if (reason == Natron::eValueChangedReasonSlaveRefresh && knob != _imp->center && knob != _imp->cloneCenter) {
         getContext()->s_breakMultiStroke();
     }
     
@@ -536,6 +536,11 @@ RotoDrawableItem::rotoKnobChanged(const boost::shared_ptr<KnobI>& knob, Natron::
         KnobChoice* mergeOp = dynamic_cast<KnobChoice*>(mergeOperatorKnob.get());
         if (mergeOp) {
             mergeOp->setValueFromLabel(compKnob->getEntry(compKnob->getValue()), 0);
+        }
+        
+        ///Since the compositing operator might have changed, we may have to change the rotopaint tree layout
+        if ( reason == Natron::eValueChangedReasonUserEdited) {
+            getContext()->refreshRotoPaintTree();
         }
     } else if (knob == _imp->sourceColor) {
         refreshNodesConnections();
@@ -652,6 +657,9 @@ RotoDrawableItem::rotoKnobChanged(const boost::shared_ptr<KnobI>& knob, Natron::
 void
 RotoDrawableItem::incrementNodesAge()
 {
+    if (getContext()->getNode()->getApp()->getProject()->isLoadingProject()) {
+        return;
+    }
     if (_imp->effectNode) {
         _imp->effectNode->incrementKnobsAge();
     }
@@ -700,7 +708,6 @@ RotoDrawableItem::refreshNodesConnections()
     
     boost::shared_ptr<Node> upstreamNode = previous ? previous->getMergeNode() : rotoPaintInput;
     
-    bool connectionChanged = false;
     
     RotoStrokeItem* isStroke = dynamic_cast<RotoStrokeItem*>(this);
     RotoStrokeType type;
@@ -736,7 +743,6 @@ RotoDrawableItem::refreshNodesConnections()
             if (_imp->effectNode->getInput(0) != effectInput) {
                 _imp->effectNode->disconnectInput(0);
                 _imp->effectNode->connectInputBase(effectInput, 0);
-                connectionChanged = true;
             }
         }
         /*
@@ -745,7 +751,6 @@ RotoDrawableItem::refreshNodesConnections()
         if (_imp->mergeNode->getInput(1) != _imp->effectNode) {
             _imp->mergeNode->disconnectInput(1);
             _imp->mergeNode->connectInputBase(_imp->effectNode, 1); // A
-            connectionChanged = true;
         }
         
         if (_imp->mergeNode->getInput(0) != upstreamNode) {
@@ -753,7 +758,6 @@ RotoDrawableItem::refreshNodesConnections()
             if (upstreamNode) {
                 _imp->mergeNode->connectInputBase(upstreamNode, 0); // B
             }
-            connectionChanged = true;
         }
         
         
@@ -776,12 +780,10 @@ RotoDrawableItem::refreshNodesConnections()
             if (effectInput->getInput(0) != revealInput) {
                 effectInput->disconnectInput(0);
                 effectInput->connectInputBase(revealInput, 0);
-                connectionChanged = true;
             }
         } else {
             if (effectInput->getInput(0)) {
                 effectInput->disconnectInput(0);
-                connectionChanged = true;
             }
             
         }
@@ -809,7 +811,6 @@ RotoDrawableItem::refreshNodesConnections()
                 if (eraserInput) {
                     _imp->mergeNode->connectInputBase(eraserInput, 1); // A
                 }
-                connectionChanged = true;
             }
             
             
@@ -818,7 +819,6 @@ RotoDrawableItem::refreshNodesConnections()
                 if (upstreamNode) {
                     _imp->mergeNode->connectInputBase(upstreamNode, 0); // B
                 }
-                connectionChanged = true;
             }
             
         }  else if (type == eRotoStrokeTypeDodge || type == eRotoStrokeTypeBurn) {
@@ -838,7 +838,6 @@ RotoDrawableItem::refreshNodesConnections()
                 if (upstreamNode) {
                     _imp->mergeNode->connectInputBase(upstreamNode, 1); // A
                 }
-                connectionChanged = true;
             }
             
             
@@ -847,7 +846,6 @@ RotoDrawableItem::refreshNodesConnections()
                 if (upstreamNode) {
                     _imp->mergeNode->connectInputBase(upstreamNode, 0); // B
                 }
-                connectionChanged = true;
             }
             
         } else {
@@ -856,9 +854,7 @@ RotoDrawableItem::refreshNodesConnections()
         }
     } //if (_imp->effectNode &&  type != eRotoStrokeTypeEraser)
     
-    if (connectionChanged && (type == eRotoStrokeTypeClone || type == eRotoStrokeTypeReveal)) {
-        resetCloneTransformCenter();
-    }
+    
 }
 
 void
@@ -878,35 +874,6 @@ RotoDrawableItem::resetNodesThreadSafety()
     
 }
 
-void
-RotoDrawableItem::resetCloneTransformCenter()
-{
-    
-    RotoStrokeType type;
-    RotoStrokeItem* isStroke = dynamic_cast<RotoStrokeItem*>(this);
-    if (isStroke) {
-        type = isStroke->getBrushType();
-    } else {
-        type = eRotoStrokeTypeSolid;
-    }
-    if (type != eRotoStrokeTypeReveal && type != eRotoStrokeTypeClone) {
-        return;
-    }
-    boost::shared_ptr<KnobI> resetCenterKnob = _imp->effectNode->getKnobByName(kTransformParamResetCenter);
-    KnobButton* resetCenter = dynamic_cast<KnobButton*>(resetCenterKnob.get());
-    if (!resetCenter) {
-        return;
-    }
-    boost::shared_ptr<KnobI> centerKnob = _imp->effectNode->getKnobByName(kTransformParamCenter);
-    KnobDouble* center = dynamic_cast<KnobDouble*>(centerKnob.get());
-    if (!center) {
-        return;
-    }
-    resetCenter->evaluateValueChange(0, resetCenter->getCurrentTime(), Natron::eValueChangedReasonUserEdited);
-    double x = center->getValue(0);
-    double y = center->getValue(1);
-    _imp->cloneCenter->setValues(x, y, Natron::eValueChangedReasonNatronGuiEdited);
-}
 
 
 void
@@ -981,7 +948,10 @@ RotoDrawableItem::load(const RotoItemSerialization &obj)
         
         for (std::list<boost::shared_ptr<KnobI> >::const_iterator it2 = _imp->knobs.begin(); it2 != _imp->knobs.end(); ++it2) {
             if ((*it2)->getName() == (*it)->getName()) {
+                boost::shared_ptr<KnobSignalSlotHandler> s = (*it2)->getSignalSlotHandler();
+                s->blockSignals(true);
                 (*it2)->clone((*it)->getKnob().get());
+                s->blockSignals(false);
                 break;
             }
         }
@@ -1351,6 +1321,46 @@ RotoDrawableItem::getLifeTimeFrameKnob() const
     return _imp->lifeTimeFrame;
 }
 
+boost::shared_ptr<KnobDouble>
+RotoDrawableItem::getMotionBlurAmountKnob() const
+{
+#ifdef NATRON_ROTO_ENABLE_MOTION_BLUR
+    return _imp->motionBlur;
+#else
+    return boost::shared_ptr<KnobDouble>();
+#endif
+}
+
+boost::shared_ptr<KnobDouble>
+RotoDrawableItem::getShutterOffsetKnob() const
+{
+#ifdef NATRON_ROTO_ENABLE_MOTION_BLUR
+    return _imp->customOffset;
+#else
+    return boost::shared_ptr<KnobDouble>();
+#endif
+}
+
+boost::shared_ptr<KnobDouble>
+RotoDrawableItem::getShutterKnob() const
+{
+#ifdef NATRON_ROTO_ENABLE_MOTION_BLUR
+    return _imp->shutter;
+#else
+    return boost::shared_ptr<KnobDouble>();
+#endif
+}
+
+boost::shared_ptr<KnobChoice>
+RotoDrawableItem::getShutterTypeKnob() const
+{
+#ifdef NATRON_ROTO_ENABLE_MOTION_BLUR
+    return _imp->shutterType;
+#else
+    return boost::shared_ptr<KnobChoice>();
+#endif
+}
+
 void
 RotoDrawableItem::setKeyframeOnAllTransformParameters(double time)
 {
@@ -1372,6 +1382,17 @@ RotoDrawableItem::getKnobs() const
     return _imp->knobs;
 }
 
+boost::shared_ptr<KnobI>
+RotoDrawableItem::getKnobByName(const std::string& name) const
+{
+    for (std::list<boost::shared_ptr<KnobI> >::const_iterator it = _imp->knobs.begin(); it != _imp->knobs.end(); ++it) {
+        if ((*it)->getName() == name) {
+            return *it;
+        }
+    }
+    return boost::shared_ptr<KnobI>();
+}
+
 
 void
 RotoDrawableItem::getTransformAtTime(double time,Transform::Matrix3x3* matrix) const
@@ -1383,7 +1404,7 @@ RotoDrawableItem::getTransformAtTime(double time,Transform::Matrix3x3* matrix) c
     double skewX = _imp->skewX->getValueAtTime(time, 0);
     double skewY = _imp->skewY->getValueAtTime(time, 0);
     double rot = _imp->rotate->getValueAtTime(time, 0);
-    rot = rot * M_PI / 180.0;
+    rot = Transform::toRadians(rot);
     double centerX = _imp->center->getValueAtTime(time, 0);
     double centerY = _imp->center->getValueAtTime(time, 1);
     bool skewOrderYX = _imp->skewOrder->getValueAtTime(time) == 1;

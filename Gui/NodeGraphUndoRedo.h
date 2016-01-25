@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
-#include "Global/GlobalDefines.h"
+#include "Global/Macros.h"
+
 #include <list>
 #include <vector>
 #include <QPointF>
@@ -35,22 +36,22 @@
 #endif
 #include <QUndoCommand>
 
+#include "Global/GlobalDefines.h"
+
+#include "Engine/EngineFwd.h"
+
+#include "Gui/GuiFwd.h"
+
+
 /**
  * This file gathers undo/redo command associated to the node graph. Each of them triggers an autosave when redone/undone
  * except the move command.
  **/
 
-class Edge;
-class NodeGui;
-class NodeGraph;
-class NodeSerialization;
 
 typedef boost::shared_ptr<NodeGui> NodeGuiPtr;
 typedef std::list<NodeGuiPtr> NodeGuiList;
 
-namespace Natron {
-class Node;
-}
 
 
 class MoveMultipleNodesCommand

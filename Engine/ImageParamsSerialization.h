@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,12 +38,14 @@ GCC_DIAG_OFF(sign-compare)
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/map.hpp>
-GCC_DIAG_OFF(sign-compare)
 #include <boost/serialization/vector.hpp>
 GCC_DIAG_ON(sign-compare)
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
+GCC_DIAG_ON(unused-parameter)
 #endif
 
-using namespace Natron;
+#include "Engine/EngineFwd.h"
+
 
 namespace boost {
 namespace serialization {
@@ -60,6 +62,8 @@ serialize(Archive & ar,
 
 }
 }
+
+namespace Natron {
 
 template<class Archive>
 void
@@ -84,5 +88,7 @@ ImageParams::serialize(Archive & ar,
     ar & boost::serialization::make_nvp("Components",_components);
     ar & boost::serialization::make_nvp("MMLevel",_mipMapLevel);
 }
+
+} // namespace Natron
 
 #endif // IMAGEPARAMSSERIALIZATION_H

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ GCC_DIAG_UNUSED_PRIVATE_FIELD_OFF
 // /opt/local/include/QtGui/qmime.h:119:10: warning: private field 'type' is not used [-Wunused-private-field]
 #include <QMouseEvent>
 GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
-#include <QTextStream>
+#include <QtCore/QTextStream>
 #include <QtCore/QThread>
 #include <QApplication>
 #include <QToolButton>
@@ -272,6 +272,7 @@ CurveWidget::onCurveChanged()
         }
     }
     _imp->_selectedKeyFrames = copy;
+    refreshSelectedKeysBbox();
     update();
 }
 
@@ -608,9 +609,13 @@ CurveWidget::mouseDoubleClickEvent(QMouseEvent* e)
             return;
         }
         std::vector<KeyFrame> keys(1);
-        if ((*foundCurveNearby)->getInternalCurve()->areKeyFramesTimeClampedToIntegers()) {
+        boost::shared_ptr<Curve> curve = (*foundCurveNearby)->getInternalCurve();
+        if (!curve) {
+            return;
+        }
+        if (curve->areKeyFramesTimeClampedToIntegers()) {
             xCurve = std::floor(xCurve + 0.5);
-        } else if ((*foundCurveNearby)->getInternalCurve()->areKeyFramesValuesClampedToBooleans()) {
+        } else if (curve->areKeyFramesValuesClampedToBooleans()) {
             xCurve = double((bool)xCurve);
         }
         keys[0] = KeyFrame(xCurve,yCurve);
@@ -1337,7 +1342,6 @@ CurveWidget::keyPressEvent(QKeyEvent* e)
         wheelEvent(&e);
     } else {
         accept = false;
-        QGLWidget::keyPressEvent(e);
     }
     
     CurveEditor* ce = 0;
@@ -1358,8 +1362,10 @@ CurveWidget::keyPressEvent(QKeyEvent* e)
         e->accept();
     } else {
         if (ce) {
-            ce->handleUnCaughtKeyPressEvent();
+            ce->handleUnCaughtKeyPressEvent(e);
         }
+        QGLWidget::keyPressEvent(e);
+
     }
 } // keyPressEvent
 

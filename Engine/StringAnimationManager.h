@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,11 +29,14 @@
 #include <boost/scoped_ptr.hpp>
 #endif
 #include <string>
+
+#include "Global/Macros.h"
 #include "Global/GlobalDefines.h"
 
-class KnobI;
-struct StringAnimationManagerPrivate;
+#include "Engine/EngineFwd.h"
 
+
+struct StringAnimationManagerPrivate;
 
 ///not thread-safe
 class StringAnimationManager
@@ -54,9 +57,9 @@ public:
 
     bool customInterpolation(double time,std::string* ret) const;
 
-    void insertKeyFrame(int time,const std::string & v,double* index);
+    void insertKeyFrame(double time,const std::string & v,double* index);
 
-    void removeKeyFrame(int time);
+    void removeKeyFrame(double time);
 
     void clearKeyFrames();
 

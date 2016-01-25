@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,12 @@
 // ***** END PYTHON BLOCK *****
 
 #include "Global/Macros.h"
+
+CLANG_DIAG_OFF(deprecated)
+CLANG_DIAG_OFF(uninitialized)
 #include <QtCore/QMutex>
+CLANG_DIAG_ON(deprecated)
+CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/Image.h"
 #include "Engine/ImageInfo.h"
@@ -34,8 +39,8 @@
 #include "Gui/TextRenderer.h"
 #include "Gui/ViewerGL.h"
 #include "Gui/ZoomContext.h"
+#include "Gui/GuiFwd.h"
 
-class Texture;
 
 #define WIPE_MIX_HANDLE_LENGTH 50.
 #define WIPE_ROTATE_HANDLE_LENGTH 100.

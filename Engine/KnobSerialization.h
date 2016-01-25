@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,6 +50,8 @@ GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #include "Engine/CurveSerialization.h"
 #include "Engine/StringAnimationManager.h"
 #include <SequenceParsing.h>
+#include "Engine/EngineFwd.h"
+
 
 #define KNOB_SERIALIZATION_INTRODUCES_SLAVED_TRACKS 2
 #define KNOB_SERIALIZATION_INTRODUCES_SLAVED_TRACKS_OFFSET 3
@@ -60,7 +62,8 @@ GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #define KNOB_SERIALIZATION_INTRODUCES_CHOICE_HELP_STRINGS 8
 #define KNOB_SERIALIZATION_INTRODUCES_DEFAULT_VALUES 9
 #define KNOB_SERIALIZATION_INTRODUCES_DISPLAY_MIN_MAX 10
-#define KNOB_SERIALIZATION_VERSION KNOB_SERIALIZATION_INTRODUCES_DISPLAY_MIN_MAX
+#define KNOB_SERIALIZATION_INTRODUCES_ALIAS 11
+#define KNOB_SERIALIZATION_VERSION KNOB_SERIALIZATION_INTRODUCES_ALIAS
 
 #define VALUE_SERIALIZATION_INTRODUCES_CHOICE_LABEL 2
 #define VALUE_SERIALIZATION_INTRODUCES_EXPRESSIONS 3
@@ -393,6 +396,7 @@ class KnobSerialization : public KnobSerializationBase
     std::string _typeName;
     int _dimension;
     std::list<MasterSerialization> _masters; //< used when deserializating, we can't restore it before all knobs have been restored.
+    bool _masterIsAlias;
     std::vector<std::pair<std::string,bool> > _expressions; //< used when deserializing, we can't restore it before all knobs have been restored.
     std::list< Curve > parametricCurves;
     std::list<KnobDouble::SerializedTrack> slavedTracks; //< same as for master, can't be used right away when deserializing
@@ -429,6 +433,8 @@ class KnobSerialization : public KnobSerializationBase
         bool secret = _knob->getIsSecret();
         ar & boost::serialization::make_nvp("Secret",secret);
 
+        ar & boost::serialization::make_nvp("MasterIsAlias",_masterIsAlias);
+        
         for (int i = 0; i < _knob->getDimension(); ++i) {
             ValueSerialization vs(_knob,i,_expressions[i].second,_expressions[i].first);
             ar & boost::serialization::make_nvp("item",vs);
@@ -496,7 +502,7 @@ class KnobSerialization : public KnobSerializationBase
             }
             
             if (isDouble && isDouble->getDimension() == 2) {
-                bool useOverlay = isDouble->getHasNativeOverlayHandle();
+                bool useOverlay = isDouble->getHasHostOverlayHandle();
                 ar & boost::serialization::make_nvp("HasOverlayHandle",useOverlay);
             }
             
@@ -543,6 +549,12 @@ class KnobSerialization : public KnobSerializationBase
         bool secret;
         ar & boost::serialization::make_nvp("Secret",secret);
         _knob->setSecret(secret);
+        
+        if (version >= KNOB_SERIALIZATION_INTRODUCES_ALIAS) {
+            ar & boost::serialization::make_nvp("MasterIsAlias",_masterIsAlias);
+        } else {
+            _masterIsAlias = false;
+        }
 
         AnimatingKnobStringHelper* isStringAnimated = dynamic_cast<AnimatingKnobStringHelper*>( _knob.get() );
         KnobFile* isFile = dynamic_cast<KnobFile*>( _knob.get() );
@@ -709,6 +721,7 @@ public:
     explicit KnobSerialization(const boost::shared_ptr<KnobI> & knob)
         : _knob()
         , _dimension(0)
+        , _masterIsAlias(false)
         , _extraData(NULL)
         , _isUserKnob(false)
         , _label()
@@ -736,8 +749,10 @@ public:
             _expressions.push_back(std::make_pair(knob->getExpression(i),knob->isExpressionUsingRetVariable(i)));
         }
         
+        _masterIsAlias = knob->getAliasMaster().get() != 0;
+        
         _isUserKnob = knob->isUserKnob();
-        _label = knob->getDescription();
+        _label = knob->getLabel();
         _triggerNewLine = knob->isNewLineActivated();
         _evaluatesOnChange = knob->getEvaluateOnChange();
         _isPersistent = knob->getIsPersistant();
@@ -828,12 +843,15 @@ public:
     /**
      * @brief This function cannot be called until all knobs of the project have been created.
      **/
-    void restoreKnobLinks(const boost::shared_ptr<KnobI> & knob,const std::list<boost::shared_ptr<Natron::Node> > & allNodes);
+    void restoreKnobLinks(const boost::shared_ptr<KnobI> & knob,
+                          const std::list<boost::shared_ptr<Natron::Node> > & allNodes,
+                          const std::map<std::string,std::string>& oldNewScriptNamesMapping);
     
     /**
      * @brief This function cannot be called until all knobs of the project have been created.
      **/
-    void restoreExpressions(const boost::shared_ptr<KnobI> & knob);
+    void restoreExpressions(const boost::shared_ptr<KnobI> & knob,
+                            const std::map<std::string,std::string>& oldNewScriptNamesMapping);
 
     virtual boost::shared_ptr<KnobI> getKnob() const OVERRIDE FINAL
     {
@@ -931,7 +949,7 @@ public:
         assert(isGrp || isPage);
         
         _name = knob->getName();
-        _label = knob->getDescription();
+        _label = knob->getLabel();
         _secret = _knob->getIsSecret();
         
         if (isGrp) {

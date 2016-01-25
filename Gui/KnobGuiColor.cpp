@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,6 +74,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/ProjectGui.h"
 #include "Gui/ScaleSliderQWidget.h"
 #include "Gui/SpinBox.h"
+#include "Gui/SpinBoxValidator.h"
 #include "Gui/TabGroup.h"
 #include "Gui/Utils.h"
 
@@ -153,18 +154,37 @@ KnobGuiColor::createWidget(QHBoxLayout* layout)
     const std::vector<double> & maximums = _knob->getMaximums();
 #endif
     
-    _rBox = new SpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble);
+    _rBox = new KnobSpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble, this, 0);
+    {
+        NumericKnobValidator* validator = new NumericKnobValidator(_rBox,this);
+        _rBox->setValidator(validator);
+    }
+    
     QObject::connect( _rBox, SIGNAL( valueChanged(double) ), this, SLOT( onColorChanged() ) );
     
     if (_dimension >= 3) {
-        _gBox = new SpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble);
+        _gBox = new KnobSpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble, this, 1);
         QObject::connect( _gBox, SIGNAL( valueChanged(double) ), this, SLOT( onColorChanged() ) );
-        _bBox = new SpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble);
+        {
+            NumericKnobValidator* validator = new NumericKnobValidator(_gBox,this);
+            _gBox->setValidator(validator);
+        }
+        
+        _bBox = new KnobSpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble, this, 2);
         QObject::connect( _bBox, SIGNAL( valueChanged(double) ), this, SLOT( onColorChanged() ) );
+        
+        {
+            NumericKnobValidator* validator = new NumericKnobValidator(_bBox,this);
+            _bBox->setValidator(validator);
+        }
     }
     if (_dimension >= 4) {
-        _aBox = new SpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble);
+        _aBox = new KnobSpinBox(boxContainers, SpinBox::eSpinBoxTypeDouble, this, 3);
         QObject::connect( _aBox, SIGNAL( valueChanged(double) ), this, SLOT( onColorChanged() ) );
+        {
+            NumericKnobValidator* validator = new NumericKnobValidator(_aBox,this);
+            _aBox->setValidator(validator);
+        }
     }
     
 #ifdef SPINBOX_TAKE_PLUGIN_RANGE_INTO_ACCOUNT
@@ -551,23 +571,48 @@ KnobGuiColor::onDisplayMinMaxChanged(double mini,
     }
 }
 
+bool
+KnobGuiColor::getAllDimensionsVisible() const
+{
+    return !_dimensionSwitchButton || _dimensionSwitchButton->isChecked();
+}
+
+int
+KnobGuiColor::getDimensionForSpinBox(const SpinBox* spinbox) const
+{
+    if (_rBox == spinbox) {
+        return 0;
+    }
+    if (_gBox == spinbox) {
+        return 1;
+    }
+    if (_bBox == spinbox) {
+        return 2;
+    }
+    if (_aBox == spinbox) {
+        return 3;
+    }
+    return -1;
+}
+
 void
 KnobGuiColor::setEnabled()
 {
     boost::shared_ptr<KnobColor> knob = _knob.lock();
-    bool r = knob->isEnabled(0)  && !knob->isSlave(0) && knob->getExpression(0).empty();
+    bool r = knob->isEnabled(0)  && !knob->isSlave(0);
+    bool enabled0 = r && knob->getExpression(0).empty();
 
     //_rBox->setEnabled(r);
     _rBox->setReadOnly(!r);
     _rLabel->setEnabled(r);
 
-    _slider->setReadOnly(!r);
-    _colorDialogButton->setEnabled(r);
+    _slider->setReadOnly(!enabled0);
+    _colorDialogButton->setEnabled(enabled0);
     
     if (_dimension >= 3) {
         
-        bool g = knob->isEnabled(1) && !knob->isSlave(1) && knob->getExpression(1).empty();
-        bool b = knob->isEnabled(2) && !knob->isSlave(2) && knob->getExpression(2).empty();
+        bool g = knob->isEnabled(1) && !knob->isSlave(1);
+        bool b = knob->isEnabled(2) && !knob->isSlave(2);
         //_gBox->setEnabled(g);
         _gBox->setReadOnly(!g);
         _gLabel->setEnabled(g);
@@ -576,13 +621,13 @@ KnobGuiColor::setEnabled()
         _bLabel->setEnabled(b);
     }
     if (_dimension >= 4) {
-        bool a = knob->isEnabled(3) && !knob->isSlave(3) && knob->getExpression(3).empty();
+        bool a = knob->isEnabled(3) && !knob->isSlave(3);
         //_aBox->setEnabled(a);
         _aBox->setReadOnly(!a);
         _aLabel->setEnabled(a);
     }
-    _dimensionSwitchButton->setEnabled(r);
-    _colorLabel->setEnabledMode(r);
+    _dimensionSwitchButton->setEnabled(enabled0);
+    _colorLabel->setEnabledMode(enabled0);
 }
 
 void
@@ -601,42 +646,83 @@ KnobGuiColor::updateGUI(int dimension)
         }
         updateLabel(r, g, b, a);
     } else {
-        assert(dimension < _dimension && dimension >= 0 && dimension <= 3);
-        double value = knob->getValue(dimension);
-        
-        if (!knob->areAllDimensionsEnabled()) {
-            for (int i = 0; i < knob->getDimension(); ++i) {
-                
-                if (i == dimension) {
-                    continue;
-                }
-                if (knob->getValue(i) != value) {
-                    expandAllDimensions();
-                }
+        const int knobDim = _dimension;
+        if (knobDim < 1 || dimension >= knobDim) {
+            return;
+        }
+        assert(1 <= knobDim && knobDim <= 4);
+        assert(dimension == -1 || (0 <= dimension && dimension < knobDim));
+        double values[4];
+        double refValue = 0.;
+        for (int i = 0; i < knobDim; ++i) {
+            values[i] = knob->getValue(i);
+        }
+        if (dimension == -1) {
+            refValue = values[0];
+        } else {
+            refValue = values[dimension];
+        }
+        bool allValuesNotEqual = false;
+        for (int i = 0; i < knobDim; ++i) {
+            if (values[i] != refValue) {
+                allValuesNotEqual = true;
             }
+        }
+        if (!knob->areAllDimensionsEnabled() && allValuesNotEqual) {
+            expandAllDimensions();
+        } else if (knob->areAllDimensionsEnabled() && !allValuesNotEqual) {
+            foldAllDimensions();
         }
         
         switch (dimension) {
             case 0: {
-                _rBox->setValue(value);
-                _slider->seekScalePosition(value);
+                assert(knobDim >= 1);
+                _rBox->setValue(values[0]);
+                _slider->seekScalePosition(values[0]);
                 if ( !knob->areAllDimensionsEnabled() ) {
-                    _gBox->setValue(value);
-                    _bBox->setValue(value);
+                    _gBox->setValue(values[0]);
+                    _bBox->setValue(values[0]);
                     if (_dimension >= 4) {
-                        _aBox->setValue(value);
+                        _aBox->setValue(values[0]);
                     }
                 }
                 break;
             }
             case 1:
-                _gBox->setValue(value);
+                assert(knobDim >= 2);
+                _gBox->setValue(values[1]);
                 break;
             case 2:
-                _bBox->setValue(value);
+                assert(knobDim >= 3);
+                _bBox->setValue(values[2]);
                 break;
             case 3:
-                _aBox->setValue(value);
+                assert(knobDim >= 4);
+                _aBox->setValue(values[3]);
+                break;
+            case -1:
+                if ( !knob->areAllDimensionsEnabled() ) {
+                    _rBox->setValue(values[0]);
+                    _slider->seekScalePosition(values[0]);
+                    if ( !knob->areAllDimensionsEnabled() ) {
+                        _gBox->setValue(values[0]);
+                        _bBox->setValue(values[0]);
+                        if (_dimension >= 4) {
+                            _aBox->setValue(values[0]);
+                        }
+                    }
+                } else {
+                    _rBox->setValue(values[0]);
+                    if (knobDim > 1) {
+                        _gBox->setValue(values[1]);
+                        if (knobDim > 2) {
+                            _bBox->setValue(values[2]);
+                            if (knobDim > 3) {
+                                _aBox->setValue(values[3]);
+                            }
+                        }
+                    }
+                }
                 break;
             default:
                 throw std::logic_error("wrong dimension");
@@ -736,28 +822,30 @@ void
 KnobGuiColor::reflectExpressionState(int dimension,
                                       bool hasExpr)
 {
-    bool isEnabled = _knob.lock()->isEnabled(dimension);
+    //bool isEnabled = _knob.lock()->isEnabled(dimension);
     switch (dimension) {
         case 0:
             _rBox->setAnimation(3);
-            _rBox->setReadOnly(hasExpr || !isEnabled);
+            //_rBox->setReadOnly(hasExpr || !isEnabled);
             break;
         case 1:
             _gBox->setAnimation(3);
-            _gBox->setReadOnly(hasExpr || !isEnabled);
+            //_gBox->setReadOnly(hasExpr || !isEnabled);
             break;
         case 2:
             _bBox->setAnimation(3);
-            _bBox->setReadOnly(hasExpr || !isEnabled);
+            //_bBox->setReadOnly(hasExpr || !isEnabled);
             break;
         case 3:
             _aBox->setAnimation(3);
-            _aBox->setReadOnly(hasExpr || !isEnabled);
+            //_aBox->setReadOnly(hasExpr || !isEnabled);
             break;
         default:
             break;
     }
-    
+    if (_slider) {
+        _slider->setReadOnly(hasExpr);
+    }
 }
 
 void
@@ -798,12 +886,14 @@ KnobGuiColor::showColorDialog()
         curA = knob->getValue(3);
         _lastColor[3] = curA;
     }
+    
+    bool isSimple = knob->isSimplified();
 
     QColor curColor;
-    curColor.setRgbF(Natron::clamp<qreal>(Natron::Color::to_func_srgb(curR), 0., 1.),
-                     Natron::clamp<qreal>(Natron::Color::to_func_srgb(curG), 0., 1.),
-                     Natron::clamp<qreal>(Natron::Color::to_func_srgb(curB), 0., 1.),
-                     Natron::clamp<qreal>(Natron::Color::to_func_srgb(curA), 0., 1.));
+    curColor.setRgbF(Natron::clamp<qreal>(isSimple ? curR : Natron::Color::to_func_srgb(curR), 0., 1.),
+                     Natron::clamp<qreal>(isSimple ? curG : Natron::Color::to_func_srgb(curG), 0., 1.),
+                     Natron::clamp<qreal>(isSimple ? curB : Natron::Color::to_func_srgb(curB), 0., 1.),
+                     Natron::clamp<qreal>(curA, 0., 1.));
     dialog.setCurrentColor(curColor);
     QObject::connect( &dialog,SIGNAL( currentColorChanged(QColor) ),this,SLOT( onDialogCurrentColorChanged(QColor) ) );
     if (!dialog.exec()) {
@@ -838,25 +928,26 @@ KnobGuiColor::showColorDialog()
         realColor.setAlpha(255);
 
         if (getKnob()->isEnabled(0)) {
-            _rBox->setValue(Natron::Color::from_func_srgb(realColor.redF()));
+            _rBox->setValue(isSimple ? realColor.redF() : Natron::Color::from_func_srgb(realColor.redF()));
         }
 
         if (_dimension >= 3) {
-            if (getKnob()->isEnabled(1)) {
-                _gBox->setValue(Natron::Color::from_func_srgb(userColor.greenF()));
-            }
-            if (getKnob()->isEnabled(2)) {
-                _bBox->setValue(Natron::Color::from_func_srgb(userColor.blueF()));
-            }
             realColor.setGreen(userColor.green());
             realColor.setBlue(userColor.blue());
+            if (getKnob()->isEnabled(1)) {
+                _gBox->setValue(isSimple ? realColor.greenF() : Natron::Color::from_func_srgb(userColor.greenF()));
+            }
+            if (getKnob()->isEnabled(2)) {
+                _bBox->setValue(isSimple ? realColor.blueF() : Natron::Color::from_func_srgb(userColor.blueF()));
+            }
+           
         }
         if (_dimension >= 4) {
+            //            realColor.setAlpha(userColor.alpha());
             ///Don't set alpha since the color dialog can only handle RGB
 //            if (getKnob()->isEnabled(3)) {
 //                _aBox->setValue(userColor.alphaF()); // no conversion, alpha is linear
 //            }
-//            realColor.setAlpha(userColor.alpha());
         }
 
         onColorChanged();
@@ -871,17 +962,23 @@ void
 KnobGuiColor::onDialogCurrentColorChanged(const QColor & color)
 {
     boost::shared_ptr<KnobColor> knob = _knob.lock();
-    knob->beginChanges();
-    knob->setValue(Natron::Color::from_func_srgb(color.redF()), 0);
-    if (_dimension > 1) {
-        knob->setValue(Natron::Color::from_func_srgb(color.greenF()), 1);
-        knob->setValue(Natron::Color::from_func_srgb(color.blueF()), 2);
-        ///Don't set alpha since the color dialog can only handle RGB
-//        if (_dimension > 3) {
-//            _knob->setValue(color.alphaF(), 3); // no conversion, alpha is linear
-//        }
+    bool isSimple = knob->isSimplified();
+    if (_dimension == 1) {
+        knob->setValue(color.redF(), 0);
+    } else if (_dimension == 3) {
+         ///Don't set alpha since the color dialog can only handle RGB
+        knob->setValues(isSimple ? color.redF() : Natron::Color::from_func_srgb(color.redF()),
+                        isSimple ? color.greenF() : Natron::Color::from_func_srgb(color.greenF()),
+                        isSimple ? color.blueF() : Natron::Color::from_func_srgb(color.blueF()),
+                        Natron::eValueChangedReasonNatronInternalEdited);
+    } else if (_dimension == 4) {
+        knob->setValues(isSimple ? color.redF() : Natron::Color::from_func_srgb(color.redF()),
+                        isSimple ? color.greenF() : Natron::Color::from_func_srgb(color.greenF()),
+                        isSimple ? color.blueF() : Natron::Color::from_func_srgb(color.blueF()),
+                        1.,
+                        Natron::eValueChangedReasonNatronInternalEdited);
     }
-    knob->endChanges();
+
 }
 
 void
@@ -907,6 +1004,13 @@ KnobGuiColor::onColorChanged()
     } else {
         if (isSpinbox) {
             _slider->seekScalePosition(r);
+        }
+        if (_dimension >= 3) {
+            _gBox->setValue(g);
+            _bBox->setValue(b);
+            if (_dimension >= 4) {
+                _aBox->setValue(a);
+            }
         }
     }
     if (_dimension >= 3) {

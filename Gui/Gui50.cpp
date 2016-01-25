@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,6 +68,7 @@ GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 #include "Gui/ComboBox.h"
 #include "Gui/DockablePanel.h"
 #include "Gui/DopeSheetEditor.h"
+#include "Gui/ExportGroupTemplateDialog.h"
 #include "Gui/GuiAppInstance.h"
 #include "Gui/GuiApplicationManager.h" // appPTR
 #include "Gui/GuiPrivate.h"
@@ -83,6 +84,7 @@ GCC_DIAG_UNUSED_PRIVATE_FIELD_ON
 #include "Gui/TabWidget.h"
 #include "Gui/ViewerGL.h"
 #include "Gui/ViewerTab.h"
+#include "Gui/PropertiesBinWrapper.h"
 #include "Gui/Histogram.h"
 
 using namespace Natron;
@@ -133,8 +135,13 @@ Gui::onRotoSelectedToolChanged(int tool)
     if (!roto) {
         return;
     }
-    QMutexLocker l(&_imp->_viewerTabsMutex);
-    for (std::list<ViewerTab*>::iterator it = _imp->_viewerTabs.begin(); it != _imp->_viewerTabs.end(); ++it) {
+    
+    std::list<ViewerTab*> viewers;
+    {
+        QMutexLocker l(&_imp->_viewerTabsMutex);
+        viewers = _imp->_viewerTabs;
+    }
+    for (std::list<ViewerTab*>::iterator it = viewers.begin(); it != viewers.end(); ++it) {
         (*it)->updateRotoSelectedTool(tool, roto);
     }
 }
@@ -267,38 +274,6 @@ Gui::progressUpdate(KnobHolder* effect,
     return true;
 }
 
-void
-Gui::addVisibleDockablePanel(DockablePanel* panel)
-{
-    
-    std::list<DockablePanel*>::iterator it = std::find(_imp->openedPanels.begin(), _imp->openedPanels.end(), panel);
-    putSettingsPanelFirst(panel);
-    if ( it == _imp->openedPanels.end() ) {
-        assert(panel);
-        int maxPanels = appPTR->getCurrentSettings()->getMaxPanelsOpened();
-        if ( ( (int)_imp->openedPanels.size() == maxPanels ) && (maxPanels != 0) ) {
-            std::list<DockablePanel*>::iterator it = _imp->openedPanels.begin();
-            (*it)->closePanel();
-        }
-        _imp->openedPanels.push_back(panel);
-    }
-}
-
-void
-Gui::removeVisibleDockablePanel(DockablePanel* panel)
-{
-    std::list<DockablePanel*>::iterator it = std::find(_imp->openedPanels.begin(), _imp->openedPanels.end(), panel);
-
-    if ( it != _imp->openedPanels.end() ) {
-        _imp->openedPanels.erase(it);
-    }
-}
-
-const std::list<DockablePanel*>&
-Gui::getVisiblePanels() const
-{
-    return _imp->openedPanels;
-}
 
 void
 Gui::onMaxVisibleDockablePanelChanged(int maxPanels)
@@ -308,7 +283,7 @@ Gui::onMaxVisibleDockablePanelChanged(int maxPanels)
         return;
     }
     while ( (int)_imp->openedPanels.size() > maxPanels ) {
-        std::list<DockablePanel*>::iterator it = _imp->openedPanels.begin();
+        std::list<DockablePanel*>::reverse_iterator it = _imp->openedPanels.rbegin();
         (*it)->closePanel();
     }
     _imp->_maxPanelsOpenedSpinBox->setValue(maxPanels);
@@ -462,6 +437,12 @@ Gui::setLastKeyPressVisitedClickFocus(bool visited)
 }
 
 void
+Gui::setLastKeyUpVisitedClickFocus(bool visited)
+{
+    _imp->keyUpEventHasVisitedFocusWidget = visited;
+}
+
+void
 Gui::keyPressEvent(QKeyEvent* e)
 {
     if (_imp->currentPanelFocusEventRecursion > 0) {
@@ -517,9 +498,9 @@ Gui::keyPressEvent(QKeyEvent* e)
             getNodeGraph()->getLastSelectedViewer()->nextIncrement();
         }
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevKF, modifiers, key) ) {
-        getApp()->getTimeLine()->goToPreviousKeyframe();
+        getApp()->goToPreviousKeyframe();
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerNextKF, modifiers, key) ) {
-        getApp()->getTimeLine()->goToNextKeyframe();
+        getApp()->goToNextKeyframe();
     } else if ( isKeybind(kShortcutGroupNodegraph, kShortcutIDActionGraphDisableNodes, modifiers, key) ) {
         _imp->_nodeGraphArea->toggleSelectedNodesEnabled();
     } else if ( isKeybind(kShortcutGroupNodegraph, kShortcutIDActionGraphFindNode, modifiers, key) ) {
@@ -545,8 +526,35 @@ Gui::keyPressEvent(QKeyEvent* e)
     } else if (isKeybind(kShortcutGroupGlobal, kShortcutIDActionConnectViewerToInput10, modifiers, key) ) {
         connectInput(9);
     } else {
+        
+        /*
+         * Modifiers are always uncaught by child implementations so that we can forward them to 1 ViewerTab so that
+         * plug-ins overlay interacts always get the keyDown/keyUp events to track modifiers state.
+         */
+        bool isModifier = key == Qt::Key_Control || key == Qt::Key_Shift || key == Qt::Key_Alt || key == Qt::Key_Meta;
+        if (isModifier) {
+            const std::list<ViewerTab*>& viewers = getViewersList();
+            bool viewerTabHasFocus = false;
+            for (std::list<ViewerTab*>::const_iterator it = viewers.begin(); it != viewers.end(); ++it) {
+                if ((*it)->hasFocus() || (_imp->currentPanelFocus == *it && !_imp->keyPressEventHasVisitedFocusWidget)) {
+                    viewerTabHasFocus = true;
+                    break;
+                }
+            }
+            //Plug-ins did not yet receive a keyDown event for this modifier, send it
+            if (!viewers.empty() && !viewerTabHasFocus) {
+                //Increment a recursion counter because the handler of the focus widget might toss it back to us
+                ++_imp->currentPanelFocusEventRecursion;
+                //If a panel as the click focus, try to send the event to it
+                QKeyEvent* ev = new QKeyEvent(QEvent::KeyPress, key, modifiers);
+                qApp->notify(viewers.front(),ev);
+                --_imp->currentPanelFocusEventRecursion;
+            }
+        }
+        
         if (_imp->currentPanelFocus && !_imp->keyPressEventHasVisitedFocusWidget) {
             
+            //Increment a recursion counter because the handler of the focus widget might toss it back to us
             ++_imp->currentPanelFocusEventRecursion;
             //If a panel as the click focus, try to send the event to it
             QWidget* curFocusWidget = _imp->currentPanelFocus->getWidget();
@@ -557,6 +565,56 @@ Gui::keyPressEvent(QKeyEvent* e)
         } else {
             QMainWindow::keyPressEvent(e);
         }
+    }
+}
+
+void
+Gui::keyReleaseEvent(QKeyEvent* e)
+{
+    if (_imp->currentPanelFocusEventRecursion > 0) {
+        return;
+    }
+    
+    Qt::Key key = (Qt::Key)e->key();
+    Qt::KeyboardModifiers modifiers = e->modifiers();
+
+    /*
+     * Modifiers are always uncaught by child implementations so that we can forward them to 1 ViewerTab so that
+     * plug-ins overlay interacts always get the keyDown/keyUp events to track modifiers state.
+     */
+    bool isModifier = key == Qt::Key_Control || key == Qt::Key_Shift || key == Qt::Key_Alt || key == Qt::Key_Meta;
+    if (isModifier) {
+        const std::list<ViewerTab*>& viewers = getViewersList();
+        bool viewerTabHasFocus = false;
+        for (std::list<ViewerTab*>::const_iterator it = viewers.begin(); it != viewers.end(); ++it) {
+            if ((*it)->hasFocus() || (_imp->currentPanelFocus == *it && !_imp->keyUpEventHasVisitedFocusWidget)) {
+                viewerTabHasFocus = true;
+                break;
+            }
+        }
+        //Plug-ins did not yet receive a keyUp event for this modifier, send it
+        if (!viewers.empty() && !viewerTabHasFocus) {
+            //Increment a recursion counter because the handler of the focus widget might toss it back to us
+            ++_imp->currentPanelFocusEventRecursion;
+            //If a panel as the click focus, try to send the event to it
+            QKeyEvent* ev = new QKeyEvent(QEvent::KeyRelease, key, modifiers);
+            qApp->notify(viewers.front(),ev);
+            --_imp->currentPanelFocusEventRecursion;
+        }
+    }
+    
+    if (_imp->currentPanelFocus && !_imp->keyUpEventHasVisitedFocusWidget) {
+        
+        //Increment a recursion counter because the handler of the focus widget might toss it back to us
+        ++_imp->currentPanelFocusEventRecursion;
+        //If a panel as the click focus, try to send the event to it
+        QWidget* curFocusWidget = _imp->currentPanelFocus->getWidget();
+        assert(curFocusWidget);
+        QKeyEvent* ev = new QKeyEvent(QEvent::KeyRelease, key, modifiers);
+        qApp->notify(curFocusWidget,ev);
+        --_imp->currentPanelFocusEventRecursion;
+    } else {
+        QMainWindow::keyPressEvent(e);
     }
 }
 
@@ -601,10 +659,7 @@ Gui::onFreezeUIButtonClicked(bool clicked)
             }
         }
     }
-    _imp->_nodeGraphArea->onGuiFrozenChanged(clicked);
-    for (std::list<NodeGraph*>::iterator it = _imp->_groups.begin(); it != _imp->_groups.end(); ++it) {
-        (*it)->onGuiFrozenChanged(clicked);
-    }
+    _imp->_propertiesBin->setEnabled(!clicked);
 }
 
 bool
@@ -623,11 +678,15 @@ Gui::addShortcut(BoundAction* action)
 void
 Gui::getNodesEntitledForOverlays(std::list<boost::shared_ptr<Natron::Node> > & nodes) const
 {
-    int layoutItemsCount = _imp->_layoutPropertiesBin->count();
-
-    for (int i = 0; i < layoutItemsCount; ++i) {
-        QLayoutItem* item = _imp->_layoutPropertiesBin->itemAt(i);
-        NodeSettingsPanel* panel = dynamic_cast<NodeSettingsPanel*>( item->widget() );
+    std::list<DockablePanel*> panels;
+    {
+        QMutexLocker k(&_imp->openedPanelsMutex);
+        panels = _imp->openedPanels;
+    }
+    
+    for (std::list<DockablePanel*>::const_iterator it = panels.begin();
+         it != panels.end(); ++it) {
+        NodeSettingsPanel* panel = dynamic_cast<NodeSettingsPanel*>(*it);
         if (!panel) {
             continue;
         }
@@ -887,8 +946,7 @@ void Gui::centerOpenedViewersOn(SequenceTime left, SequenceTime right)
 void
 Gui::ddeOpenFile(const QString& filePath)
 {
-    openProject(filePath.toStdString());
-#pragma message WARN("CONTROL FLOW ERROR: should check the return value of openProject, raise an error...")
+    _imp->_appInstance->handleFileOpenEvent(filePath.toStdString());
 }
 #endif
 

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,11 +25,13 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
-#include "Global/Macros.h"
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QObject>
@@ -39,26 +41,10 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Global/GlobalDefines.h"
 
-class QInputEvent;
-class QMouseEvent;
-class QToolBar;
-class QWidget;
-class QIcon;
-class QString;
-class QToolButton;
-class QKeyEvent;
-class QPointF;
-class ViewerTab;
-class QAction;
-class RotoItem;
-class QUndoCommand;
-class NodeGui;
-class Bezier;
-class RotoDrawableItem;
-class BezierCP;
-class GuiAppInstance;
-struct RotoGuiSharedData;
-class RotoContext;
+#include "Engine/EngineFwd.h"
+
+#include "Gui/GuiFwd.h"
+
 
 class RotoToolButton
     : public QToolButton
@@ -186,21 +172,21 @@ public:
      **/
     RotoGui::RotoRoleEnum getCurrentRole() const;
 
-    void drawOverlays(double time, double scaleX, double scaleY) const;
+    void drawOverlays(double time, const RenderScale & renderScale) const;
 
-    bool penDown(double time, double scaleX, double scaleY, Natron::PenType pen, bool isTabletEvent, const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QMouseEvent* e);
+    bool penDown(double time, const RenderScale & renderScale, Natron::PenType pen, bool isTabletEvent, const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QMouseEvent* e);
 
-    bool penDoubleClicked(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, QMouseEvent* e);
+    bool penDoubleClicked(double time, const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, QMouseEvent* e);
 
-    bool penMotion(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QInputEvent* e);
+    bool penMotion(double time, const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QInputEvent* e);
 
-    bool penUp(double time, double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QMouseEvent* e);
+    bool penUp(double time, const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure, double timestamp, QMouseEvent* e);
 
-    bool keyDown(double time, double scaleX, double scaleY, QKeyEvent* e);
+    bool keyDown(double time, const RenderScale & renderScale, QKeyEvent* e);
 
-    bool keyUp(double time, double scaleX, double scaleY, QKeyEvent* e);
+    bool keyUp(double time, const RenderScale & renderScale, QKeyEvent* e);
 
-    bool keyRepeat(double time, double scaleX, double scaleY, QKeyEvent* e);
+    bool keyRepeat(double time, const RenderScale & renderScale, QKeyEvent* e);
     
     void focusOut(double time);
 

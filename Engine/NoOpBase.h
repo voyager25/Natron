@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,9 @@
 #include <boost/shared_ptr.hpp>
 #endif
 #include "Engine/OutputEffectInstance.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Node;
-}
 
-class KnobBool;
 /**
  * @brief A NoOp is an effect that doesn't do anything. It is useful for scripting (adding custom parameters)
  * and it is also used to implement the "Dot" node.
@@ -65,7 +62,7 @@ public:
 
     virtual std::string getPluginID() const OVERRIDE WARN_UNUSED_RETURN = 0;
     virtual std::string getPluginLabel() const OVERRIDE WARN_UNUSED_RETURN = 0;
-    virtual std::string getDescription() const OVERRIDE WARN_UNUSED_RETURN = 0;
+    virtual std::string getPluginDescription() const OVERRIDE WARN_UNUSED_RETURN = 0;
     virtual void getPluginGrouping(std::list<std::string>* grouping) const OVERRIDE FINAL
     {
         grouping->push_back(PLUGIN_GROUP_OTHER);
@@ -87,7 +84,7 @@ public:
     }
 
     virtual Natron::StatusEnum getTransform(double time,
-                                            const RenderScale& renderScale,
+                                            const RenderScale & renderScale,
                                             int view,
                                             Natron::EffectInstance** inputToTransform,
                                             Transform::Matrix3x3* transform) OVERRIDE FINAL WARN_UNUSED_RETURN;
@@ -101,7 +98,7 @@ public:
     
     
     virtual bool isHostChannelSelectorSupported(bool* defaultR,bool* defaultG, bool* defaultB, bool* defaultA) const OVERRIDE FINAL;
-    
+
 private:
 
     /**

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -147,6 +147,9 @@ LinkToKnobDialog::LinkToKnobDialog(KnobGui* from,
 
     EffectInstance* isEffect = dynamic_cast<EffectInstance*>(from->getKnob()->getHolder());
     assert(isEffect);
+    if (!isEffect) {
+        throw std::logic_error("");
+    }
     boost::shared_ptr<NodeCollection> group = isEffect->getNode()->getGroup();
     group->getActiveNodes(&_imp->allNodes);
     NodeGroup* isGroup = dynamic_cast<NodeGroup*>(group.get());
@@ -206,7 +209,7 @@ LinkToKnobDialog::onNodeComboEditingFinished()
             KnobPage* isPage = dynamic_cast<KnobPage*>( knobs[j].get() );
             KnobGroup* isGroup = dynamic_cast<KnobGroup*>( knobs[j].get() );
             if (from->isTypeCompatible(knobs[j]) && !isButton && !isPage && !isGroup) {
-                QString name( knobs[j]->getDescription().c_str() );
+                QString name( knobs[j]->getName().c_str() );
 
                 bool canInsertKnob = true;
                 for (int k = 0; k < knobs[j]->getDimension(); ++k) {

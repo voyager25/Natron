@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,51 @@
 
 #include <QMutex>
 #include <QObject>
+#include <QNetworkReply>
+#include <QProcess>
+
+#ifndef REPORTER_CLI_ONLY
+#include <QDialog>
+#endif
 
 class QLocalSocket;
+class QLocalServer;
 class QNetworkReply;
 
-#ifdef DEBUG
-class QTextStream;
-class QFile;
+class QString;
+
+#ifndef REPORTER_CLI_ONLY
+class CrashDialog;
+class QProgressDialog;
+class QVBoxLayout;
+class QTextEdit;
+class QDialogButtonBox;
+class QApplication;
+#else
+class QCoreApplication;
+#endif
+
+namespace google_breakpad {
+class CrashGenerationServer;
+}
+
+
+#ifndef REPORTER_CLI_ONLY
+class NetworkErrorDialog : public QDialog
+{
+    
+    QVBoxLayout* mainLayout;
+    QTextEdit* textArea;
+    QDialogButtonBox* buttons;
+    
+public:
+    
+    NetworkErrorDialog(const QString& errorMessage, QWidget* parent);
+    
+    virtual ~NetworkErrorDialog();
+    
+
+};
 #endif
 
 class CallbacksManager : public QObject
@@ -36,51 +74,112 @@ class CallbacksManager : public QObject
 
 public:
 
-    CallbacksManager(bool autoUpload);
-    ~CallbacksManager();
+    CallbacksManager();
+    
+    virtual ~CallbacksManager();
 
-    void s_emitDoCallBackOnMainThread(const QString& filePath);
 
     static CallbacksManager* instance()
     {
         return _instance;
     }
 
-#ifdef DEBUG
-    void writeDebugMessage(const QString& str);
-#else
-    void writeDebugMessage(const QString& /*str*/) {}
-#endif
+    /**
+     * @brief Creates the crash generation server and spawns the actual Natron proces.
+     * This function throws an exception in case of error.
+     **/
+    void init(int& argc, char** argv);
+    
+    void s_emitDoCallBackOnMainThread(const QString& filePath);
+    
+    int exec();
 
-    void initOuptutPipe(const QString& comPipeName);
+public Q_SLOTS:
 
-    void writeToOutputPipe(const QString& str);
-
-public slots:
-
-    void replyFinished(QNetworkReply* reply);
+    void replyFinished();
 
     void onDoDumpOnMainThread(const QString& filePath);
 
-    void onOutputPipeConnectionMade();
-
-signals:
+    void onCrashDialogFinished();
+    
+    void replyError(QNetworkReply::NetworkError);
+    
+    void onUploadProgress(qint64 bytesSent, qint64 bytesTotal);
+    
+    void onProgressDialogCanceled();
+        
+    void onNatronProcessStdOutWrittenTo();
+    void onNatronProcessStdErrWrittenTo();
+    
+    void onSpawnedProcessFinished(int exitCode, QProcess::ExitStatus status);
+    void onSpawnedProcessError(QProcess::ProcessError error);
+    
+    void onComPipeConnectionPending();
+    
+    void onComPipeDataWrittenTo();
+    
+Q_SIGNALS:
 
     void doDumpCallBackOnMainThread(QString);
 
 private:
+    
+    /**
+     * @brief To be called to start breakpad generation server right away
+     * after the constructor
+     * This throws a runtime exception upon error
+     **/
+    void initCrashGenerationServer();
 
-    void uploadFileToRepository(const QString& str);
+    void createCrashGenerationServer();
+
+    void initQApplication(int& argc, char** argv);
+    
+    void uploadFileToRepository(const QString& filepath, const QString& comments);
 
     static CallbacksManager *_instance;
 
-#ifdef DEBUG
-    QMutex _dFileMutex;
-    QFile* _dFile;
+    
+#ifndef Q_OS_LINUX
+    //On Windows & OSX breakpad expects us to manage the pipe
+    QLocalServer* _breakpadPipeServer;
+    
+    //The Natron process has no way to print to stdout/stderr, so connect signals
+    QProcess* _natronProcess;
 #endif
+    
+    /*
+     Pipe between the 2 applications to check one another if they are still alive
+     */
+    QLocalServer* _comServer;
+    
+    //owned by _comServer
+    QLocalSocket* _comPipeConnection;
 
-    QLocalSocket* _outputPipe;
-    bool _autoUpload;
+    QNetworkReply* _uploadReply;
+    bool _dumpReceived;
+#ifndef REPORTER_CLI_ONLY
+    CrashDialog* _dialog;
+    QProgressDialog* _progressDialog;
+#endif
+    bool _didError;
+    QString _dumpFilePath;
+    QString _dumpDirPath;
+    QString _pipePath,_comPipePath;
+    google_breakpad::CrashGenerationServer* _crashServer;
+    
+#ifdef Q_OS_LINUX
+    //On Linux this is the pipe FD of crash generation server on the server side
+    int _serverFD;
+    int _clientFD;
+#endif
+    
+#ifdef REPORTER_CLI_ONLY
+    QCoreApplication* _app;
+#else
+    QApplication* _app;
+#endif
+    
 };
 
 #endif // CALLBACKSMANAGER_H

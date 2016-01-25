@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -273,15 +273,17 @@ void
 KnobGuiParametric::resetSelectedCurves()
 {
     QList<QTreeWidgetItem*> selected = _tree->selectedItems();
+    boost::shared_ptr<KnobParametric> k = _knob.lock();
     for (int i = 0; i < selected.size(); ++i) {
         //find the items in the curves
         for (CurveGuis::iterator it = _curves.begin(); it != _curves.end(); ++it) {
             if ( it->second.treeItem == selected.at(i) ) {
-                _knob.lock()->resetToDefaultValue(it->second.curve->getDimension());
+                k->resetToDefaultValue(it->second.curve->getDimension());
                 break;
             }
         }
     }
+    k->evaluateValueChange(0, k->getCurrentTime(), Natron::eValueChangedReasonUserEdited);
 }
 
 boost::shared_ptr<KnobI> KnobGuiParametric::getKnob() const

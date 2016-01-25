@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 #include "ProjectPrivate.h"
 
 #include <stdexcept>
+#include <list>
 
 #include <QtCore/QDebug>
 #include <QtCore/QTimer>
@@ -46,6 +47,7 @@
 #include "Engine/TimeLine.h"
 #include "Engine/ViewerInstance.h"
 
+
 namespace Natron {
 ProjectPrivate::ProjectPrivate(Natron::Project* project)
     : _publicInterface(project)
@@ -62,7 +64,6 @@ ProjectPrivate::ProjectPrivate(Natron::Project* project)
     , projectPath()
     , formatKnob()
     , addFormatKnob()
-    , viewsCount()
     , previewMode()
     , colorSpace8u()
     , colorSpace16u()
@@ -86,6 +87,7 @@ ProjectPrivate::ProjectPrivate(Natron::Project* project)
     , isSavingProject(false)
     , autoSaveTimer( new QTimer() )
     , projectClosing(false)
+    , tlsData(new TLSHolder<Project::ProjectTLSData>())
     
 {
     
@@ -101,102 +103,98 @@ ProjectPrivate::restoreFromSerialization(const ProjectSerialization & obj,
 {
     
     /*1st OFF RESTORE THE PROJECT KNOBS*/
-
-    projectCreationTime = QDateTime::fromMSecsSinceEpoch( obj.getCreationDate() );
-
-    _publicInterface->getApp()->updateProjectLoadStatus(QObject::tr("Restoring project settings..."));
-
-    /*we must restore the entries in the combobox before restoring the value*/
-    std::vector<std::string> entries;
-
-    for (std::list<Format>::const_iterator it = builtinFormats.begin(); it != builtinFormats.end(); ++it) {
-        QString formatStr = Natron::generateStringFromFormat(*it);
-        entries.push_back( formatStr.toStdString() );
-    }
-
-    const std::list<Format> & objAdditionalFormats = obj.getAdditionalFormats();
-    for (std::list<Format>::const_iterator it = objAdditionalFormats.begin(); it != objAdditionalFormats.end(); ++it) {
-        QString formatStr = Natron::generateStringFromFormat(*it);
-        entries.push_back( formatStr.toStdString() );
-    }
-    additionalFormats = objAdditionalFormats;
-
-    formatKnob->populateChoices(entries);
-    autoSetProjectFormat = false;
-
-    const std::list< boost::shared_ptr<KnobSerialization> > & projectSerializedValues = obj.getProjectKnobsValues();
-    const std::vector< boost::shared_ptr<KnobI> > & projectKnobs = _publicInterface->getKnobs();
-
-    /// 1) restore project's knobs.
-    for (U32 i = 0; i < projectKnobs.size(); ++i) {
-        ///try to find a serialized value for this knob
-        for (std::list< boost::shared_ptr<KnobSerialization> >::const_iterator it = projectSerializedValues.begin(); it != projectSerializedValues.end(); ++it) {
-            
-            if ( (*it)->getName() == projectKnobs[i]->getName() ) {
+    bool ok;
+    {
+        CreatingNodeTreeFlag_RAII creatingNodeTreeFlag(_publicInterface->getApp());
+        
+        projectCreationTime = QDateTime::fromMSecsSinceEpoch( obj.getCreationDate() );
+        
+        _publicInterface->getApp()->updateProjectLoadStatus(QObject::tr("Restoring project settings..."));
+        
+        /*we must restore the entries in the combobox before restoring the value*/
+        std::vector<std::string> entries;
+        
+        for (std::list<Format>::const_iterator it = builtinFormats.begin(); it != builtinFormats.end(); ++it) {
+            QString formatStr = Natron::generateStringFromFormat(*it);
+            entries.push_back( formatStr.toStdString() );
+        }
+        
+        const std::list<Format> & objAdditionalFormats = obj.getAdditionalFormats();
+        for (std::list<Format>::const_iterator it = objAdditionalFormats.begin(); it != objAdditionalFormats.end(); ++it) {
+            QString formatStr = Natron::generateStringFromFormat(*it);
+            entries.push_back( formatStr.toStdString() );
+        }
+        additionalFormats = objAdditionalFormats;
+        
+        formatKnob->populateChoices(entries);
+        autoSetProjectFormat = false;
+        
+        const std::list< boost::shared_ptr<KnobSerialization> > & projectSerializedValues = obj.getProjectKnobsValues();
+        const std::vector< boost::shared_ptr<KnobI> > & projectKnobs = _publicInterface->getKnobs();
+        
+        /// 1) restore project's knobs.
+        for (U32 i = 0; i < projectKnobs.size(); ++i) {
+            ///try to find a serialized value for this knob
+            for (std::list< boost::shared_ptr<KnobSerialization> >::const_iterator it = projectSerializedValues.begin(); it != projectSerializedValues.end(); ++it) {
                 
-                ///EDIT: Allow non persistent params to be loaded if we found a valid serialization for them
-                //if ( projectKnobs[i]->getIsPersistant() ) {
-                
-                KnobChoice* isChoice = dynamic_cast<KnobChoice*>(projectKnobs[i].get());
-                if (isChoice) {
-                    const TypeExtraData* extraData = (*it)->getExtraData();
-                    const ChoiceExtraData* choiceData = dynamic_cast<const ChoiceExtraData*>(extraData);
-                    assert(choiceData);
+                if ( (*it)->getName() == projectKnobs[i]->getName() ) {
                     
-                    KnobChoice* serializedKnob = dynamic_cast<KnobChoice*>((*it)->getKnob().get());
-                    assert(serializedKnob);
-                    isChoice->choiceRestoration(serializedKnob, choiceData);
-                } else {
-                    projectKnobs[i]->clone( (*it)->getKnob() );
+                    ///EDIT: Allow non persistent params to be loaded if we found a valid serialization for them
+                    //if ( projectKnobs[i]->getIsPersistant() ) {
+                    
+                    KnobChoice* isChoice = dynamic_cast<KnobChoice*>(projectKnobs[i].get());
+                    if (isChoice) {
+                        const TypeExtraData* extraData = (*it)->getExtraData();
+                        const ChoiceExtraData* choiceData = dynamic_cast<const ChoiceExtraData*>(extraData);
+                        assert(choiceData);
+                        
+                        KnobChoice* serializedKnob = dynamic_cast<KnobChoice*>((*it)->getKnob().get());
+                        assert(serializedKnob);
+                        isChoice->choiceRestoration(serializedKnob, choiceData);
+                    } else {
+                        projectKnobs[i]->clone( (*it)->getKnob() );
+                    }
+                    //}
+                    break;
                 }
-                //}
+            }
+            if (projectKnobs[i] == envVars) {
+                
+                ///For eAppTypeBackgroundAutoRunLaunchedFromGui don't change the project path since it is controlled
+                ///by the main GUI process
+                if (appPTR->getAppType() != AppManager::eAppTypeBackgroundAutoRunLaunchedFromGui) {
+                    autoSetProjectDirectory(path);
+                }
+                _publicInterface->onOCIOConfigPathChanged(appPTR->getOCIOConfigPath(),false);
+            } else if (projectKnobs[i] == natronVersion) {
+                std::string v = natronVersion->getValue();
+                if (v == "Natron v1.0.0") {
+                    _publicInterface->getApp()->setProjectWasCreatedWithLowerCaseIDs(true);
+                }
+            }
+            
+        }
+        
+        /// 2) restore the timeline
+        timeline->seekFrame(obj.getCurrentTime(), false, 0, Natron::eTimelineChangeReasonOtherSeek);
+        
+        
+        /// 3) Restore the nodes
+                
+        std::map<std::string,bool> processedModules;
+        ok = NodeCollectionSerialization::restoreFromSerialization(obj.getNodesSerialization().getNodesSerialization(),
+                                                                        _publicInterface->shared_from_this(),true, &processedModules);
+        for (std::map<std::string,bool>::iterator it = processedModules.begin(); it!=processedModules.end(); ++it) {
+            if (it->second) {
+                *mustSave = true;
                 break;
             }
         }
-        if (projectKnobs[i] == envVars) {
-            
-            ///For eAppTypeBackgroundAutoRunLaunchedFromGui don't change the project path since it is controlled
-            ///by the main GUI process
-            if (appPTR->getAppType() != AppManager::eAppTypeBackgroundAutoRunLaunchedFromGui) {
-                autoSetProjectDirectory(path);
-            }
-            _publicInterface->onOCIOConfigPathChanged(appPTR->getOCIOConfigPath(),false);
-        } else if (projectKnobs[i] == natronVersion) {
-            std::string v = natronVersion->getValue();
-            if (v == "Natron v1.0.0") {
-                _publicInterface->getApp()->setProjectWasCreatedWithLowerCaseIDs(true);
-            }
-        }
-
-    }
-
-    /// 2) restore the timeline
-    timeline->seekFrame(obj.getCurrentTime(), false, 0, Natron::eTimelineChangeReasonPlaybackSeek);
-
-    
-    /// 3) Restore the nodes
-    
-    bool hasProjectAWriter = false;
-    
-    std::map<std::string,bool> processedModules;
-    bool ok = NodeCollectionSerialization::restoreFromSerialization(obj.getNodesSerialization().getNodesSerialization(),
-                                                                    _publicInterface->shared_from_this(),true, &processedModules, &hasProjectAWriter);
-    for (std::map<std::string,bool>::iterator it = processedModules.begin(); it!=processedModules.end(); ++it) {
-        if (it->second) {
-            *mustSave = true;
-            break;
-        }
-    }
-
-    if ( !hasProjectAWriter && appPTR->isBackground() ) {
-        _publicInterface->clearNodes(true);
-        throw std::invalid_argument("Project file is missing a writer node. This project cannot render anything.");
-    }
-
-    
-    _publicInterface->getApp()->updateProjectLoadStatus(QObject::tr("Restoring graph stream preferences"));
-    
-   
+        
+        
+        _publicInterface->getApp()->updateProjectLoadStatus(QObject::tr("Restoring graph stream preferences"));
+        
+    } // CreatingNodeTreeFlag_RAII creatingNodeTreeFlag(_publicInterface->getApp());
     
     _publicInterface->forceComputeInputDependentDataOnAllTrees();
     

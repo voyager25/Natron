@@ -41,7 +41,7 @@ fi
 if [ "$STDC_LIB" != "" ]; then
   COMPAT_GCC=`$DIR/bin/strings $STDC_LIB | grep GLIBCXX_${COMPAT_VERSION}`
 fi
-if [ "$COMPAT_GCC" = "GLIBCXX_${COMPAT_VERSION}" ]; then
+if [ "$COMPAT_GCC" != "" ]; then
   if [ -f "$DIR/lib/libstdc++.so.6" ]; then
     rm -f $DIR/lib/libstdc++.so.6 || echo "Failed to remove symlink, please run as root to fix."
   fi
@@ -81,7 +81,7 @@ fi
 if [ "$1" = "-debug" -a -x "$DIR/bin/Natron.debug" ]; then
     SEGFAULT_SIGNALS="all"
     export SEGFAULT_SIGNALS
-    catchsegv "$DIR/bin/Natron.debug" -style fusion "$@"
+    catchsegv "$DIR/bin/Natron.debug" -style plastique "$@"
 else
-    "$DIR/bin/Natron" -style fusion "$@"
+    "$DIR/bin/Natron" -style plastique "$@"
 fi

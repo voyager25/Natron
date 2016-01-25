@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,6 +46,7 @@ GCC_DIAG_ON(unused-parameter)
 #include "Engine/RotoContextPrivate.h"
 #include "Engine/RotoDrawableItemSerialization.h"
 #include "Engine/BezierCPSerialization.h"
+#include "Engine/EngineFwd.h"
 
 #define BEZIER_SERIALIZATION_INTRODUCES_ROTO_STROKE 2
 #define BEZIER_SERIALIZATION_REMOVES_IS_ROTO_STROKE 3

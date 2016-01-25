@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,11 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <vector> // KnobGuiInt
 #include <list>
-#include "Global/Macros.h"
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QtCore/QObject>
@@ -36,61 +38,19 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-#include "Global/Macros.h"
 #include "Global/GlobalDefines.h"
 
 #include "Engine/Singleton.h"
 #include "Engine/Knob.h"
 #include "Engine/ImageComponents.h"
+#include "Engine/EngineFwd.h"
 
 #include "Gui/CurveSelection.h"
 #include "Gui/KnobGui.h"
 #include "Gui/AnimatedCheckBox.h"
 #include "Gui/Label.h"
+#include "Gui/GuiFwd.h"
 
-// Qt
-class QString;
-class QFrame;
-class QHBoxLayout;
-class QTreeWidget;
-class QTreeWidgetItem;
-class QScrollArea;
-class QFontComboBox;
-
-// Engine
-class KnobI;
-class KnobInt;
-class KnobBool;
-class KnobDouble;
-class KnobButton;
-class KnobSeparator;
-class KnobGroup;
-class KnobParametric;
-class KnobColor;
-class KnobChoice;
-class KnobString;
-
-// Gui
-class DockablePanel;
-class LineEdit;
-class Button;
-class SpinBox;
-class ComboBox;
-class ScaleSliderQWidget;
-class CurveWidget;
-class KnobCurveGui;
-class TabGroup;
-
-// private classes, defined in KnobGuiTypes.cpp
-namespace Natron {
-class GroupBoxLabel;
-class ClickableLabel;
-}
-class AnimatedCheckBox;
-
-namespace Natron {
-class Node;
-}
 
 class KnobGuiChoice
     : public KnobGui
@@ -121,6 +81,10 @@ public Q_SLOTS:
 
     void onEntriesPopulated();
     
+    void onEntryAppended(const QString& entry, const QString& help);
+    
+    void onEntriesReset();
+    
     void onItemNewSelected();
 
 private:
@@ -137,7 +101,6 @@ private:
     virtual void updateToolTip() OVERRIDE FINAL;
     virtual void reflectModificationsState() OVERRIDE FINAL;
     
-    std::vector<std::string> _entries;
     ComboBox *_comboBox;
     boost::weak_ptr<KnobChoice> _knob;
 };

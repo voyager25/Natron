@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +19,19 @@
 #ifndef ROTOPAINT_H
 #define ROTOPAINT_H
 
-#include "Engine/EffectInstance.h"
+// ***** BEGIN PYTHON BLOCK *****
+// from <https://docs.python.org/3/c-api/intro.html#include-files>:
+// "Since Python may define some pre-processor definitions which affect the standard headers on some systems, you must include Python.h before any standard headers are included."
+#include <Python.h>
+// ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
+#include "Engine/EffectInstance.h"
+#include "Engine/EngineFwd.h"
+
+
+struct RotoPaintPrivate;
 class RotoPaint : public Natron::EffectInstance
 {
 public:
@@ -34,9 +45,7 @@ public:
     
     virtual ~RotoPaint();
     
-    bool isDefaultBehaviourPaintContext() const {
-        return _isPaintByDefault;
-    }
+    bool isDefaultBehaviourPaintContext() const;
     
     virtual bool isRotoPaintNode() const OVERRIDE FINAL WARN_UNUSED_RETURN  { return true; }
     
@@ -61,7 +70,7 @@ public:
 
     virtual std::string getPluginLabel() const OVERRIDE WARN_UNUSED_RETURN;
 
-    virtual std::string getDescription() const OVERRIDE WARN_UNUSED_RETURN;
+    virtual std::string getPluginDescription() const OVERRIDE WARN_UNUSED_RETURN;
 
     virtual void getPluginGrouping(std::list<std::string>* grouping) const OVERRIDE FINAL
     {
@@ -120,6 +129,12 @@ public:
     virtual bool isHostChannelSelectorSupported(bool* defaultR,bool* defaultG, bool* defaultB, bool* defaultA) const OVERRIDE WARN_UNUSED_RETURN;
     
 private:
+    
+    virtual void knobChanged(KnobI* k,
+                             Natron::ValueChangedReasonEnum reason,
+                             int view,
+                             double time,
+                             bool originatedFromMainThread) OVERRIDE FINAL;
 
     virtual Natron::StatusEnum
     getRegionOfDefinition(U64 hash,double time, const RenderScale & scale, int view, RectD* rod) OVERRIDE WARN_UNUSED_RETURN;
@@ -144,7 +159,7 @@ private:
 
     virtual Natron::StatusEnum render(const RenderActionArgs& args) OVERRIDE WARN_UNUSED_RETURN;
 
-    bool _isPaintByDefault;
+    boost::scoped_ptr<RotoPaintPrivate> _imp;
 
 };
 
@@ -168,7 +183,7 @@ public:
     
     virtual std::string getPluginLabel() const OVERRIDE WARN_UNUSED_RETURN;
     
-    virtual std::string getDescription() const OVERRIDE WARN_UNUSED_RETURN;
+    virtual std::string getPluginDescription() const OVERRIDE WARN_UNUSED_RETURN;
     
     virtual bool isHostChannelSelectorSupported(bool* defaultR,bool* defaultG, bool* defaultB, bool* defaultA) const OVERRIDE WARN_UNUSED_RETURN;
 };

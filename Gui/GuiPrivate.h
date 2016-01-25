@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,61 +25,27 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <list>
 #include <map>
 #include <vector>
 
-#include "Global/Macros.h"
-
+CLANG_DIAG_OFF(deprecated)
+CLANG_DIAG_OFF(uninitialized)
 #include <QtCore/QMutex>
 #include <QtCore/QWaitCondition>
 #include <QToolBar>
 #include <QMessageBox>
+CLANG_DIAG_ON(deprecated)
+CLANG_DIAG_ON(uninitialized)
 
 #include "Global/Enums.h"
 
 #include "Gui/GuiDefines.h"
 #include "Gui/RegisteredTabs.h"
+#include "Gui/GuiFwd.h"
 
-class QAction;
-class QEvent;
-class QHBoxLayout;
-class QVBoxLayout;
-class QMenuBar;
-class QProgressDialog;
-class QScrollArea;
-class QUndoGroup;
-class QUndoStack;
-class QWidget;
-class QToolButton;
-
-class AboutWindow;
-class ActionWithShortcut;
-class Button;
-class CurveEditor;
-class DopeSheetEditor;
-class FloatingWidget;
-class Histogram;
-class Gui;
-class GuiAppInstance;
-namespace Natron {
-    class Menu;
-}
-class NodeGraph;
-class PreferencesPanel;
-class ProjectGui;
-class PropertiesBinWrapper;
-class PyPanel;
-class ShortCutEditor;
-class SpinBox;
-class Splitter;
-class TabWidget;
-class ToolButton;
-class ViewerTab;
-class KnobHolder;
-class DockablePanel;
-class ScriptEditor;
-class RenderStatsDialog;
 
 #define kPropertiesBinName "properties"
 
@@ -120,6 +86,7 @@ struct GuiPrivate
     ActionWithShortcut *actionNew_project;
     ActionWithShortcut *actionOpen_project;
     ActionWithShortcut *actionClose_project;
+    ActionWithShortcut *actionReload_project;
     ActionWithShortcut *actionSave_project;
     ActionWithShortcut *actionSaveAs_project;
     ActionWithShortcut *actionExportAsGroup;
@@ -131,6 +98,9 @@ struct GuiPrivate
     ActionWithShortcut *actionShortcutEditor;
     ActionWithShortcut *actionNewViewer;
     ActionWithShortcut *actionFullScreen;
+#ifdef __NATRON_WIN32__
+    ActionWithShortcut *actionShowWindowsConsole;
+#endif
     ActionWithShortcut *actionClearDiskCache;
     ActionWithShortcut *actionClearPlayBackCache;
     ActionWithShortcut *actionClearNodeCache;
@@ -148,6 +118,12 @@ struct GuiPrivate
     ActionWithShortcut* actionNextTab;
     ActionWithShortcut* actionPrevTab;
     ActionWithShortcut* actionCloseTab;
+
+    QAction* actionHelpWebsite;
+    QAction* actionHelpForum;
+    QAction* actionHelpIssues;
+    QAction* actionHelpPython;
+    QAction* actionHelpWiki;
 
     ///the main "central" widget
     QWidget *_centralWidget;
@@ -218,12 +194,12 @@ struct GuiPrivate
     Natron::Menu *menuEdit;
     Natron::Menu *menuLayout;
     Natron::Menu *menuDisplay;
-    Natron::Menu *menuOptions;
     Natron::Menu *menuRender;
     Natron::Menu *viewersMenu;
     Natron::Menu *viewerInputsMenu;
     Natron::Menu *viewersViewMenu;
     Natron::Menu *cacheMenu;
+    Natron::Menu *menuHelp;
 
 
     ///all TabWidget's : used to know what to hide/show for fullscreen mode
@@ -250,6 +226,7 @@ struct GuiPrivate
     std::map<KnobHolder*, QProgressDialog*> _progressBars;
 
     ///list of the currently opened property panels
+    mutable QMutex openedPanelsMutex;
     std::list<DockablePanel*> openedPanels;
     QString _openGLVersion;
     QString _glewVersion;
@@ -271,8 +248,11 @@ struct GuiPrivate
     //To prevent recursion when we forward an uncaught event to the click focus widget
     int currentPanelFocusEventRecursion;
     bool keyPressEventHasVisitedFocusWidget;
+    bool keyUpEventHasVisitedFocusWidget;
     
     bool wasLaskUserSeekDuringPlayback;
+    
+    bool applicationConsoleVisible;
     
     GuiPrivate(GuiAppInstance* app,
                Gui* gui);

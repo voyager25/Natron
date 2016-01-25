@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef NODEGUISERIALIZATION_H
 #define NODEGUISERIALIZATION_H
 
@@ -27,25 +26,32 @@
 // ***** END PYTHON BLOCK *****
 
 #include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
 GCC_DIAG_OFF(unused-parameter)
 // /opt/local/include/boost/serialization/smart_cast.hpp:254:25: warning: unused parameter 'u' [-Wunused-parameter]
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
-GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
-GCC_DIAG_ON(unused-parameter)
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/split_member.hpp>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
+GCC_DIAG_ON(unused-parameter)
 #endif
+
+#include "Engine/AppManager.h"
+
+#include "Gui/GuiFwd.h"
+
+
 #define NODE_GUI_INTRODUCES_COLOR 2
 #define NODE_GUI_INTRODUCES_SELECTED 3
 #define NODE_GUI_MERGE_BACKDROP 4
 #define NODE_GUI_INTRODUCES_OVERLAY_COLOR 5
-#define NODE_GUI_SERIALIZATION_VERSION NODE_GUI_INTRODUCES_OVERLAY_COLOR
-#include "Engine/AppManager.h"
+#define NODE_GUI_INTRODUCES_CHILDREN 6
+#define NODE_GUI_SERIALIZATION_VERSION NODE_GUI_INTRODUCES_CHILDREN
 
-class NodeGui;
+
 class NodeGuiSerialization
 {
 public:
@@ -125,6 +131,11 @@ public:
         return true;
     }
     
+    const std::list< boost::shared_ptr<NodeGuiSerialization> >& getChildren() const
+    {
+        return _children;
+    }
+    
 private:
 
     std::string _nodeName;
@@ -137,6 +148,9 @@ private:
 
     double _overlayR,_overlayG,_overlayB;
     bool _hasOverlayColor;
+    
+    ///If this node is a group, this is the children
+    std::list< boost::shared_ptr<NodeGuiSerialization> > _children;
     
     friend class boost::serialization::access;
     template<class Archive>
@@ -164,6 +178,16 @@ private:
             ar & boost::serialization::make_nvp("oG",_overlayG);
             ar & boost::serialization::make_nvp("oB",_overlayB);
         }
+        
+        int nodesCount = (int)_children.size();
+        ar & boost::serialization::make_nvp("Children",nodesCount);
+        
+        for (std::list< boost::shared_ptr<NodeGuiSerialization> >::const_iterator it = _children.begin();
+             it != _children.end();
+             ++it) {
+            ar & boost::serialization::make_nvp("item",**it);
+        }
+
     }
     
     template<class Archive>
@@ -201,6 +225,17 @@ private:
             }
         } else {
             _hasOverlayColor = false;
+        }
+        
+        if (version >= NODE_GUI_INTRODUCES_CHILDREN) {
+            int nodesCount ;
+            ar & boost::serialization::make_nvp("Children",nodesCount);
+            
+            for (int i = 0; i < nodesCount; ++i) {
+                boost::shared_ptr<NodeGuiSerialization> s(new NodeGuiSerialization);
+                ar & boost::serialization::make_nvp("item",*s);
+                _children.push_back(s);
+            }
         }
     }
 

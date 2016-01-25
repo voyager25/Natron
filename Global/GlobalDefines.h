@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@
 #endif
 
 #include "Global/Macros.h"
+
 
 // ofxhPropertySuite.h:565:37: warning: 'this' pointer cannot be null in well-defined C++ code; comparison may be assumed to always evaluate to true [-Wtautological-undefined-compare]
 CLANG_DIAG_OFF(unknown-pragmas)
@@ -79,7 +80,11 @@ typedef int SequenceTime;
 
 Q_DECLARE_METATYPE(SequenceTime)
 
-typedef OfxPointD RenderScale;
+struct RenderScale : public OfxPointD {
+    RenderScale() { x = y = 1.; }
+    RenderScale(double scale) { x = y = scale; }
+    RenderScale(double scaleX, double scaleY) { x = scaleX; y = scaleY; }
+};
 
 namespace Natron {
 typedef OfxPointD Point;
@@ -187,7 +192,7 @@ s2ws(const std::string & s)
     return dest;
 #endif
 
-}
+} // s2ws
 
 #ifdef __NATRON_WIN32__
 
@@ -211,10 +216,13 @@ std::string GetLastErrorAsString()
     LocalFree(messageBuffer);
 
     return message;
-}
+} // GetLastErrorAsString
 
 
 #endif
+
+
+
 
 } // Natron
 

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,15 +25,18 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #endif
-#include "Gui/LineEdit.h"
 
-class QColor;
-class QMenu;
+#include "Gui/LineEdit.h"
+#include "Gui/GuiFwd.h"
+
 
 struct SpinBoxPrivate;
+
 class SpinBox
     : public LineEdit
 {
@@ -94,18 +97,30 @@ public:
 
     void setUseLineColor(bool use, const QColor& color);
     
-private:
+    /**
+     * @brief Set an optional validator that will validate numbers instead of the regular double/int validator.
+     * The spinbox takes ownership of the validator and will destroy it.
+     **/
+    void setValidator(SpinBoxValidator* validator);
+    
+    double getLastValidValueBeforeValidation() const;
+    
+protected:
 
     void increment(int delta, int shift);
 
     virtual void wheelEvent(QWheelEvent* e) OVERRIDE FINAL;
     virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
 
-    virtual void focusInEvent(QFocusEvent* e) OVERRIDE FINAL;
-    virtual void focusOutEvent(QFocusEvent* e) OVERRIDE FINAL;
+    virtual void focusInEvent(QFocusEvent* e) OVERRIDE;
+    virtual void focusOutEvent(QFocusEvent* e) OVERRIDE;
     virtual void paintEvent(QPaintEvent* e) OVERRIDE FINAL;
 
     bool validateText();
+    
+    bool validateInternal();
+    
+    bool validateWithCustomValidator(const QString& txt);
 
 Q_SIGNALS:
 
@@ -132,6 +147,33 @@ private:
     bool dirty;
     bool altered;
     boost::scoped_ptr<SpinBoxPrivate> _imp;
+};
+
+class KnobSpinBox : public SpinBox
+{
+    const KnobGui* knob;
+    int dimension;
+public:
+    
+    KnobSpinBox(QWidget* parent,
+                SpinBoxTypeEnum type,
+                const KnobGui* knob,
+                int dimension)
+    : SpinBox(parent,type)
+    , knob(knob)
+    , dimension(dimension)
+    {
+        
+    }
+    
+    virtual ~KnobSpinBox()
+    {
+        
+    }
+    
+private:
+    
+    virtual void focusInEvent(QFocusEvent* e) OVERRIDE FINAL;
 };
 
 #endif /* defined(NATRON_GUI_FEEDBACKSPINBOX_H_) */

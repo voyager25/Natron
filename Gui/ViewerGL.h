@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,39 +25,28 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <vector>
 #include <utility>
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #endif
-#include "Global/Macros.h"
+
+#include "Global/GLIncludes.h" //!<must be included before QGlWidget because of gl.h and glew.h
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
-#include "Global/GLIncludes.h" //!<must be included before QGlWidget because of gl.h and glew.h
 #include <QtOpenGL/QGLWidget>
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/OpenGLViewerI.h"
-#include "Global/Macros.h"
+#include "Engine/EngineFwd.h"
 
-class QKeyEvent;
-class QEvent;
-class QMenu;
-class QGLShaderProgram;
+#include "Gui/GuiFwd.h"
 
-namespace Natron {
-class ChannelSet;
-class Image;
-}
-class InfoViewerWidget;
-class AppInstance;
-class ViewerInstance;
-class ViewerTab;
-class ImageInfo;
-class QInputEvent;
-struct TextureRect;
-class Format;
+
 
 /**
  *@class ViewerGL
@@ -223,10 +212,7 @@ public Q_SLOTS:
     /**
      *@brief Convenience function. See ViewerGL::zoomSlot(int)
      **/
-    void zoomSlot(double v)
-    {
-        zoomSlot( (int)v );
-    }
+    void zoomSlot(double v);
 
 
     void setRegionOfDefinition(const RectD & rod, double par, int textureIndex);

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -251,8 +251,13 @@ Gui::onDoDialog(int type,
                 Natron::StandardButtons buttons,
                 int defaultB)
 {
+    QWidget* currentActiveWindow = qApp->activeWindow();
+    QDialog* isActiveWindowADialog = 0;
+    if (currentActiveWindow) {
+        isActiveWindowADialog = qobject_cast<QDialog*>(currentActiveWindow);
+    }
+    
     QString msg = useHtml ? content : Natron::convertFromPlainText(content.trimmed(), Qt::WhiteSpaceNormal);
-
 
     if (type == 0) { // error dialog
         QMessageBox critical(QMessageBox::Critical, title, msg, QMessageBox::NoButton, this, Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
@@ -297,9 +302,14 @@ Gui::onDoDialog(int type,
         }
     }
 
-    QMutexLocker locker(&_imp->_uiUsingMainThreadMutex);
-    _imp->_uiUsingMainThread = false;
-    _imp->_uiUsingMainThreadCond.wakeOne();
+    {
+        QMutexLocker locker(&_imp->_uiUsingMainThreadMutex);
+        _imp->_uiUsingMainThread = false;
+        _imp->_uiUsingMainThreadCond.wakeOne();
+    }
+    if (currentActiveWindow && !isActiveWindowADialog) {
+        currentActiveWindow->activateWindow();
+    }
 }
 
 Natron::StandardButtonEnum

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,59 +36,19 @@
 #include <boost/shared_ptr.hpp>
 #endif
 
-#include "Global/GlobalDefines.h"
-#include "Engine/RotoDrawableItem.h"
-
 CLANG_DIAG_OFF(deprecated-declarations)
 #include <QObject>
 CLANG_DIAG_ON(deprecated-declarations)
 
-#define kRotoLayerBaseName "Layer"
-#define kRotoBezierBaseName "Bezier"
-#define kRotoOpenBezierBaseName "Pencil"
-#define kRotoEllipseBaseName "Ellipse"
-#define kRotoRectangleBaseName "Rectangle"
-#define kRotoPaintBrushBaseName "Brush"
-#define kRotoPaintEraserBaseName "Eraser"
-#define kRotoPaintBlurBaseName "Blur"
-#define kRotoPaintSmearBaseName "Smear"
-#define kRotoPaintSharpenBaseName "Sharpen"
-#define kRotoPaintCloneBaseName "Clone"
-#define kRotoPaintRevealBaseName "Reveal"
-#define kRotoPaintDodgeBaseName "Dodge"
-#define kRotoPaintBurnBaseName "Burn"
+#include "Global/GlobalDefines.h"
+#include "Engine/RotoDrawableItem.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Image;
-class ImageComponents;
-class Node;
-}
-namespace boost { namespace serialization { class access; } }
 
-class RectI;
-class RectD;
-class KnobI;
-class KnobBool;
-class KnobDouble;
-class KnobInt;
-class KnobChoice;
-class KnobColor;
-typedef struct _cairo_pattern cairo_pattern_t;
-
-class Curve;
-class Bezier;
-class RotoItemSerialization;
-class BezierCP;
 
 /**
  * @class A base class for all items made by the roto context
  **/
-class RotoContext;
-class RotoLayer;
-
-namespace Transform {
-struct Matrix3x3;
-}
 
 
 /**
@@ -212,7 +172,6 @@ public:
     void setCurveFinished(bool finished);
     bool isCurveFinished() const;
     
-    void resetCenterKnob();
 
     /**
      * @brief Removes the control point at the given index if any. The feather point will also be removed , at the same position.
@@ -343,6 +302,11 @@ public:
      * If ripple edit is enabled, the point will be moved at the same location at all keyframes.
      **/
     void cuspPointAtIndex(int index,double time,const std::pair<double,double>& pixelScale);
+    
+    void getMotionBlurSettings(const double time,
+                               double* startTime,
+                               double* endTime,
+                               double* timeStep) const;
 
 private:
     
@@ -369,7 +333,7 @@ public:
     /**
      * @brief Moves a keyframe
      **/
-    void moveKeyframe(int oldTime,int newTime);
+    void moveKeyframe(double oldTime,double newTime);
 
 
     /**
@@ -585,9 +549,9 @@ public:
      **/
     virtual void load(const RotoItemSerialization & obj) OVERRIDE;
 
-    void getKeyframeTimes(std::set<int> *times) const;
+    void getKeyframeTimes(std::set<double> *times) const;
     
-    void getKeyframeTimesAndInterpolation(std::list<std::pair<int,Natron::KeyframeTypeEnum> > *keys) const;
+    void getKeyframeTimesAndInterpolation(std::list<std::pair<double,Natron::KeyframeTypeEnum> > *keys) const;
 
     /**
      * @brief Get the nearest previous keyframe from the given time.

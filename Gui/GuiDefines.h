@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,11 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
+#include "Gui/GuiFwd.h"
+
+
 #define NATRON_BUTTON_BORDER 4
 #define NATRON_SMALL_BUTTON_SIZE 15
 #define NATRON_SMALL_BUTTON_ICON_SIZE (NATRON_SMALL_BUTTON_SIZE - NATRON_BUTTON_BORDER)
@@ -37,7 +42,11 @@
 #define NATRON_TOOL_BUTTON_SIZE (NATRON_TOOL_BUTTON_ICON_SIZE + NATRON_TOOL_BUTTON_BORDER)
 
 #define NATRON_PREVIEW_WIDTH 64
-#define NATRON_PREVIEW_HEIGHT 48
+#define NATRON_PREVIEW_HEIGHT 38
+
+#define NODE_WIDTH 80
+#define NODE_HEIGHT 30
+
 #define NATRON_WHEEL_ZOOM_PER_DELTA 1.00152 // 120 wheel deltas (one click on a standard wheel mouse) is x1.2
 //#define NATRON_FONT "Helvetica"
 //#define NATRON_FONT_ALT "Times"

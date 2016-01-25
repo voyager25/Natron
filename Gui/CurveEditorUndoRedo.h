@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,30 +25,27 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <list>
 #include <vector>
-#include "Global/Macros.h"
-CLANG_DIAG_OFF(deprecated)
-CLANG_DIAG_OFF(uninitialized)
-#include <QUndoCommand> // in QtGui on Qt4, in QtWidgets on Qt5
-CLANG_DIAG_ON(deprecated)
-CLANG_DIAG_ON(uninitialized)
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 #endif
+
+CLANG_DIAG_OFF(deprecated)
+CLANG_DIAG_OFF(uninitialized)
+#include <QUndoCommand> // in QtGui on Qt4, in QtWidgets on Qt5
+CLANG_DIAG_ON(deprecated)
+CLANG_DIAG_ON(uninitialized)
+
 #include "Engine/Curve.h"
 
-namespace Transform
-{
-    struct Matrix3x3;
-}
-class CurveGui;
-class KnobGui;
-class Curve;
-class CurveWidget;
-class NodeCurveEditorElement;
+#include "Gui/GuiFwd.h"
+
 
 struct SelectedKey
 {
@@ -341,9 +338,25 @@ private:
 private:
     bool _firstRedoCalled;
     bool _updateOnFirstRedo;
-    SelectedKeys _keys;
+    SelectedKeys _keys,_altKeys;
     CurveWidget* _widget;
-    std::list<std::pair<boost::shared_ptr<Curve>,boost::shared_ptr<Curve> > > _curves;
+    
+    struct CurveCopy
+    {
+        CurveGui* guiCurve;
+        boost::shared_ptr<Curve> original;
+        boost::shared_ptr<Curve> oldCpy,newCpy;
+    };
+    
+    struct BezierCopy
+    {
+        CurveGui* guiCurve;
+        boost::shared_ptr<Bezier> original;
+        boost::shared_ptr<Bezier> oldCpy,newCpy;
+    };
+    
+    std::list<CurveCopy> _curves;
+    std::list<BezierCopy> _beziers;
     boost::shared_ptr<Transform::Matrix3x3> _matrix;
 };
 

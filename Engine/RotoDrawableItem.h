@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,64 +37,22 @@
 #include <boost/enable_shared_from_this.hpp>
 #endif
 
-#include "Global/GlobalDefines.h"
-#include "Engine/FitCurve.h"
-#include "Engine/CacheEntryHolder.h"
-#include "Engine/RotoItem.h"
-
 CLANG_DIAG_OFF(deprecated-declarations)
 #include <QObject>
 #include <QMutex>
 #include <QMetaType>
 CLANG_DIAG_ON(deprecated-declarations)
 
-#define kRotoLayerBaseName "Layer"
-#define kRotoBezierBaseName "Bezier"
-#define kRotoOpenBezierBaseName "Pencil"
-#define kRotoBSplineBaseName "BSpline"
-#define kRotoEllipseBaseName "Ellipse"
-#define kRotoRectangleBaseName "Rectangle"
-#define kRotoPaintBrushBaseName "Brush"
-#define kRotoPaintEraserBaseName "Eraser"
-#define kRotoPaintBlurBaseName "Blur"
-#define kRotoPaintSmearBaseName "Smear"
-#define kRotoPaintSharpenBaseName "Sharpen"
-#define kRotoPaintCloneBaseName "Clone"
-#define kRotoPaintRevealBaseName "Reveal"
-#define kRotoPaintDodgeBaseName "Dodge"
-#define kRotoPaintBurnBaseName "Burn"
+#include "Global/GlobalDefines.h"
+#include "Engine/FitCurve.h"
+#include "Engine/CacheEntryHolder.h"
+#include "Engine/RotoItem.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Image;
-class ImageComponents;
-class Node;
-}
-namespace boost { namespace serialization { class access; } }
-
-class RectI;
-class RectD;
-class KnobI;
-class KnobBool;
-class KnobDouble;
-class KnobInt;
-class KnobChoice;
-class KnobColor;
-typedef struct _cairo_pattern cairo_pattern_t;
-
-class Curve;
-class Bezier;
-class RotoItemSerialization;
-class BezierCP;
 
 /**
  * @class A base class for all items made by the roto context
  **/
-class RotoContext;
-class RotoLayer;
-
-namespace Transform {
-struct Matrix3x3;
-}
 
 /**
  * @brief Base class for all drawable items
@@ -209,10 +167,16 @@ public:
     boost::shared_ptr<KnobChoice> getTimeOffsetModeKnob() const;
     boost::shared_ptr<KnobChoice> getBrushSourceTypeKnob() const;
     boost::shared_ptr<KnobDouble> getBrushCloneTranslateKnob() const;
+    boost::shared_ptr<KnobDouble> getMotionBlurAmountKnob() const;
+    boost::shared_ptr<KnobDouble> getShutterOffsetKnob() const;
+    boost::shared_ptr<KnobDouble> getShutterKnob() const;
+    boost::shared_ptr<KnobChoice> getShutterTypeKnob() const;
     
     void setKeyframeOnAllTransformParameters(double time);
 
     const std::list<boost::shared_ptr<KnobI> >& getKnobs() const;
+    
+    boost::shared_ptr<KnobI> getKnobByName(const std::string& name) const;
     
     virtual RectD getBoundingBox(double time) const = 0;
 
@@ -261,8 +225,7 @@ protected:
 
 private:
     
-    void resetCloneTransformCenter();
-    
+        
     RotoDrawableItem* findPreviousInHierarchy();
 
 

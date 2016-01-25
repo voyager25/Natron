@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,6 +61,9 @@ using namespace Natron;
 QImage
 NodeGraph::getFullSceneScreenShot()
 {
+    
+    _imp->isDoingPreviewRender = true;
+    
     ///The bbox of all nodes in the nodegraph
     QRectF sceneR = _imp->calcNodesBoundingRect();
 
@@ -101,7 +104,7 @@ NodeGraph::getFullSceneScreenShot()
 
     ///Paint the visible portion with a highlight
     QPainter painter(&renderImage);
-
+    
     ///Remove the overlays from the scene before rendering it
     scene()->removeItem(_imp->_cacheSizeText);
     scene()->removeItem(_imp->_navigator);
@@ -150,6 +153,8 @@ NodeGraph::getFullSceneScreenShot()
         }
     }
 
+    _imp->isDoingPreviewRender = false;
+    
     return img;
 } // getFullSceneScreenShot
 
@@ -244,18 +249,21 @@ NodeGraph::updateCacheSizeText()
         }
         return;
     } else {
-        if (!_imp->_cacheSizeText->isVisible()) {
+        if (!_imp->cacheSizeHidden && !_imp->_cacheSizeText->isVisible()) {
             _imp->_cacheSizeText->show();
+        } else if (_imp->cacheSizeHidden && _imp->_cacheSizeText->isVisible()) {
+            _imp->_cacheSizeText->hide();
+            return;
         }
 
     }
     
-    QString oldText = _imp->_cacheSizeText->toPlainText();
+    QString oldText = _imp->_cacheSizeText->text();
     quint64 cacheSize = appPTR->getCachesTotalMemorySize();
     QString cacheSizeStr = QDirModelPrivate_size(cacheSize);
     QString newText = tr("Memory cache size: ") + cacheSizeStr;
     if (newText != oldText) {
-        _imp->_cacheSizeText->setPlainText(newText);
+        _imp->_cacheSizeText->setText(newText);
     }
 }
 
@@ -263,7 +271,8 @@ NodeGraph::updateCacheSizeText()
 void
 NodeGraph::toggleCacheInfo()
 {
-    if ( _imp->_cacheSizeText->isVisible() ) {
+    _imp->cacheSizeHidden = !_imp->cacheSizeHidden;
+    if (_imp->cacheSizeHidden) {
         _imp->_cacheSizeText->hide();
     } else {
         _imp->_cacheSizeText->show();
@@ -378,12 +387,15 @@ NodeGraph::showMenu(const QPoint & pos)
     QObject::connect( displayCacheInfoAction,SIGNAL( triggered() ),this,SLOT( toggleCacheInfo() ) );
     _imp->_menu->addAction(displayCacheInfoAction);
     
-    QAction* turnOffPreviewAction = new ActionWithShortcut(kShortcutGroupNodegraph,kShortcutIDActionGraphTogglePreview,
-                                                           kShortcutDescActionGraphTogglePreview,_imp->_menu);
-    turnOffPreviewAction->setCheckable(true);
-    turnOffPreviewAction->setChecked(false);
-    QObject::connect( turnOffPreviewAction,SIGNAL( triggered() ),this,SLOT( togglePreviewsForSelectedNodes() ) );
-    _imp->_menu->addAction(turnOffPreviewAction);
+    const NodeGuiList& selectedNodes = getSelectedNodes();
+    if (!selectedNodes.empty()) {
+        QAction* turnOffPreviewAction = new ActionWithShortcut(kShortcutGroupNodegraph,kShortcutIDActionGraphTogglePreview,
+                                                               kShortcutDescActionGraphTogglePreview,_imp->_menu);
+        turnOffPreviewAction->setCheckable(true);
+        turnOffPreviewAction->setChecked(false);
+        QObject::connect( turnOffPreviewAction,SIGNAL( triggered() ),this,SLOT( togglePreviewsForSelectedNodes() ) );
+        _imp->_menu->addAction(turnOffPreviewAction);
+    }
     
     QAction* connectionHints = new ActionWithShortcut(kShortcutGroupNodegraph,kShortcutIDActionGraphEnableHints,
                                                       kShortcutDescActionGraphEnableHints,_imp->_menu);
@@ -398,6 +410,18 @@ NodeGraph::showMenu(const QPoint & pos)
     autoHideInputs->setChecked( appPTR->getCurrentSettings()->areOptionalInputsAutoHidden() );
     QObject::connect( autoHideInputs,SIGNAL( triggered() ),this,SLOT( toggleAutoHideInputs() ) );
     _imp->_menu->addAction(autoHideInputs);
+    
+    QAction* hideInputs = new ActionWithShortcut(kShortcutGroupNodegraph,kShortcutIDActionGraphHideInputs,
+                                                     kShortcutDescActionGraphHideInputs,_imp->_menu);
+    hideInputs->setCheckable(true);
+    bool hideInputsVal = false;
+    if (!selectedNodes.empty()) {
+        hideInputsVal = selectedNodes.front()->getNode()->getHideInputsKnobValue();
+    }
+    hideInputs->setChecked(hideInputsVal);
+    QObject::connect( hideInputs,SIGNAL( triggered() ),this,SLOT( toggleHideInputs() ) );
+    _imp->_menu->addAction(hideInputs);
+
     
     QAction* knobLinks = new ActionWithShortcut(kShortcutGroupNodegraph,kShortcutIDActionGraphShowExpressions,
                                                 kShortcutDescActionGraphShowExpressions,_imp->_menu);

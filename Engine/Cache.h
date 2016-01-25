@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,12 +38,11 @@
 #include "Global/MemoryInfo.h"
 GCC_DIAG_OFF(deprecated)
 #include <QtCore/QMutex>
+#include <QtCore/QThread>
 #include <QtCore/QWaitCondition>
 #include <QtCore/QMutexLocker>
 #include <QtCore/QObject>
-#include <QtCore/QTextStream>
 #include <QtCore/QBuffer>
-#include <QtCore/QThreadPool>
 #include <QtCore/QRunnable>
 GCC_DIAG_ON(deprecated)
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
@@ -57,6 +56,7 @@ GCC_DIAG_ON(deprecated)
 #include "Engine/StandardPaths.h"
 #include "Engine/ImageLocker.h"
 #include "Global/MemoryInfo.h"
+#include "Engine/EngineFwd.h"
 
 //Beyond that percentage of occupation, the cache will start evicting LRU entries
 #define NATRON_CACHE_LIMIT_PERCENT 0.9
@@ -76,10 +76,10 @@ class DeleterThread
     mutable QMutex _entriesQueueMutex;
     std::list<boost::shared_ptr<T> >_entriesQueue;
     QWaitCondition _entriesQueueNotEmptyCond;
-    bool mustQuit;
+    CacheAPI* cache;
     QMutex mustQuitMutex;
     QWaitCondition mustQuitCond;
-    CacheAPI* cache;
+    bool mustQuit;
 
 public:
 
@@ -88,10 +88,10 @@ public:
         , _entriesQueueMutex()
         , _entriesQueue()
         , _entriesQueueNotEmptyCond()
-        , mustQuit(false)
+        , cache(cache)
         , mustQuitMutex()
         , mustQuitCond()
-        , cache(cache)
+        , mustQuit(false)
     {
         setObjectName("CacheDeleter");
     }
@@ -201,10 +201,10 @@ class CacheCleanerThread
 
     std::list<CleanRequest> _requestsQueues;
     QWaitCondition _requestsQueueNotEmptyCond;
-    bool mustQuit;
+    CacheAPI* cache;
     QMutex mustQuitMutex;
     QWaitCondition mustQuitCond;
-    CacheAPI* cache;
+    bool mustQuit;
 
 public:
 
@@ -213,10 +213,10 @@ public:
         , _requestQueueMutex()
         , _requestsQueues()
         , _requestsQueueNotEmptyCond()
-        , mustQuit(false)
+        , cache(cache)
         , mustQuitMutex()
         , mustQuitCond()
-        , cache(cache)
+        , mustQuit(false)
     {
         setObjectName("CacheCleaner");
     }
@@ -993,7 +993,7 @@ public:
     /**
      * @brief To be called by a CacheEntry on allocation.
      **/
-    virtual void notifyEntryAllocated(int time,
+    virtual void notifyEntryAllocated(double time,
                                       std::size_t size,
                                       Natron::StorageModeEnum storage) const OVERRIDE FINAL
     {
@@ -1015,7 +1015,7 @@ public:
     /**
      * @brief To be called by a CacheEntry on destruction.
      **/
-    virtual void notifyEntryDestroyed(int time,
+    virtual void notifyEntryDestroyed(double time,
                                       std::size_t size,
                                       Natron::StorageModeEnum storage) const OVERRIDE FINAL
     {
@@ -1050,7 +1050,7 @@ public:
      **/
     virtual void notifyEntryStorageChanged(Natron::StorageModeEnum oldStorage,
                                            Natron::StorageModeEnum newStorage,
-                                           int time,
+                                           double time,
                                            std::size_t size) const OVERRIDE FINAL
     {
         if (_tearingDown) {
@@ -1148,22 +1148,26 @@ public:
 
     std::size_t getMaximumSize() const
     {
-        QMutexLocker k(&_sizeLock); return _maximumCacheSize;
+        QMutexLocker k(&_sizeLock);
+        return _maximumCacheSize;
     }
 
     std::size_t getMaximumMemorySize() const
     {
-        QMutexLocker k(&_sizeLock); return _maximumInMemorySize;
+        QMutexLocker k(&_sizeLock);
+        return _maximumInMemorySize;
     }
 
     std::size_t getMemoryCacheSize() const
     {
-        QMutexLocker k(&_sizeLock); return _memoryCacheSize;
+        QMutexLocker k(&_sizeLock);
+        return _memoryCacheSize;
     }
 
     std::size_t getDiskCacheSize() const
     {
-        QMutexLocker k(&_sizeLock); return _diskCacheSize;
+        QMutexLocker k(&_sizeLock);
+        return _diskCacheSize;
     }
 
     CacheSignalEmitter* activateSignalEmitter() const
@@ -1274,9 +1278,13 @@ public:
         _cleanerThread.appendToQueue(holder->getCacheID(), nodeHash, false);
     }
 
-    void removeAllEntriesForHolderPublic(const CacheEntryHolder* holder)
+    void removeAllEntriesForHolderPublic(const CacheEntryHolder* holder, bool blocking)
     {
-        _cleanerThread.appendToQueue(holder->getCacheID(), 0, true);
+        if (blocking) {
+            removeAllEntriesWithDifferentNodeHashForHolderPrivate(holder->getCacheID(), 0, true);
+        } else {
+            _cleanerThread.appendToQueue(holder->getCacheID(), 0, true);
+        }
     }
     
     void getMemoryStatsForCacheEntryHolder(const CacheEntryHolder* holder,

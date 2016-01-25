@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,14 +31,13 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
+#include "Engine/EngineFwd.h"
 
-
-class BezierCP;
 
 namespace Natron {
 
     void regularize(const std::list<boost::shared_ptr<BezierCP> >& coonsPatch,
-                    int time,
+                    double time,
                     std::list<std::list<boost::shared_ptr<BezierCP> > >* fixedPatch);
     
 }

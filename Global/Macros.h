@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,13 +34,16 @@
 #endif
 
 #define NATRON_APPLICATION_DESCRIPTION "Open-source, cross-platform, nodal compositing software."
-#define NATRON_COPYRIGHT "Copyright (C) 2015 the Natron developers."
+#define NATRON_COPYRIGHT "Copyright (C) 2016 the Natron developers."
 #define NATRON_ORGANIZATION_NAME "INRIA"
 #define NATRON_ORGANIZATION_DOMAIN_TOPLEVEL "fr"
 #define NATRON_ORGANIZATION_DOMAIN_SUB "inria"
 #define NATRON_ORGANIZATION_DOMAIN NATRON_ORGANIZATION_DOMAIN_SUB "." NATRON_ORGANIZATION_DOMAIN_TOPLEVEL
 #define NATRON_APPLICATION_NAME "Natron"
 #define NATRON_WEBSITE_URL "http://www.natron.fr"
+#define NATRON_FORUM_URL "https://forum.natron.fr"
+#define NATRON_PYTHON_URL "https://natron.readthedocs.org/en/workshop/"
+#define NATRON_WIKI_URL "https://github.com/MrKepzie/Natron/wiki"
 #define NATRON_ISSUE_TRACKER_URL "https://github.com/MrKepzie/Natron/issues"
 // The MIME types for Natron documents are:
 // *.ntp: application/vnd.natron.project
@@ -86,6 +89,7 @@
 #define NATRON_VERSION_MINOR 0
 #define NATRON_VERSION_REVISION 0
 
+
 #define NATRON_LAST_VERSION_URL "https://raw.githubusercontent.com/MrKepzie/Natron/workshop/LATEST_VERSION.txt"
 #define NATRON_LAST_VERSION_FILE_VERSION 1
 
@@ -119,6 +123,14 @@
 ///For example RC 1, RC 2 etc... This is to be defined from withing the qmake call, passing BUILD_NUMBER=X to the command line
 //#define NATRON_BUILD_NUMBER 0
 
+#define NATRON_BREAKPAD_PROCESS_EXEC "breakpad_process_exec"
+#define NATRON_BREAKPAD_PROCESS_PID "breakpad_process_pid"
+#define NATRON_BREAKPAD_CLIENT_FD_ARG "breakpad_client_fd"
+#define NATRON_BREAKPAD_PIPE_ARG "breakpad_pipe_path"
+#define NATRON_BREAKPAD_COM_PIPE_ARG "breakpad_com_pipe_path"
+
+#define NATRON_NATRON_TO_BREAKPAD_EXISTENCE_CHECK "-e"
+#define NATRON_NATRON_TO_BREAKPAD_EXISTENCE_CHECK_ACK "-eack"
 
 ///If set the version of Natron will no longer be displayed in the splashscreen but the name of the user
 ///Set this from qmake
@@ -126,7 +138,11 @@
 #define STRINGIZE_CPP_NAME_(token) #token
 #define STRINGIZE_CPP_NAME(token) STRINGIZE_CPP_NAME_(token)
 
+#ifdef NATRON_CUSTOM_BUILD_USER_TOKEN
 #define NATRON_CUSTOM_BUILD_USER_NAME STRINGIZE_CPP_NAME(NATRON_CUSTOM_BUILD_USER_TOKEN)
+#else
+#define NATRON_CUSTOM_BUILD_USER_NAME ""
+#endif
 
 #define NATRON_VERSION_ENCODE(major,minor,revision) ( \
 ( (major) * 10000 ) \
@@ -184,6 +200,9 @@ NATRON_VERSION_REVISION)
 //When enabled the value of 2 is a code for a pixel being rendered but not yet available.
 //In this context, the reader of the bitmap should then wait for the pixel to be available.
 #define NATRON_ENABLE_TRIMAP 1
+
+//Uncomment to get access to ReadQt and WriteQt nodes. Note that they are no longer maintained and probably buggy.
+//#define NATRON_ENABLE_QT_IO_NODES
 
 // compiler_warning.h
 #define STRINGISE_IMPL(x) # x

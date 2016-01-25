@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Engine/Knob.h"
+#include "Engine/KnobTypes.h"
 #include "Gui/KnobGui.h"
 #include "Gui/KnobGuiPrivate.h"
 
@@ -34,16 +36,39 @@ using namespace Natron;
 
 
 void
-KnobGui::onCreateMasterOnGroupActionTriggered()
+KnobGui::onCreateAliasOnGroupActionTriggered()
 {
     KnobHolder* holder = getKnob()->getHolder();
     EffectInstance* isEffect = dynamic_cast<EffectInstance*>(holder);
     assert(isEffect);
+    if (!isEffect) {
+        throw std::logic_error("");
+    }
     boost::shared_ptr<NodeCollection> collec = isEffect->getNode()->getGroup();
     NodeGroup* isCollecGroup = dynamic_cast<NodeGroup*>(collec.get());
     assert(isCollecGroup);
     if (isCollecGroup) {
-        createDuplicateOnNode(isCollecGroup, true);
+        createDuplicateOnNode(isCollecGroup, true, boost::shared_ptr<KnobPage>(), boost::shared_ptr<KnobGroup>(), -1);
+    }
+}
+
+void
+KnobGui::onRemoveAliasLinkActionTriggered()
+{
+    boost::shared_ptr<KnobI> thisKnob = getKnob();
+    std::list<boost::shared_ptr<KnobI> > listeners;
+    thisKnob->getListeners(listeners);
+    boost::shared_ptr<KnobI> aliasMaster;
+    boost::shared_ptr<KnobI> listener;
+    if (!listeners.empty()) {
+        listener = listeners.front();
+        aliasMaster = listener->getAliasMaster();
+        if (aliasMaster != thisKnob) {
+            aliasMaster.reset();
+        }
+    }
+    if (aliasMaster && listener) {
+        listener->setKnobAsAliasOfThis(aliasMaster, false);
     }
 }
 
@@ -58,15 +83,20 @@ KnobGui::onUnlinkActionTriggered()
     boost::shared_ptr<KnobI> thisKnob = getKnob();
     int dims = thisKnob->getDimension();
     
-    thisKnob->beginChanges();
-    for (int i = 0; i < dims; ++i) {
-        if (dim == -1 || i == dim) {
-            std::pair<int,boost::shared_ptr<KnobI> > other = thisKnob->getMaster(i);
-            thisKnob->onKnobUnSlaved(i);
-            onKnobSlavedChanged(i, false);
+    boost::shared_ptr<KnobI> aliasMaster = thisKnob->getAliasMaster();
+    if (aliasMaster) {
+        thisKnob->setKnobAsAliasOfThis(aliasMaster, false);
+    } else {
+        thisKnob->beginChanges();
+        for (int i = 0; i < dims; ++i) {
+            if (dim == -1 || i == dim) {
+                std::pair<int,boost::shared_ptr<KnobI> > other = thisKnob->getMaster(i);
+                thisKnob->onKnobUnSlaved(i);
+                onKnobSlavedChanged(i, false);
+            }
         }
+        thisKnob->endChanges();
     }
-    thisKnob->endChanges();
     getKnob()->getHolder()->getApp()->triggerAutoSave();
 }
 
@@ -225,11 +255,7 @@ KnobGui::onRemoveAnimationActionTriggered()
     pushUndoCommand( new RemoveKeysCommand(getGui()->getCurveEditor()->getCurveWidget(),
                                            toRemove) );
     //refresh the gui so it doesn't indicate the parameter is animated anymore
-    for (int i = 0; i < knob->getDimension(); ++i) {
-        if (dim == -1 || dim == i) {
-            updateGUI(i);
-        }
-    }
+    updateGUI(dim);
 }
 
 void
@@ -343,7 +369,7 @@ KnobGui::setKeyframe(double time,
     Q_EMIT keyFrameSet();
     
     if ( !knob->getIsSecret() && keyAdded && knob->isDeclaredByPlugin()) {
-        knob->getHolder()->getApp()->getTimeLine()->addKeyframeIndicator(time);
+        knob->getHolder()->getApp()->addKeyframeIndicator(time);
     }
 }
 
@@ -358,7 +384,7 @@ KnobGui::setKeyframe(double time,const KeyFrame& key,int dimension)
     
     Q_EMIT keyFrameSet();
     if ( !knob->getIsSecret() && keyAdded && knob->isDeclaredByPlugin() ) {
-        knob->getHolder()->getApp()->getTimeLine()->addKeyframeIndicator(time);
+        knob->getHolder()->getApp()->addKeyframeIndicator(time);
     }
 }
 
@@ -423,7 +449,7 @@ KnobGui::removeKeyFrame(double time,
 
     assert( knob->getHolder()->getApp() );
     if ( !knob->getIsSecret() ) {
-        knob->getHolder()->getApp()->getTimeLine()->removeKeyFrameIndicator(time);
+        knob->getHolder()->getApp()->removeKeyFrameIndicator(time);
     }
     updateGUI(dimension);
 }
@@ -444,7 +470,7 @@ KnobGui::setKeyframes(const std::vector<KeyFrame>& keys, int dimension)
     }
     Q_EMIT keyFrameSet();
     if ( !knob->getIsSecret() && knob->isDeclaredByPlugin() ) {
-        knob->getHolder()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(times, true);
+        knob->getHolder()->getApp()->addMultipleKeyframeIndicatorsAdded(times, true);
     }
 }
 
@@ -456,14 +482,14 @@ KnobGui::removeKeyframes(const std::vector<KeyFrame>& keys, int dimension)
         knob->onKeyFrameRemoved(keys[i].getTime(), dimension);
     }
     
-    assert( knob->getHolder()->getApp() );
+    /*assert( knob->getHolder()->getApp() );
     if ( !knob->getIsSecret() ) {
         std::list<SequenceTime> times;
         for (std::size_t i = 0; i < keys.size(); ++i) {
             times.push_back(keys[i].getTime());
         }
         knob->getHolder()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(times, true);
-    }
+    }*/
 
     Q_EMIT keyFrameRemoved();
     updateGUI(dimension);
@@ -610,6 +636,9 @@ KnobGui::hide()
 
     if (shouldRemoveWidget) {
         _imp->field->hide();
+        if (_imp->container) {
+            _imp->container->refreshTabWidgetMaxHeight();
+        }
     } else {
         if (!_imp->field->isVisible()) {
             _imp->field->show();
@@ -618,6 +647,7 @@ KnobGui::hide()
     if (_imp->descriptionLabel) {
         _imp->descriptionLabel->hide();
     }
+    
 }
 
 void
@@ -641,11 +671,15 @@ KnobGui::show(int /*index*/)
 
     if (_imp->isOnNewLine) {
         _imp->field->show();
+        if (_imp->container) {
+            _imp->container->refreshTabWidgetMaxHeight();
+        }
     }
     
     if (_imp->descriptionLabel) {
         _imp->descriptionLabel->show();
     }
+ 
 }
 
 int

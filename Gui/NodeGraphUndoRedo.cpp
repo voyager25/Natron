@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -476,15 +476,15 @@ ConnectCommand::doConnect(const NodeGuiPtr &oldSrc,
     NodePtr internalNewSrc = newSrc ? newSrc->getNode() : NodePtr();
     NodePtr internalOldSrc = oldSrc ? oldSrc->getNode() : NodePtr();
     
-    InspectorNode* inspector = dynamic_cast<InspectorNode*>(internalDst.get());
+    ViewerInstance* isViewer = dynamic_cast<ViewerInstance*>(internalDst->getLiveInstance());
 
     
     
-    if (inspector) {
+    if (isViewer) {
         ///if the node is an inspector  disconnect any current connection between the inspector and the _newSrc
-        for (int i = 0; i < inspector->getMaxInputCount(); ++i) {
-            if (i != inputNb && inspector->getInput(i) == internalNewSrc) {
-                inspector->disconnectInput(i);
+        for (int i = 0; i < internalDst->getMaxInputCount(); ++i) {
+            if (i != inputNb && internalDst->getInput(i) == internalNewSrc) {
+                internalDst->disconnectInput(i);
             }
         }
     }
@@ -519,13 +519,13 @@ ConnectCommand::doConnect(const NodeGuiPtr &oldSrc,
     }
     
     dst->refreshEdges();
-    dst->checkOptionalEdgesVisibility();
+    dst->refreshEdgesVisility();
 
     if (newSrc) {
-        newSrc->checkOptionalEdgesVisibility();
+        newSrc->refreshEdgesVisility();
     }
     if (oldSrc) {
-        oldSrc->checkOptionalEdgesVisibility();
+        oldSrc->refreshEdgesVisility();
     }
 
 
@@ -1191,7 +1191,7 @@ LoadNodePresetsCommand::redo()
                 newNode->loadKnobs(**it);
                 std::list<SequenceTime> keys;
                 newNode->getAllKnobsKeyframes(&keys);
-                newNode->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(keys, true);
+                newNode->getApp()->addMultipleKeyframeIndicatorsAdded(keys, true);
                 _newChildren.push_back(newNode);
             }
         }
@@ -1207,6 +1207,15 @@ LoadNodePresetsCommand::redo()
             panel->addInstances(newChildren);
         }
     }
+    
+    NodeList allNodes;
+    internalNode->getGroup()->getActiveNodes(&allNodes);
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(internalNode->getLiveInstance());
+    if (isGroup) {
+        isGroup->getActiveNodes(&allNodes);
+    }
+    std::map<std::string,std::string> oldNewScriptNames;
+    internalNode->restoreKnobsLinks(*_newSerializations.front(), allNodes,oldNewScriptNames);
     internalNode->getLiveInstance()->evaluate_public(NULL, true, Natron::eValueChangedReasonUserEdited);
     internalNode->getApp()->triggerAutoSave();
     _firstRedoCalled = true;
@@ -1495,18 +1504,29 @@ GroupFromSelectionCommand::GroupFromSelectionCommand(NodeGraph* graph,const Node
 , _isRedone(false)
 {
     
-    NodeGuiList selection = nodes;
+    assert(!nodes.empty());
+    
+    QPointF groupPosition;
     for (NodeGuiList::const_iterator it = nodes.begin(); it != nodes.end(); ++it) {
         _originalNodes.push_back(*it);
+        
+        QPointF nodePos = (*it)->getPos_mt_safe();
+        groupPosition += nodePos;
     }
+    
+    if (!nodes.empty()) {
+        groupPosition.rx() /= nodes.size();
+        groupPosition.ry() /= nodes.size();
+    }
+    
     CreateNodeArgs groupArgs(PLUGINID_NATRON_GROUP,
                              "",
                              -1,-1,
-                             true, //< autoconnect
+                             false, //< autoconnect
                              INT_MIN,INT_MIN,
                              false, //< push undo/redo command
                              true, // add to project
-                             true,
+                             false,
                              QString(),
                              CreateNodeArgs::DefaultValuesList(),
                              _graph->getGroup());
@@ -1517,7 +1537,144 @@ GroupFromSelectionCommand::GroupFromSelectionCommand(NodeGraph* graph,const Node
     assert(container_i);
     _group = boost::dynamic_pointer_cast<NodeGui>(container_i);
     assert(_group.lock());
-    _graph->copyNodesAndCreateInGroup(selection,isGrp);
+    container_i->setPosition(groupPosition.x(), groupPosition.y());
+    
+    std::list<std::pair<std::string,boost::shared_ptr<NodeGui> > > newNodes;
+    _graph->copyNodesAndCreateInGroup(nodes,isGrp,newNodes);
+    
+    
+    
+    NodeList internalNewNodes;
+    for (std::list<std::pair<std::string,boost::shared_ptr<NodeGui> > >::iterator it = newNodes.begin(); it!=newNodes.end(); ++it) {
+        internalNewNodes.push_back(it->second->getNode());
+    }
+    
+    std::list<Natron::Project::NodesTree> trees;
+    Natron::Project::extractTreesFromNodes(internalNewNodes, trees);
+    
+    bool hasCreatedOutput = false;
+    
+    int inputNb = 0;
+    for (std::list<Natron::Project::NodesTree>::iterator it = trees.begin(); it!= trees.end(); ++it) {
+        for (std::list<Natron::Project::TreeInput>::iterator it2 = it->inputs.begin(); it2 != it->inputs.end(); ++it2) {
+            
+            ///Find the equivalent node in the original nodes and see which inputs we need to create
+
+            NodeGuiPtr foundOriginalNode;
+            for (NodeGuiList::const_iterator it3 = nodes.begin(); it3 != nodes.end(); ++it3) {
+                if ((*it3)->getNode()->getScriptName_mt_safe() == it2->node->getScriptName_mt_safe()) {
+                    foundOriginalNode = *it3;
+                    break;
+                }
+            }
+            assert(foundOriginalNode);
+            if (!foundOriginalNode) {
+                continue;
+            }
+        
+            NodePtr originalNodeInternal = foundOriginalNode->getNode();
+            const std::vector<NodePtr>& originalNodeInputs = originalNodeInternal->getInputs();
+            for (std::size_t i = 0; i < originalNodeInputs.size(); ++i) {
+                if (originalNodeInputs[i]) {
+                    
+                    //Create an input node corresponding to this input
+                    CreateNodeArgs args(PLUGINID_NATRON_INPUT,
+                                        std::string(),
+                                        -1,
+                                        -1,
+                                        true, // autoconnect
+                                        INT_MIN,
+                                        INT_MIN,
+                                        false, //<< don't push an undo command
+                                        true,
+                                        true,
+                                        QString(),
+                                        CreateNodeArgs::DefaultValuesList(),
+                                        isGrp);
+                    NodePtr input = _graph->getGui()->getApp()->createNode(args);
+                    assert(input);
+                    std::string inputLabel = originalNodeInternal->getLabel() + '_' + originalNodeInternal->getInputLabel(i);
+                    input->setLabel(inputLabel);
+                    
+                    double offsetX,offsetY;
+                    {
+                        double inputX,inputY;
+                        originalNodeInputs[i]->getPosition(&inputX, &inputY);
+                        double originalX,originalY;
+                        foundOriginalNode->getPosition(&originalX, &originalY);
+                        offsetX = inputX - originalX;
+                        offsetY = inputY - originalY;
+                    }
+                    
+                    double thisInputX,thisInputY;
+                    it2->node->getPosition(&thisInputX, &thisInputY);
+                    
+                    thisInputX += offsetX;
+                    thisInputY += offsetY;
+                    
+                    input->setPosition(thisInputX, thisInputY);
+                    
+                    it2->node->connectInput(input, i);
+                    
+                    containerNode->connectInput(originalNodeInputs[i], inputNb);
+                    
+                    ++inputNb;
+                    
+                }
+            } // for all node's inputs
+        } // for all inputs in the tree
+        
+        //Create only a single output
+        if (!hasCreatedOutput) {
+            NodeGuiPtr foundOriginalNode;
+            for (NodeGuiList::const_iterator it3 = nodes.begin(); it3 != nodes.end(); ++it3) {
+                if ((*it3)->getNode()->getScriptName_mt_safe() == it->output.node->getScriptName_mt_safe()) {
+                    foundOriginalNode = *it3;
+                    break;
+                }
+            }
+            assert(foundOriginalNode);
+            
+            CreateNodeArgs args(PLUGINID_NATRON_OUTPUT,
+                                std::string(),
+                                -1,
+                                -1,
+                                false, //< don't autoconnect
+                                INT_MIN,
+                                INT_MIN,
+                                false, //<< don't push an undo command
+                                true,
+                                true,
+                                QString(),
+                                CreateNodeArgs::DefaultValuesList(),
+                                isGrp);
+            NodePtr output = graph->getGui()->getApp()->createNode(args);
+            try {
+                output->setScriptName("Output");
+            } catch (...) {
+                
+            }
+            assert(output);
+            
+            double thisNodeX,thisNodeY;
+            it->output.node->getPosition(&thisNodeX, &thisNodeY);
+            double thisNodeW,thisNodeH;
+            it->output.node->getSize(&thisNodeW, &thisNodeH);
+            
+            thisNodeY += thisNodeH * 2;
+            
+            output->setPosition(thisNodeX, thisNodeY);
+            
+            output->connectInput(it->output.node, 0);
+            
+            ///Todo: Connect all outputs of the original node to the new Group
+            
+            
+            hasCreatedOutput = true;
+
+        }
+    } // for all trees
+    
     
 }
 
@@ -1599,7 +1756,7 @@ InlineGroupCommand::InlineGroupCommand(NodeGraph* graph,const std::list<boost::s
         std::vector<NodePtr> groupInputs;
         
         NodePtr groupOutput = group->getOutputNode(true);
-        group->getInputs(&groupInputs);
+        group->getInputs(&groupInputs, true);
         
         std::list<boost::shared_ptr<NodeGui> > nodesToCopy;
         for (NodeList::iterator it2 = nodes.begin(); it2!=nodes.end(); ++it2) {

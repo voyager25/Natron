@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -155,7 +155,7 @@ typedef std::list< boost::shared_ptr<RotoItem> > SelectedItems;
 
 struct TimeLineKeys
 {
-    std::set<int> keys;
+    std::set<double> keys;
     bool visible;
 };
 
@@ -285,7 +285,7 @@ struct RotoPanelPrivate
         return items.end();
     }
 
-    void insertItemRecursively(double time, const boost::shared_ptr<RotoItem>& item);
+    void insertItemRecursively(double time, const boost::shared_ptr<RotoItem>& item,int indexInParentLayer);
 
     void removeItemRecursively(const boost::shared_ptr<RotoItem>& item);
 
@@ -303,9 +303,9 @@ struct RotoPanelPrivate
     
     void removeItemAnimation(const boost::shared_ptr<RotoItem>& item);
 
-    void insertItemInternal(int reason, double time, const boost::shared_ptr<RotoItem>& item);
+    void insertItemInternal(int reason, double time, const boost::shared_ptr<RotoItem>& item, int indexInParentLayer);
     
-    void setVisibleItemKeyframes(const std::set<int>& keys,bool visible, bool emitSignal);
+    void setVisibleItemKeyframes(const std::set<double>& keys,bool visible, bool emitSignal);
 };
 
 RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
@@ -314,7 +314,7 @@ RotoPanel::RotoPanel(const boost::shared_ptr<NodeGui>&  n,
       , _imp( new RotoPanelPrivate(this,n) )
 {
     QObject::connect( _imp->context.get(), SIGNAL( selectionChanged(int) ), this, SLOT( onSelectionChanged(int) ) );
-    QObject::connect( _imp->context.get(),SIGNAL( itemInserted(int) ),this,SLOT( onItemInserted(int) ) );
+    QObject::connect( _imp->context.get(),SIGNAL( itemInserted(int,int) ),this,SLOT( onItemInserted(int,int) ) );
     QObject::connect( _imp->context.get(),SIGNAL( itemRemoved(const boost::shared_ptr<RotoItem>&,int) ),this,SLOT( onItemRemoved(const boost::shared_ptr<RotoItem>&,int) ) );
     QObject::connect( n->getNode()->getApp()->getTimeLine().get(), SIGNAL( frameChanged(SequenceTime,int) ), this,
                       SLOT( onTimeChanged(SequenceTime, int) ) );
@@ -579,7 +579,7 @@ void
 RotoPanel::onSelectionChangedInternal()
 {
     ///disconnect previous selection
-    std::list<std::set<int> > toRemove;
+    std::list<std::set<double> > toRemove;
     
     for (SelectedItems::const_iterator it = _imp->selectedItems.begin(); it != _imp->selectedItems.end(); ++it) {
         boost::shared_ptr<Bezier> isBezier = boost::dynamic_pointer_cast<Bezier>(*it);
@@ -600,11 +600,11 @@ RotoPanel::onSelectionChangedInternal()
     
     ///Remove previous selection's keyframes
     {
-        std::list<std::set<int> >::iterator next = toRemove.begin();
+        std::list<std::set<double> >::iterator next = toRemove.begin();
         if (next != toRemove.end()) {
             ++next;
         }
-        for (std::list<std::set<int> >::iterator it = toRemove.begin() ; it != toRemove.end(); ++it) {
+        for (std::list<std::set<double> >::iterator it = toRemove.begin() ; it != toRemove.end(); ++it) {
             _imp->setVisibleItemKeyframes(*it, false, next == toRemove.end());
             if (next != toRemove.end()) {
                 ++next;
@@ -614,7 +614,7 @@ RotoPanel::onSelectionChangedInternal()
     
     ///connect new selection
     
-    std::list<std::set<int> > toAdd;
+    std::list<std::set<double> > toAdd;
     int selectedBeziersCount = 0;
     const std::list<boost::shared_ptr<RotoItem> > & items = _imp->context->getSelectedItems();
     for (std::list<boost::shared_ptr<RotoItem> >::const_iterator it = items.begin(); it != items.end(); ++it) {
@@ -640,11 +640,11 @@ RotoPanel::onSelectionChangedInternal()
     
     ///Add new selection keyframes
     {
-        std::list<std::set<int> >::iterator next = toAdd.begin();
+        std::list<std::set<double> >::iterator next = toAdd.begin();
         if (next != toAdd.end()) {
             ++next;
         }
-        for (std::list<std::set<int> >::iterator it = toAdd.begin() ; it != toAdd.end(); ++it) {
+        for (std::list<std::set<double> >::iterator it = toAdd.begin() ; it != toAdd.end(); ++it) {
             _imp->setVisibleItemKeyframes(*it, true, next == toAdd.end());
             if (next != toAdd.end()) {
                 ++next;
@@ -770,7 +770,7 @@ RotoPanel::onSelectedBezierCloned()
     if (isBezier) {
         ItemKeys::iterator it = _imp->keyframes.find(isBezier);
         if ( it != _imp->keyframes.end() ) {
-            std::set<int> keys;
+            std::set<double> keys;
             isBezier->getKeyframeTimes(&keys);
             it->second.keys = keys;
             if (it->second.visible) {
@@ -833,7 +833,7 @@ void
 RotoPanelPrivate::updateSplinesInfoGUI(double time)
 {
   
-    std::set<int> keyframes;
+    std::set<double> keyframes;
 
     for (SelectedItems::const_iterator it = selectedItems.begin(); it != selectedItems.end(); ++it) {
         boost::shared_ptr<Bezier> isBezier = boost::dynamic_pointer_cast<Bezier>(*it);
@@ -848,7 +848,7 @@ RotoPanelPrivate::updateSplinesInfoGUI(double time)
         currentKeyframe->setAnimation(0);
     } else {
         ///get the first time that is equal or greater to the current time
-        std::set<int>::iterator lowerBound = keyframes.lower_bound(time);
+        std::set<double>::iterator lowerBound = keyframes.lower_bound(time);
         int dist = 0;
         if ( lowerBound != keyframes.end() ) {
             dist = std::distance(keyframes.begin(), lowerBound);
@@ -866,7 +866,7 @@ RotoPanelPrivate::updateSplinesInfoGUI(double time)
             if ( lowerBound == keyframes.begin() ) {
                 currentKeyframe->setValue(1.);
             } else {
-                std::set<int>::iterator prev = lowerBound;
+                std::set<double>::iterator prev = lowerBound;
                 if (prev != keyframes.begin()) {
                     --prev;
                 }
@@ -878,7 +878,7 @@ RotoPanelPrivate::updateSplinesInfoGUI(double time)
     }
 
     ///Refresh the  inverted state
-    for (TreeItems::iterator it = items.begin(); it != items.end(); ++it) {
+/*    for (TreeItems::iterator it = items.begin(); it != items.end(); ++it) {
         RotoDrawableItem* drawable = dynamic_cast<RotoDrawableItem*>( it->rotoItem.get() );
         if (drawable) {
             QIcon shapeColorIC;
@@ -894,7 +894,7 @@ RotoPanelPrivate::updateSplinesInfoGUI(double time)
 //                cb->setCurrentIndex_no_emit(drawable->getCompositingOperator(time));
 //            }
         }
-    }
+    }*/
 } // updateSplinesInfoGUI
 
 void
@@ -915,7 +915,7 @@ expandRecursively(QTreeWidgetItem* item)
 
 void
 RotoPanelPrivate::insertItemRecursively(double time,
-                                        const boost::shared_ptr<RotoItem> & item)
+                                        const boost::shared_ptr<RotoItem> & item,int indexInParentLayer)
 {
     QTreeWidgetItem* treeItem = new QTreeWidgetItem;
     boost::shared_ptr<RotoLayer> parent = item->getParentLayer();
@@ -925,7 +925,7 @@ RotoPanelPrivate::insertItemRecursively(double time,
 
         ///the parent must have already been inserted!
         assert( parentIT != items.end() );
-        parentIT->treeItem->insertChild(0,treeItem);
+        parentIT->treeItem->insertChild(indexInParentLayer,treeItem);
     } else {
         tree->insertTopLevelItem(0,treeItem);
     }
@@ -1027,8 +1027,9 @@ RotoPanelPrivate::insertItemRecursively(double time,
         treeItem->setIcon(0, iconLayer);
         ///insert children
         const std::list<boost::shared_ptr<RotoItem> > & children = layer->getItems();
-        for (std::list<boost::shared_ptr<RotoItem> >::const_iterator it = children.begin(); it != children.end(); ++it) {
-            insertItemRecursively(time,*it);
+        int i = 0;
+        for (std::list<boost::shared_ptr<RotoItem> >::const_iterator it = children.begin(); it != children.end(); ++it,++i) {
+            insertItemRecursively(time,*it,i);
         }
     }
     expandRecursively(treeItem);
@@ -1096,18 +1097,19 @@ RotoPanelPrivate::removeItemRecursively(const boost::shared_ptr<RotoItem>& item)
 }
 
 void
-RotoPanel::onItemInserted(int reason)
+RotoPanel::onItemInserted(int index,int reason)
 {
     boost::shared_ptr<RotoItem> lastInsertedItem = _imp->context->getLastInsertedItem();
     double time = _imp->context->getTimelineCurrentTime();
 
-    _imp->insertItemInternal(reason,time, lastInsertedItem);
+    _imp->insertItemInternal(reason,time, lastInsertedItem,index);
 }
 
 void
 RotoPanelPrivate::insertItemInternal(int reason,
                                      double time,
-                                     const boost::shared_ptr<RotoItem> & item)
+                                     const boost::shared_ptr<RotoItem> & item,
+                                     int indexInParentLayer)
 {
     boost::shared_ptr<Bezier> isBezier = boost::dynamic_pointer_cast<Bezier>(item);
 
@@ -1129,7 +1131,7 @@ RotoPanelPrivate::insertItemInternal(int reason,
         return;
     }
     assert(item);
-    insertItemRecursively(time, item);
+    insertItemRecursively(time, item, indexInParentLayer);
 }
 
 void
@@ -1146,8 +1148,8 @@ RotoPanel::onItemRemoved(const boost::shared_ptr<RotoItem>& item,
         ItemKeys::iterator it = _imp->keyframes.find(isBezier);
         if ( it != _imp->keyframes.end() ) {
 
-            for (std::set<int>::iterator it2 = it->second.keys.begin(); it2 != it->second.keys.end(); ++it2) {
-                getNode()->getNode()->getApp()->getTimeLine()->removeKeyFrameIndicator(*it2);
+            for (std::set<double>::iterator it2 = it->second.keys.begin(); it2 != it->second.keys.end(); ++it2) {
+                getNode()->getNode()->getApp()->removeKeyFrameIndicator(*it2);
             }
             _imp->keyframes.erase(it);
         }
@@ -1167,7 +1169,7 @@ RotoPanelPrivate::buildTreeFromContext()
     tree->blockSignals(true);
     if ( !layers.empty() ) {
         const boost::shared_ptr<RotoLayer> & base = layers.front();
-        insertItemRecursively(time, base);
+        insertItemRecursively(time, base, 0);
     }
     tree->blockSignals(false);
 }
@@ -1183,7 +1185,8 @@ RotoPanel::onCurrentItemCompOperatorChanged(int index)
             RotoDrawableItem* drawable = dynamic_cast<RotoDrawableItem*>( it->rotoItem.get() );
             assert(drawable);
             boost::shared_ptr<KnobChoice> op = drawable->getOperatorKnob();
-            op->setValue(index, 0);
+            KeyFrame k;
+            op->setValue(index, 0, Natron::eValueChangedReasonUserEdited,&k);
             _imp->context->clearSelection(RotoItem::eSelectionReasonOther);
             _imp->context->select(it->rotoItem, RotoItem::eSelectionReasonOther);
             _imp->context->evaluateChange();
@@ -1604,7 +1607,7 @@ void
 RotoPanel::onItemSelectionChanged()
 {
     ///disconnect previous selection
-    std::list<std::set<int> > toRemove;
+    std::list<std::set<double> > toRemove;
     for (SelectedItems::const_iterator it = _imp->selectedItems.begin(); it != _imp->selectedItems.end(); ++it) {
         boost::shared_ptr<Bezier> isBezier = boost::dynamic_pointer_cast<Bezier>(*it);
         if (isBezier) {
@@ -1627,11 +1630,11 @@ RotoPanel::onItemSelectionChanged()
     
     ///Remove previous selection's keyframes
     {
-        std::list<std::set<int> >::iterator next = toRemove.begin();
+        std::list<std::set<double> >::iterator next = toRemove.begin();
         if (next != toRemove.end()) {
             ++next;
         }
-        for (std::list<std::set<int> >::iterator it = toRemove.begin() ; it != toRemove.end(); ++it) {
+        for (std::list<std::set<double> >::iterator it = toRemove.begin() ; it != toRemove.end(); ++it) {
             _imp->setVisibleItemKeyframes(*it, false, next == toRemove.end());
             if (next != toRemove.end()) {
                 ++next;
@@ -1651,7 +1654,7 @@ RotoPanel::onItemSelectionChanged()
     }
 
     QList<QTreeWidgetItem*> selectedItems = _imp->tree->selectedItems();
-    std::list<std::set<int> > toAdd;
+    std::list<std::set<double> > toAdd;
     int selectedBeziersCount = 0;
     for (int i = 0; i < selectedItems.size(); ++i) {
         TreeItems::iterator it = _imp->findItem(selectedItems[i]);
@@ -1690,11 +1693,11 @@ RotoPanel::onItemSelectionChanged()
     
     ///Remove previous selection's keyframes
     {
-        std::list<std::set<int> >::iterator next = toAdd.begin();
+        std::list<std::set<double> >::iterator next = toAdd.begin();
         if (next != toAdd.end()) {
             ++next;
         }
-        for (std::list<std::set<int> >::iterator it = toAdd.begin() ; it != toAdd.end(); ++it) {
+        for (std::list<std::set<double> >::iterator it = toAdd.begin() ; it != toAdd.end(); ++it) {
             _imp->setVisibleItemKeyframes(*it, true, next == toAdd.end());
             if (next != toAdd.end()) {
                 ++next;
@@ -1853,14 +1856,21 @@ TreeWidget::dragAndDropHandler(const QMimeData* mime,
                         std::list<boost::shared_ptr<RotoItem> >::const_iterator found =
                             std::find(children.begin(),children.end(),intoRotoItem);
                         assert( found != children.end() );
-                        int index = std::distance(children.begin(), found);
+                        int intoIndex = std::distance(children.begin(), found);
 
-                        ///if the dropped item is already into the children and after the found index don't decrement
                         found = std::find(children.begin(),children.end(),ret->droppedRotoItem);
-                        if ( ( found != children.end() ) && ( std::distance(children.begin(), found) > index) ) {
-                            ret->insertIndex = index;
+                        int droppedIndex = -1;
+                        if (found != children.end()) {
+                            droppedIndex = std::distance(children.begin(), found) ;
+                        }
+                        
+                        ///if the dropped item is already into the children and after the found index don't decrement
+                        if (droppedIndex != -1 && droppedIndex > intoIndex) {
+                            ret->insertIndex = intoIndex;
                         } else {
-                            ret->insertIndex = index == 0 ? 0 : index - 1;
+                            //The item "above" in the tree is index - 1 in the internal list which is ordered from bottom to top
+                            ret->insertIndex = intoIndex == 0 ? 0 : intoIndex - 1;
+
                         }
                     } else {
                         return false;
@@ -1875,7 +1885,7 @@ TreeWidget::dragAndDropHandler(const QMimeData* mime,
                     }
                     if (!intoParentLayer || isTargetLayerAParent) {
                         ///insert at the begining of the layer
-                        ret->insertIndex = 0;
+                        ret->insertIndex = isIntoALayer ? isIntoALayer->getItems().size() : 0;
                         ret->newParentLayer = isIntoALayer;
                         ret->newParentItem = into;
                     } else {
@@ -1892,6 +1902,7 @@ TreeWidget::dragAndDropHandler(const QMimeData* mime,
                         if ( ( found != children.end() ) && ( std::distance(children.begin(), found) < index) ) {
                             ret->insertIndex = index;
                         } else {
+                            //The item "below" in the tree is index + 1 in the internal list which is ordered from bottom to top
                             ret->insertIndex = index + 1;
                         }
 
@@ -1902,17 +1913,7 @@ TreeWidget::dragAndDropHandler(const QMimeData* mime,
                 }
                 case QAbstractItemView::OnItem: {
                     if (isIntoALayer) {
-                        ///insert at the end of the layer
-                        const std::list<boost::shared_ptr<RotoItem> > & children = isIntoALayer->getItems();
-                        ///check if the item is already in that layer
-                        std::list<boost::shared_ptr<RotoItem> >::const_iterator found =
-                            std::find(children.begin(), children.end(), ret->droppedRotoItem);
-                        if ( found != children.end() ) {
-                            ret->insertIndex =  children.empty() ? 0 : (int)children.size() - 1;    // minus one because we're going to remove the item from it
-                        } else {
-                            ret->insertIndex = (int)children.size();
-                        }
-
+                        ret->insertIndex =  0; // always insert on-top of others
                         ret->newParentLayer = isIntoALayer;
                         ret->newParentItem = into;
                     } else {
@@ -2159,7 +2160,7 @@ RotoPanelPrivate::itemHasKey(const boost::shared_ptr<RotoItem>& item,
     ItemKeys::const_iterator it = keyframes.find(item);
 
     if ( it != keyframes.end() ) {
-        std::set<int>::const_iterator it2 = it->second.keys.find(time);
+        std::set<double>::const_iterator it2 = it->second.keys.find(time);
         if ( it2 != it->second.keys.end() ) {
             return true;
         }
@@ -2176,9 +2177,9 @@ RotoPanelPrivate::setItemKey(const boost::shared_ptr<RotoItem>& item,
 
     if ( it != keyframes.end() ) {
 
-        std::pair<std::set<int>::iterator,bool> ret = it->second.keys.insert(time);
+        std::pair<std::set<double>::iterator,bool> ret = it->second.keys.insert(time);
         if (ret.second && it->second.visible) {
-            node.lock()->getNode()->getApp()->getTimeLine()->addKeyframeIndicator(time);
+            node.lock()->getNode()->getApp()->addKeyframeIndicator(time);
         }
     } else {
         TimeLineKeys keys;
@@ -2196,11 +2197,11 @@ RotoPanelPrivate::removeItemKey(const boost::shared_ptr<RotoItem>& item,
 
     if ( it != keyframes.end() ) {
 
-        std::set<int>::iterator it2 = it->second.keys.find(time);
+        std::set<double>::iterator it2 = it->second.keys.find(time);
         if ( it2 != it->second.keys.end() ) {
             it->second.keys.erase(it2);
             if (it->second.visible) {
-                node.lock()->getNode()->getApp()->getTimeLine()->removeKeyFrameIndicator(time);
+                node.lock()->getNode()->getApp()->removeKeyFrameIndicator(time);
             }
         }
     }
@@ -2214,28 +2215,28 @@ RotoPanelPrivate::removeItemAnimation(const boost::shared_ptr<RotoItem>& item)
     if ( it != keyframes.end() ) {
         std::list<SequenceTime> toRemove;
 
-        for (std::set<int>::iterator it2 = it->second.keys.begin(); it2 != it->second.keys.end(); ++it2) {
+        for (std::set<double>::iterator it2 = it->second.keys.begin(); it2 != it->second.keys.end(); ++it2) {
             toRemove.push_back(*it2);
         }
         it->second.keys.clear();
         if (it->second.visible) {
-            node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(toRemove, true);
+            node.lock()->getNode()->getApp()->removeMultipleKeyframeIndicator(toRemove, true);
         }
     }
 }
 
 
 void
-RotoPanelPrivate::setVisibleItemKeyframes(const std::set<int>& keyframes,bool visible, bool emitSignal)
+RotoPanelPrivate::setVisibleItemKeyframes(const std::set<double>& keyframes,bool visible, bool emitSignal)
 {
     std::list<SequenceTime> keys;
-    for (std::set<int>::iterator it2 = keyframes.begin(); it2 != keyframes.end(); ++it2) {
+    for (std::set<double>::iterator it2 = keyframes.begin(); it2 != keyframes.end(); ++it2) {
         keys.push_back(*it2);
     }
     if (!visible) {
-        node.lock()->getNode()->getApp()->getTimeLine()->removeMultipleKeyframeIndicator(keys, emitSignal);
+        node.lock()->getNode()->getApp()->removeMultipleKeyframeIndicator(keys, emitSignal);
     } else {
-        node.lock()->getNode()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(keys, emitSignal);
+        node.lock()->getNode()->getApp()->addMultipleKeyframeIndicatorsAdded(keys, emitSignal);
     }
 }
 
@@ -2245,7 +2246,7 @@ RotoPanel::onSettingsPanelClosed(bool closed)
     boost::shared_ptr<TimeLine> timeline = getNode()->getNode()->getApp()->getTimeLine();
     if (closed) {
         ///remove all keyframes from the structure kept
-        std::set< std::set<int> > toRemove;
+        std::set< std::set<double> > toRemove;
         
         for (TreeItems::iterator it = _imp->items.begin(); it != _imp->items.end(); ++it) {
             boost::shared_ptr<Bezier> isBezier = boost::dynamic_pointer_cast<Bezier>(it->rotoItem);
@@ -2258,11 +2259,11 @@ RotoPanel::onSettingsPanelClosed(bool closed)
             }
         }
         
-        std::set<std::set<int> >::iterator next = toRemove.begin();
+        std::set<std::set<double> >::iterator next = toRemove.begin();
         if (next != toRemove.end()) {
             ++next;
         }
-        for (std::set<std::set<int> >::iterator it = toRemove.begin(); it != toRemove.end(); ++it) {
+        for (std::set<std::set<double> >::iterator it = toRemove.begin(); it != toRemove.end(); ++it) {
             _imp->setVisibleItemKeyframes(*it, false, next == toRemove.end());
             if (next != toRemove.end()) {
                 ++next;
@@ -2271,7 +2272,7 @@ RotoPanel::onSettingsPanelClosed(bool closed)
         _imp->keyframes.clear();
     } else {
         ///rebuild all the keyframe structure
-        std::set< std::set<int> > toAdd;
+        std::set< std::set<double> > toAdd;
         for (TreeItems::iterator it = _imp->items.begin(); it != _imp->items.end(); ++it) {
             boost::shared_ptr<Bezier> isBezier = boost::dynamic_pointer_cast<Bezier>(it->rotoItem);
             if (isBezier) {
@@ -2280,7 +2281,7 @@ RotoPanel::onSettingsPanelClosed(bool closed)
                 isBezier->getKeyframeTimes(&keys.keys);
                 keys.visible = false;
                 std::list<SequenceTime> markers;
-                for (std::set<int>::iterator it3 = keys.keys.begin(); it3 != keys.keys.end(); ++it3) {
+                for (std::set<double>::iterator it3 = keys.keys.begin(); it3 != keys.keys.end(); ++it3) {
                     markers.push_back(*it3);
                 }
 
@@ -2297,11 +2298,11 @@ RotoPanel::onSettingsPanelClosed(bool closed)
                 }
             }
         }
-        std::set<std::set<int> >::iterator next = toAdd.begin();
+        std::set<std::set<double> >::iterator next = toAdd.begin();
         if (next != toAdd.end()) {
             ++next;
         }
-        for (std::set<std::set<int> >::iterator it = toAdd.begin(); it != toAdd.end(); ++it) {
+        for (std::set<std::set<double> >::iterator it = toAdd.begin(); it != toAdd.end(); ++it) {
             _imp->setVisibleItemKeyframes(*it, true, next == toAdd.end());
             if (next != toAdd.end()) {
                 ++next;

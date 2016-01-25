@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ CLANG_DIAG_OFF(uninitialized)
 #include <QThread>
 #include <QKeyEvent>
 #include <QString>
-#include <QTextStream>
+#include <QtCore/QTextStream>
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
@@ -62,6 +62,7 @@ struct RenderingProgressDialogPrivate
     QString _sequenceName;
     int _firstFrame;
     int _lastFrame;
+    int _frameStep;
     boost::shared_ptr<ProcessHandler> _process;
 
     int _nFramesRendered;
@@ -70,6 +71,7 @@ struct RenderingProgressDialogPrivate
                                    const QString & sequenceName,
                                    int firstFrame,
                                    int lastFrame,
+                                   int frameStep,
                                    const boost::shared_ptr<ProcessHandler> & proc)
     : _gui(gui)
     , _mainLayout(0)
@@ -82,6 +84,7 @@ struct RenderingProgressDialogPrivate
     , _sequenceName(sequenceName)
     , _firstFrame(firstFrame)
     , _lastFrame(lastFrame)
+    , _frameStep(frameStep)
     , _process(proc)
     , _nFramesRendered(0)
     {
@@ -97,8 +100,11 @@ RenderingProgressDialog::onFrameRenderedWithTimer(int frame, double /*timeElapse
     assert(QThread::currentThread() == qApp->thread());
     
     ++_imp->_nFramesRendered;
-    
-    double percent = _imp->_nFramesRendered / (double)(_imp->_lastFrame - _imp->_firstFrame + 1);
+    U64 totalFrames = (double)(_imp->_lastFrame - _imp->_firstFrame + 1) / _imp->_frameStep;
+    double percent = 0;
+    if (totalFrames > 0) {
+        percent = _imp->_nFramesRendered / (double)totalFrames;
+    }
     double progress = percent * 100;
     
     _imp->_totalProgressBar->setValue(progress);
@@ -108,8 +114,12 @@ RenderingProgressDialog::onFrameRenderedWithTimer(int frame, double /*timeElapse
     ts << "Frame " << frame << " (" << QString::number(progress,'f',1) << "%)";
     _imp->_totalProgressInfo->setText(infoStr);
     
-    QString timeStr = Timer::printAsTime(remainingTime, true);
-    _imp->_estimatedWaitTimeInfo->setText(timeStr);
+    if (remainingTime != -1) {
+        QString timeStr = Timer::printAsTime(remainingTime, true);
+        _imp->_estimatedWaitTimeInfo->setText(timeStr);
+    } else {
+        _imp->_estimatedWaitTimeInfo->setText(tr("Unknown"));
+    }
 }
 
 void
@@ -120,8 +130,11 @@ RenderingProgressDialog::onFrameRendered(int frame)
     assert(QThread::currentThread() == qApp->thread());
 
     ++_imp->_nFramesRendered;
-
-    double percent = _imp->_nFramesRendered / (double)(_imp->_lastFrame - _imp->_firstFrame + 1);
+    U64 totalFrames = (double)(_imp->_lastFrame - _imp->_firstFrame + 1) / _imp->_frameStep;
+    double percent = 0;
+    if (totalFrames > 0) {
+        percent = _imp->_nFramesRendered / (double)totalFrames;
+    }
     double progress = percent * 100;
 
     _imp->_totalProgressBar->setValue(progress);
@@ -232,10 +245,11 @@ RenderingProgressDialog::RenderingProgressDialog(Gui* gui,
                                                  const QString & sequenceName,
                                                  int firstFrame,
                                                  int lastFrame,
+                                                 int frameStep,
                                                  const boost::shared_ptr<ProcessHandler> & process,
                                                  QWidget* parent)
     : QDialog(parent)
-      , _imp( new RenderingProgressDialogPrivate(gui,sequenceName,firstFrame,lastFrame,process) )
+      , _imp( new RenderingProgressDialogPrivate(gui,sequenceName,firstFrame,lastFrame,frameStep,process) )
 
 {
     setMinimumWidth(fontMetrics().width(_imp->_sequenceName) + 100);

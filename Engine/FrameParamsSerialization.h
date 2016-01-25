@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-#ifndef FRAMEPARAMSSERIALIZATION_H
-#define FRAMEPARAMSSERIALIZATION_H
+#ifndef Engine_FrameParamsSerialization_h
+#define Engine_FrameParamsSerialization_h
 
 // ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
@@ -33,13 +33,14 @@ GCC_DIAG_OFF(unused-parameter)
 // /opt/local/include/boost/serialization/smart_cast.hpp:254:25: warning: unused parameter 'u' [-Wunused-parameter]
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
-GCC_DIAG_ON(unused-parameter)
 #include <boost/serialization/base_object.hpp>
 GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
+GCC_DIAG_ON(unused-parameter)
 #endif
 #include "Engine/FrameParams.h"
+#include "Engine/EngineFwd.h"
 
-using namespace Natron;
+namespace Natron {
 
 template<class Archive>
 void
@@ -50,4 +51,5 @@ FrameParams::serialize(Archive & ar,
     ar & boost::serialization::make_nvp("Rod",_rod);
 }
 
-#endif // FRAMEPARAMSSERIALIZATION_H
+}
+#endif // Engine_FrameParamsSerialization_h

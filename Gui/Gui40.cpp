@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -149,7 +149,7 @@ Gui::openRecentFile()
             _imp->_appInstance->getProject()->loadProject( path, f.fileName() );
         } else {
             CLArgs cl;
-            AppInstance* newApp = appPTR->newAppInstance(cl);
+            AppInstance* newApp = appPTR->newAppInstance(cl, false);
             newApp->getProject()->loadProject( path, f.fileName() );
         }
     }
@@ -189,12 +189,13 @@ Gui::screenShot(QWidget* w)
 }
 
 void
-Gui::onProjectNameChanged(const QString & name)
+Gui::onProjectNameChanged(const QString & filePath, bool modified)
 {
-    QString text(QCoreApplication::applicationName() + " - ");
-
-    text.append(name);
-    setWindowTitle(text);
+    // handles window title and appearance formatting
+    // http://doc.qt.io/qt-4.8/qwidget.html#windowModified-prop
+    setWindowModified(modified);
+    // http://doc.qt.io/qt-4.8/qwidget.html#windowFilePath-prop
+    setWindowFilePath(filePath.isEmpty() ? NATRON_PROJECT_UNTITLED : filePath);
 }
 
 void
@@ -240,12 +241,12 @@ Gui::hasPickers() const
 }
 
 void
-Gui::updateViewersViewsMenu(int viewsCount)
+Gui::updateViewersViewsMenu(const std::vector<std::string>& viewNames)
 {
     QMutexLocker l(&_imp->_viewerTabsMutex);
 
     for (std::list<ViewerTab*>::iterator it = _imp->_viewerTabs.begin(); it != _imp->_viewerTabs.end(); ++it) {
-        (*it)->updateViewsMenu(viewsCount);
+        (*it)->updateViewsMenu(viewNames);
     }
 }
 
@@ -366,10 +367,11 @@ void
 Gui::onProcessHandlerStarted(const QString & sequenceName,
                              int firstFrame,
                              int lastFrame,
+                             int frameStep,
                              const boost::shared_ptr<ProcessHandler> & process)
 {
     ///make the dialog which will show the progress
-    RenderingProgressDialog *dialog = new RenderingProgressDialog(this, sequenceName, firstFrame, lastFrame, process, this);
+    RenderingProgressDialog *dialog = new RenderingProgressDialog(this, sequenceName, firstFrame, lastFrame, frameStep, process, this);
     QObject::connect(dialog,SIGNAL(accepted()),this,SLOT(onRenderProgressDialogFinished()));
     QObject::connect(dialog,SIGNAL(rejected()),this,SLOT(onRenderProgressDialogFinished()));
     dialog->show();
@@ -630,8 +632,10 @@ Gui::debugImage(const Natron::Image* image,
     U64 hashKey = image->getHashKey();
     QString hashKeyStr = QString::number(hashKey);
     QString realFileName = filename.isEmpty() ? QString(hashKeyStr + ".png") : filename;
+#ifdef DEBUG
     qDebug() << "Writing image: " << realFileName;
     renderWindow.debug();
+#endif
     output.save(realFileName);
 }
 
@@ -663,11 +667,12 @@ void
 Gui::onWriterRenderStarted(const QString & sequenceName,
                            int firstFrame,
                            int lastFrame,
+                           int frameStep,
                            Natron::OutputEffectInstance* writer)
 {
     assert( QThread::currentThread() == qApp->thread() );
 
-    RenderingProgressDialog *dialog = new RenderingProgressDialog(this, sequenceName, firstFrame, lastFrame,
+    RenderingProgressDialog *dialog = new RenderingProgressDialog(this, sequenceName, firstFrame, lastFrame, frameStep,
                                                                   boost::shared_ptr<ProcessHandler>(), this);
     RenderEngine* engine = writer->getRenderEngine();
     QObject::connect( dialog, SIGNAL( canceled() ), engine, SLOT( abortRendering_Blocking() ) );
@@ -740,7 +745,7 @@ Gui::onNodeNameChanged(const QString & /*name*/)
 void
 Gui::renderAllWriters()
 {
-    _imp->_appInstance->startWritersRendering(areRenderStatsEnabled(), std::list<AppInstance::RenderRequest>() );
+    _imp->_appInstance->startWritersRendering(areRenderStatsEnabled(), false, std::list<AppInstance::RenderRequest>() );
 }
 
 void
@@ -771,6 +776,7 @@ Gui::renderSelectedNode()
                     assert(w.writer);
                     w.firstFrame = INT_MIN;
                     w.lastFrame = INT_MAX;
+                    w.frameStep = INT_MIN;
                     workList.push_back(w);
                 }
             } else {
@@ -783,12 +789,13 @@ Gui::renderSelectedNode()
                         assert(w.writer);
                         w.firstFrame = INT_MIN;
                         w.lastFrame = INT_MAX;
+                        w.frameStep = INT_MIN;
                         workList.push_back(w);
                     }
                 }
             }
         }
-        _imp->_appInstance->startWritersRendering(areRenderStatsEnabled(),workList);
+        _imp->_appInstance->startWritersRendering(areRenderStatsEnabled(), false, workList);
     }
 }
 
@@ -878,18 +885,17 @@ Gui::onTimeChanged(SequenceTime time,
     
     ViewerInstance* leadViewer = getApp()->getLastViewerUsingTimeline();
     
-    bool isUserEdited = reason == eTimelineChangeReasonUserSeek ||
-    reason == eTimelineChangeReasonDopeSheetEditorSeek ||
-    reason == eTimelineChangeReasonCurveEditorSeek;
+    bool isPlayback = reason == eTimelineChangeReasonPlaybackSeek;
     
     
 
     const std::list<ViewerTab*>& viewers = getViewersList();
     ///Syncrhronize viewers
     for (std::list<ViewerTab*>::const_iterator it = viewers.begin(); it!=viewers.end();++it) {
-        if ((*it)->getInternalNode() != leadViewer || isUserEdited) {
-            (*it)->getInternalNode()->renderCurrentFrame(reason != eTimelineChangeReasonPlaybackSeek);
+        if ((*it)->getInternalNode() == leadViewer && isPlayback) {
+            continue;
         }
+         (*it)->getInternalNode()->renderCurrentFrame(!isPlayback);
     }
 }
 

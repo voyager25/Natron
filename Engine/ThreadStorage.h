@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +25,13 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <QtCore/QThread>
 #include <QtCore/QThreadStorage>
 #include <QtCore/QCoreApplication>
+
+#include "Engine/EngineFwd.h"
 
 // A class that inherits from QThreadStorage, but never sets local data in the main thread.
 // It uses an actual instance of the data.
@@ -50,12 +54,12 @@ public:
     /// Do *not* use this to check if there is *valid* local data. You must store a flag in the local data for that purpose.
     inline bool hasLocalData() const
     {
-        return QThread::currentThread() == qApp->thread() || QThreadStorage<T>::hasLocalData();
+        return (qApp && QThread::currentThread() == qApp->thread()) || QThreadStorage<T>::hasLocalData();
     }
 
     inline T & localData()
     {
-        if ( QThread::currentThread() == qApp->thread() ) {
+        if ( qApp && QThread::currentThread() == qApp->thread() ) {
             return mainData;
         } else {
             return QThreadStorage<T>::localData();
@@ -64,7 +68,7 @@ public:
 
     inline T localData() const
     {
-        if ( QThread::currentThread() == qApp->thread() ) {
+        if ( qApp && QThread::currentThread() == qApp->thread() ) {
             return mainData;
         } else {
             return QThreadStorage<T>::localData();
@@ -73,7 +77,7 @@ public:
 
     inline void setLocalData(const T& t)
     {
-        if ( QThread::currentThread() == qApp->thread() ) {
+        if ( qApp && QThread::currentThread() == qApp->thread() ) {
             mainData = t;
         } else {
             return QThreadStorage<T>::setLocalData(t);

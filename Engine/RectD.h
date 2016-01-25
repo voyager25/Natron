@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,9 +36,12 @@
 #include "Global/GlobalDefines.h"
 #include "Global/Macros.h"
 
-GCC_DIAG_OFF(strict-overflow)
+#include "Engine/EngineFwd.h"
 
-class RectI;
+#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
+//Shiboken fails if defined at the start of a header
+GCC_DIAG_OFF(strict-overflow)
+#endif
 
 class RectD
 {
@@ -290,15 +293,13 @@ public:
         return x >= x1 && x < x2 && y >= y1 && y < y2;
     }
 
+#ifdef DEBUG
     void debug() const
     {
-        std::cout << "RectI is..." << std::endl;
-        std::cout << "left = " << x1 << std::endl;
-        std::cout << "bottom = " << y1 << std::endl;
-        std::cout << "right = " << x2 << std::endl;
-        std::cout << "top = " << y2 << std::endl;
+        std::cout << "x1 = "<<x1<<" y1 = "<<y1<<" x2 = "<<x2<<" y2 = "<<y2<< std::endl;
     }
-
+#endif
+    
     void toPixelEnclosing(const RenderScale & scale,
                           double par,
                           RectI *rect) const;

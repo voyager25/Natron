@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,7 +78,7 @@ NoOpBase::isHostChannelSelectorSupported(bool* /*defaultR*/,bool* /*defaultG*/, 
 
 Natron::StatusEnum
 NoOpBase::getTransform(double /*time*/,
-                       const RenderScale& /*renderScale*/,
+                       const RenderScale & /*renderScale*/,
                        int /*view*/,
                        Natron::EffectInstance** inputToTransform,
                        Transform::Matrix3x3* transform)
@@ -100,3 +100,4 @@ NoOpBase::getInputsHoldingTransform(std::list<int>* inputs) const
     inputs->push_back(0);
     return true;
 }
+

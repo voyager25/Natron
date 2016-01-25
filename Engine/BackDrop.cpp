@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ BackDrop::~BackDrop()
 }
 
 std::string
-BackDrop::getDescription() const
+BackDrop::getPluginDescription() const
 {
     return QObject::tr("The node backdrop is useful to group nodes and identify them in the node graph. You can also "
               "move all the nodes inside the backdrop.").toStdString() ;
@@ -78,7 +78,7 @@ void
 BackDrop::knobChanged(KnobI* k,
                       Natron::ValueChangedReasonEnum /*reason*/,
                       int /*view*/,
-                      SequenceTime /*time*/,
+                      double /*time*/,
                       bool /*originatedFromMainThread*/)
 {
     if ( k == _imp->knobLabel.lock().get() ) {

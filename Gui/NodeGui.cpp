@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QLayout>
 #include <QAction>
-#include <QtConcurrentRun>
+#include <QThread>
 #include <QFontMetrics>
 #include <QTextBlockFormat>
 #include <QTextCursor>
@@ -48,7 +48,11 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/BackDrop.h"
 #include "Engine/Image.h"
 #include "Engine/Knob.h"
+#include "Engine/MergingEnum.h"
 #include "Engine/Node.h"
+#include "Engine/NodeGroup.h"
+#include "Engine/GroupInput.h"
+#include "Engine/GroupOutput.h"
 #include "Engine/NodeSerialization.h"
 #include "Engine/OfxEffectInstance.h"
 #include "Engine/OfxImageEffectInstance.h"
@@ -61,7 +65,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/BackDropGui.h"
 #include "Gui/Button.h"
 #include "Gui/CurveEditor.h"
-#include "Gui/DefaultOverlays.h"
+#include "Gui/HostOverlay.h"
 #include "Gui/DockablePanel.h"
 #include "Gui/DopeSheetEditor.h"
 #include "Gui/Edge.h"
@@ -77,7 +81,9 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/NodeGraph.h"
 #include "Gui/NodeGraphUndoRedo.h"
 #include "Gui/NodeGuiSerialization.h"
+#include "Gui/NodeGraphTextItem.h"
 #include "Gui/NodeSettingsPanel.h"
+#include "Gui/PreviewThread.h"
 #include "Gui/SequenceFileDialog.h"
 #include "Gui/SequenceFileDialog.h"
 #include "Gui/SpinBox.h"
@@ -95,8 +101,6 @@ CLANG_DIAG_ON(uninitialized)
 
 #define NATRON_ELLIPSE_WARN_DIAMETER 10
 
-#define NODE_WIDTH 80
-#define NODE_HEIGHT 30
 
 #define DOT_GUI_DIAMETER 15
 
@@ -121,74 +125,14 @@ replaceLineBreaksWithHtmlParagraph(QString txt)
 
 static void getPixmapForMergeOperator(const QString& op,QPixmap* pix)
 {
-    if (op == "atop") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_ATOP, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "average") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_AVERAGE, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "color-burn") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COLOR_BURN, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "color-dodge") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COLOR_DODGE, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "conjoint-over") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_CONJOINT_OVER, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "copy") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_COPY, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "difference") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DIFFERENCE, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "disjoint-over") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DISJOINT_OVER, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "divide") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_DIVIDE, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "exclusion") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_EXCLUSION, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "freeze") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_FREEZE, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "from") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_FROM, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "geometric") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_GEOMETRIC, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "hard-light") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_HARD_LIGHT, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "hypot") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_HYPOT, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "in") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_IN, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "interpolated") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_INTERPOLATED, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "mask") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MASK, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "matte") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MATTE, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "max") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MAX, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "min") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MIN, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "minus") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MINUS, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "multiply") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_MULTIPLY, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "out") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OUT, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "over") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OVER, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "overlay") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_OVERLAY, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "pinlight") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_PINLIGHT, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "plus") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_PLUS, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "reflect") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_REFLECT, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "screen") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_SCREEN, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "soft-light") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_SOFT_LIGHT, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "stencil") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_STENCIL, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "under") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_UNDER, NATRON_PLUGIN_ICON_SIZE, pix);
-    } else if (op == "xor") {
-        appPTR->getIcon(Natron::NATRON_PIXMAP_MERGE_XOR, NATRON_PLUGIN_ICON_SIZE, pix);
+    std::string opstd = op.toStdString();
+    for (int i = 0; i <= (int)Natron::eMergeXOR; ++i) {
+        std::string opStr = Natron::getNatronOperationString((Natron::MergingFunctionEnum)i);
+        if (opStr == opstd) {
+            Natron::PixmapEnum pixEnum = Natron::getPixmapForMergingOperator((Natron::MergingFunctionEnum)i);
+            appPTR->getIcon(pixEnum, TO_DPIX(NATRON_PLUGIN_ICON_SIZE), pix);
+            return;
+        }
     }
 }
 
@@ -209,10 +153,14 @@ NodeGui::NodeGui(QGraphicsItem *parent)
 , _boundingBox(NULL)
 , _channelsPixmap(NULL)
 , _previewPixmap(NULL)
+, _previewDataMutex()
+, _previewData(NATRON_PREVIEW_HEIGHT * NATRON_PREVIEW_WIDTH * sizeof(unsigned int))
+, _previewW(NATRON_PREVIEW_WIDTH)
+, _previewH(NATRON_PREVIEW_HEIGHT)
 , _persistentMessage(NULL)
 , _stateIndicator(NULL)
 , _mergeHintActive(false)
-, _bitDepthWarning(NULL)
+, _bitDepthWarning()
 , _disabledTopLeftBtmRight(NULL)
 , _disabledBtmLeftTopRight(NULL)
 , _inputEdges()
@@ -228,7 +176,7 @@ NodeGui::NodeGui(QGraphicsItem *parent)
 , _slaveMasterLink(NULL)
 , _masterNodeGui()
 , _knobsLinks()
-, _expressionIndicator(NULL)
+, _expressionIndicator()
 , _magnecEnabled()
 , _magnecDistance()
 , _updateDistanceSinceLastMagnec()
@@ -237,13 +185,14 @@ NodeGui::NodeGui(QGraphicsItem *parent)
 , _nodeLabel()
 , _parentMultiInstance()
 , _renderingStartedCount(0)
-, _optionalInputsVisible(false)
 , _mtSafeSizeMutex()
 , _mtSafeWidth(0)
 , _mtSafeHeight(0)
-, _defaultOverlay()
+, _hostOverlay()
 , _undoStack(new QUndoStack())
 , _overlayLocked(false)
+, _availableViewsIndicator()
+, _passThroughIndicator()
 {
 }
 
@@ -251,8 +200,6 @@ NodeGui::~NodeGui()
 {
     deleteReferences();
 
-    delete _bitDepthWarning;
-    delete _expressionIndicator;
 }
 
 void
@@ -271,8 +218,8 @@ NodeGui::initialize(NodeGraph* dag,
     QObject::connect( internalNode.get(), SIGNAL( refreshEdgesGUI() ),this,SLOT( refreshEdges() ) );
     QObject::connect( internalNode.get(), SIGNAL( knobsInitialized() ),this,SLOT( initializeKnobs() ) );
     QObject::connect( internalNode.get(), SIGNAL( inputsInitialized() ),this,SLOT( initializeInputs() ) );
-    QObject::connect( internalNode.get(), SIGNAL( previewImageChanged(int) ), this, SLOT( updatePreviewImage(int) ) );
-    QObject::connect( internalNode.get(), SIGNAL( previewRefreshRequested(int) ), this, SLOT( forceComputePreview(int) ) );
+    QObject::connect( internalNode.get(), SIGNAL( previewImageChanged(double) ), this, SLOT( updatePreviewImage(double) ) );
+    QObject::connect( internalNode.get(), SIGNAL( previewRefreshRequested(double) ), this, SLOT( forceComputePreview(double) ) );
     QObject::connect( internalNode.get(), SIGNAL( deactivated(bool) ),this,SLOT( deactivate(bool) ) );
     QObject::connect( internalNode.get(), SIGNAL( activated(bool) ), this, SLOT( activate(bool) ) );
     QObject::connect( internalNode.get(), SIGNAL( inputChanged(int) ), this, SLOT( connectEdge(int) ) );
@@ -289,7 +236,10 @@ NodeGui::initialize(NodeGraph* dag,
     QObject::connect( internalNode.get(), SIGNAL( bitDepthWarningToggled(bool,QString) ),this,SLOT( toggleBitDepthIndicator(bool,QString) ) );
     QObject::connect( internalNode.get(), SIGNAL( nodeExtraLabelChanged(QString) ),this,SLOT( onNodeExtraLabelChanged(QString) ) );
     QObject::connect( internalNode.get(), SIGNAL( outputLayerChanged() ),this,SLOT( onOutputLayerChanged() ) );
+    QObject::connect( internalNode.get(), SIGNAL( hideInputsKnobChanged(bool) ),this,SLOT( onHideInputsKnobValueChanged(bool) ) );
+    QObject::connect( internalNode.get(), SIGNAL( availableViewsChanged() ),this,SLOT( onAvailableViewsChanged() ) );
     
+    QObject::connect(this, SIGNAL(previewImageComputed()), this, SLOT(onPreviewImageComputed()));
     setCacheMode(DeviceCoordinateCache);
 
     OutputEffectInstance* isOutput = dynamic_cast<OutputEffectInstance*>(internalNode->getLiveInstance());
@@ -406,7 +356,7 @@ NodeGui::initialize(NodeGraph* dag,
         refreshPosition(p.x(), p.y(),true);
     }
 
-    getNode()->initializeDefaultOverlays();
+    getNode()->initializeHostOverlays();
 
 } // initialize
 
@@ -415,7 +365,9 @@ NodeGui::restoreStateAfterCreation()
 {
     NodePtr internalNode = getNode();
     ///Refresh the disabled knob
-    if ( internalNode->isNodeDisabled() ) {
+    
+    boost::shared_ptr<KnobBool> disabledknob = internalNode->getDisabledKnob();
+    if (disabledknob && disabledknob->getValue()) {
         onDisabledKnobToggled(true);
     }
     if ( !internalNode->isMultiInstance() ) {
@@ -424,6 +376,7 @@ NodeGui::restoreStateAfterCreation()
     }
     ///Refresh the name in the line edit
     onInternalNameChanged( internalNode->getLabel().c_str() );
+    internalNode->refreshIdentityState();
 }
 
 void
@@ -547,8 +500,8 @@ void
 NodeGui::getSizeWithPreview(int *w, int *h) const
 {
     getInitialSize(w,h);
-    *w = *w -  (NODE_WIDTH / 2.) + NATRON_PREVIEW_WIDTH;
-    *h = *h + NATRON_PREVIEW_HEIGHT;
+    *w = *w -  (TO_DPIX(NODE_WIDTH) / 2.) + TO_DPIX(NATRON_PREVIEW_WIDTH);
+    *h = *h + TO_DPIY(NATRON_PREVIEW_HEIGHT) + 10;
 }
 
 void
@@ -556,11 +509,11 @@ NodeGui::getInitialSize(int *w, int *h) const
 {
     const QString& iconFilePath = getNode()->getPlugin()->getIconFilePath();
     if (!iconFilePath.isEmpty() && QFile::exists(iconFilePath) && appPTR->getCurrentSettings()->isPluginIconActivatedOnNodeGraph()) {
-        *w = NODE_WIDTH + NATRON_PLUGIN_ICON_SIZE + PLUGIN_ICON_OFFSET * 2;
+        *w = TO_DPIX(NODE_WIDTH) + TO_DPIX(NATRON_PLUGIN_ICON_SIZE) + TO_DPIX(PLUGIN_ICON_OFFSET)* 2;
     } else {
-        *w = NODE_WIDTH;
+        *w = TO_DPIX(NODE_WIDTH);
     }
-    *h = NODE_HEIGHT;
+    *h = TO_DPIY(NODE_HEIGHT);
 }
 
 void
@@ -580,8 +533,10 @@ NodeGui::createGui()
         _resizeHandle = new QGraphicsPolygonItem(this);
         _resizeHandle->setZValue(depth + 1);
     }
+    
+    NodePtr node = getNode();
 
-    const QString& iconFilePath = getNode()->getPlugin()->getIconFilePath();
+    const QString& iconFilePath = node->getPlugin()->getIconFilePath();
 
     BackDropGui* isBd = dynamic_cast<BackDropGui*>(this);
 
@@ -589,12 +544,12 @@ NodeGui::createGui()
 
         QPixmap pix(iconFilePath);
         if (QFile::exists(iconFilePath) && !pix.isNull()) {
-            _pluginIcon = new QGraphicsPixmapItem(this);
+            _pluginIcon = new NodeGraphPixmapItem(getDagGui(),this);
             _pluginIcon->setZValue(depth + 1);
             _pluginIconFrame = new QGraphicsRectItem(this);
             _pluginIconFrame->setZValue(depth);
             _pluginIconFrame->setBrush(QColor(50,50,50));
-            int size = NATRON_PLUGIN_ICON_SIZE;
+            int size = TO_DPIX(NATRON_PLUGIN_ICON_SIZE);
             if (std::max(pix.width(), pix.height()) != size) {
                 pix = pix.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             }
@@ -602,20 +557,25 @@ NodeGui::createGui()
         }
     }
 
-    if (getNode()->getPlugin()->getPluginID() == QString(PLUGINID_OFX_MERGE)) {
-        _mergeIcon = new QGraphicsPixmapItem(this);
+    if (node->getPlugin()->getPluginID() == QString(PLUGINID_OFX_MERGE)) {
+        _mergeIcon = new NodeGraphPixmapItem(getDagGui(),this);
         _mergeIcon->setZValue(depth + 1);
     }
 
-    _nameItem = new QGraphicsTextItem(getNode()->getLabel().c_str(),this);
+    _nameItem = new NodeGraphTextItem(getDagGui(),this,false);
+    _nameItem->setPlainText(node->getLabel().c_str());
     _nameItem->setDefaultTextColor( QColor(0,0,0,255) );
     //_nameItem->setFont( QFont(appFont,appFontSize) );
     _nameItem->setZValue(depth+ 1);
 
-    _persistentMessage = new QGraphicsTextItem("",this);
+    _persistentMessage = new NodeGraphSimpleTextItem(getDagGui(),this,false);
     _persistentMessage->setZValue(depth + 3);
     QFont f = _persistentMessage->font();
     f.setPixelSize(25);
+    bool antialias = appPTR->getCurrentSettings()->isNodeGraphAntiAliasingEnabled();
+    if (!antialias) {
+        f.setStyleStrategy(QFont::NoAntialias);
+    }
     _persistentMessage->setFont(f);
     _persistentMessage->hide();
 
@@ -628,8 +588,9 @@ NodeGui::createGui()
     bitDepthGrad.push_back( qMakePair( 0., QColor(Qt::white) ) );
     bitDepthGrad.push_back( qMakePair( 0.3, QColor(Qt::yellow) ) );
     bitDepthGrad.push_back( qMakePair( 1., QColor(243,137,0) ) );
-    _bitDepthWarning = new NodeGuiIndicator(depth + 2, "C",bbox.topLeft(),NATRON_ELLIPSE_WARN_DIAMETER,NATRON_ELLIPSE_WARN_DIAMETER,
-                                            bitDepthGrad,QColor(0,0,0,255),this);
+    _bitDepthWarning.reset(new NodeGuiIndicator(getDagGui(), depth + 2, "C",QPointF(bbox.x() + bbox.width() / 2, bbox.y()),
+                                                NATRON_ELLIPSE_WARN_DIAMETER,NATRON_ELLIPSE_WARN_DIAMETER,
+                                            bitDepthGrad,QColor(0,0,0,255),this));
     _bitDepthWarning->setActive(false);
 
 
@@ -637,11 +598,27 @@ NodeGui::createGui()
     exprGrad.push_back( qMakePair( 0., QColor(Qt::white) ) );
     exprGrad.push_back( qMakePair( 0.3, QColor(Qt::green) ) );
     exprGrad.push_back( qMakePair( 1., QColor(69,96,63) ) );
-    _expressionIndicator = new NodeGuiIndicator(depth + 2,"E",bbox.topRight(),NATRON_ELLIPSE_WARN_DIAMETER,NATRON_ELLIPSE_WARN_DIAMETER,
-                                                exprGrad,QColor(255,255,255),this);
+    _expressionIndicator.reset(new NodeGuiIndicator(getDagGui(), depth + 2,"E",bbox.topRight(),NATRON_ELLIPSE_WARN_DIAMETER,NATRON_ELLIPSE_WARN_DIAMETER, exprGrad,QColor(255,255,255),this));
     _expressionIndicator->setToolTip(Natron::convertFromPlainText(tr("This node has one or several expression(s) involving values of parameters of other "
                                          "nodes in the project. Hover the mouse on the green connections to see what are the effective links."), Qt::WhiteSpaceNormal));
     _expressionIndicator->setActive(false);
+    
+    _availableViewsIndicator.reset(new NodeGuiIndicator(getDagGui(), depth + 2, "V", bbox.topLeft(),NATRON_ELLIPSE_WARN_DIAMETER,NATRON_ELLIPSE_WARN_DIAMETER,exprGrad, QColor(255,255,255), this));
+    _availableViewsIndicator->setActive(false);
+    
+    onAvailableViewsChanged();
+    
+    GroupInput* isGroupInput = dynamic_cast<GroupInput*>(node->getLiveInstance());
+    GroupOutput* isGroupOutput = dynamic_cast<GroupOutput*>(node->getLiveInstance());
+    
+    if (!isGroupInput && !isGroupOutput) {
+        QGradientStops ptGrad;
+        ptGrad.push_back(qMakePair(0., QColor(0,0,255)));
+        ptGrad.push_back(qMakePair(0.5, QColor(0,50,200)));
+        ptGrad.push_back(qMakePair(1., QColor(0,100,150)));
+        _passThroughIndicator.reset(new NodeGuiIndicator(getDagGui(), depth + 2, "P", bbox.topRight(),NATRON_ELLIPSE_WARN_DIAMETER,NATRON_ELLIPSE_WARN_DIAMETER,ptGrad, QColor(255,255,255), this));
+        _passThroughIndicator->setActive(false);
+    }
 
     _disabledBtmLeftTopRight = new QGraphicsLineItem(this);
     _disabledBtmLeftTopRight->setZValue(depth + 1);
@@ -696,7 +673,11 @@ NodeGui::ensurePreviewCreated()
         QImage prev(NATRON_PREVIEW_WIDTH, NATRON_PREVIEW_HEIGHT, QImage::Format_ARGB32);
         prev.fill(Qt::black);
         QPixmap prev_pixmap = QPixmap::fromImage(prev);
-        _previewPixmap = new QGraphicsPixmapItem(prev_pixmap,this);
+        _previewPixmap = new NodeGraphPixmapItem(getDagGui(),this);
+        //Scale the widget according to the DPI of the screen otherwise the pixmap will cover exactly as many pixels
+        //as there are in the image
+        _previewPixmap->scale(appPTR->getLogicalDPIXRATIO(),appPTR->getLogicalDPIYRATIO());
+        _previewPixmap->setPixmap(prev_pixmap);
         _previewPixmap->setZValue(getBaseDepth() + 1);
 
     }
@@ -806,6 +787,62 @@ NodeGui::adjustSizeToContent(int* /*w*/,int *h,bool adjustToTextSize)
     }
 }
 
+int
+NodeGui::getPluginIconWidth() const
+{
+    return _pluginIcon ? TO_DPIX(NATRON_PLUGIN_ICON_SIZE + PLUGIN_ICON_OFFSET * 2) : 0;
+}
+
+double
+NodeGui::refreshPreviewAndLabelPosition(const QRectF& bbox)
+{
+    const QRectF labelBbox = _nameItem->boundingRect();
+    const double labelHeight = labelBbox.height();
+    
+    int prevW,prevH;
+    {
+        QMutexLocker k(&_previewDataMutex);
+        prevW = _previewW;
+        prevH = _previewH;
+    }
+    const double textPlusPixHeight = std::min((double)prevH + 5. + labelHeight, bbox.height() - 5);
+    const int iconWidth = getPluginIconWidth();
+
+    if (_previewPixmap) {
+        double pixX = bbox.x() + iconWidth;
+        double remainingSpace = bbox.width() - pixX;
+        pixX = pixX + remainingSpace / 2. - prevW / 2.;
+        double pixY = bbox.y() + bbox.height() / 2 - textPlusPixHeight / 2;
+        _previewPixmap->setPos(pixX ,pixY);
+    }
+    
+    double height = bbox.height();
+    
+    {
+        int nameWidth = labelBbox.width();
+        double textX = bbox.x() + iconWidth +  ((bbox.width() - iconWidth) / 2) - (nameWidth / 2);
+        //double textY = topLeft.y() + labelHeight * 0.1;
+        
+        double textY;
+        if (mustFrameName()) {
+            double frameHeight = 1.5 * labelHeight;
+            QRectF nameFrameBox(bbox.x(),bbox.y(), bbox.width(), frameHeight);
+            _nameFrame->setRect(nameFrameBox);
+            height = std::max((double)bbox.height(), nameFrameBox.height());
+            textY = bbox.y() + frameHeight / 2 -  labelHeight / 2;
+        } else {
+            if (_previewPixmap) {
+                textY = bbox.y() + height / 2 - textPlusPixHeight / 2 + prevH;
+            } else {
+                textY = bbox.y() + height / 2 - labelHeight / 2;
+            }
+        }
+        
+        _nameItem->setPos(textX, textY);
+    }
+    return height;
+}
+
 void
 NodeGui::resize(int width,
                 int height,
@@ -816,55 +853,49 @@ NodeGui::resize(int width,
         return;
     }
 
-    QPointF topLeft = mapFromParent( pos() );
-    QRectF labelBbox = _nameItem->boundingRect();
-
+    const QPointF topLeft = mapFromParent(pos());
+    const QPointF bottomRight(topLeft.x() + width,topLeft.y() + height);
+    
+    const bool hasPluginIcon = _pluginIcon != NULL;
+    const int iconWidth = getPluginIconWidth();
     adjustSizeToContent(&width,&height,adjustToTextSize);
 
-    bool hasPluginIcon = _pluginIcon != NULL;
 
     {
         QMutexLocker k(&_mtSafeSizeMutex);
         _mtSafeWidth = width;
         _mtSafeHeight = height;
+        
     }
 
-    int iconWidth = hasPluginIcon ? NATRON_PLUGIN_ICON_SIZE + PLUGIN_ICON_OFFSET * 2 : 0;
 
     QRectF bbox(topLeft.x(),topLeft.y(),width,height);
 
     _boundingBox->setRect(bbox);
 
+    int iconSize = TO_DPIY(NATRON_PLUGIN_ICON_SIZE);
+    int iconOffsetX = TO_DPIX(PLUGIN_ICON_OFFSET);
     if (hasPluginIcon) {
-        _pluginIcon->setX(topLeft.x() + PLUGIN_ICON_OFFSET);
-        int iconsOffset = _mergeIcon  && _mergeIcon->isVisible() ? (height - 2 * NATRON_PLUGIN_ICON_SIZE) / 3. : (height - NATRON_PLUGIN_ICON_SIZE) /2.;
+        _pluginIcon->setX(topLeft.x() + iconOffsetX);
+        int iconsOffset = _mergeIcon  && _mergeIcon->isVisible() ? (height - 2 * iconSize) / 3. : (height - iconSize) /2.;
         _pluginIcon->setY(topLeft.y() + iconsOffset);
-        _pluginIconFrame->setRect(topLeft.x(),topLeft.y(),iconWidth, height);
+        _pluginIconFrame->setRect(topLeft.x(),topLeft.y(), iconWidth, height);
     }
 
     if (_mergeIcon && _mergeIcon->isVisible()) {
-        int iconsOffset =  (height - 2 * NATRON_PLUGIN_ICON_SIZE) / 3.;
-        _mergeIcon->setX(topLeft.x() + PLUGIN_ICON_OFFSET);
-        _mergeIcon->setY(topLeft.y() + iconsOffset * 2 + NATRON_PLUGIN_ICON_SIZE);
+        int iconsOffset =  (height - 2 * iconSize) / 3.;
+        _mergeIcon->setX(topLeft.x() + iconOffsetX);
+        _mergeIcon->setY(topLeft.y() + iconsOffset * 2 + iconSize);
     }
 
     QFont f(appFont,appFontSize);
-    QFontMetrics metrics(f);
-    int nameWidth = labelBbox.width();
-    _nameItem->setX( topLeft.x() + iconWidth +  ((width - iconWidth) / 2) - (nameWidth / 2) );
+    QFontMetrics metrics(f,0);
+    
+    height = refreshPreviewAndLabelPosition(bbox);
 
-    double mh = labelBbox.height();
-    _nameItem->setY(topLeft.y() + mh * 0.1);
-
-    if (mustFrameName()) {
-        QRectF nameFrameBox(topLeft.x(),topLeft.y(), width, 1.5 * mh);
-        _nameFrame->setRect(nameFrameBox);
-        height = std::max((double)height, nameFrameBox.height());
-    }
 
     if (mustAddResizeHandle()) {
         QPolygonF poly;
-        QPointF bottomRight(topLeft.x() + width,topLeft.y() + height);
         poly.push_back( QPointF( bottomRight.x() - 20,bottomRight.y() ) );
         poly.push_back(bottomRight);
         poly.push_back( QPointF(bottomRight.x(), bottomRight.y() - 20) );
@@ -872,23 +903,28 @@ NodeGui::resize(int width,
 
     }
 
-    QString persistentMessage = _persistentMessage->toPlainText();
+    QString persistentMessage = _persistentMessage->text();
     f.setPixelSize(25);
-    metrics = QFontMetrics(f);
+    metrics = QFontMetrics(f,0);
     int pMWidth = metrics.width(persistentMessage);
     QPointF bitDepthPos(topLeft.x() + iconWidth + (width - iconWidth) / 2,0);
     _bitDepthWarning->refreshPosition(bitDepthPos);
 
-    _expressionIndicator->refreshPosition( topLeft + QPointF(width,0) );
-
-    _persistentMessage->setPos(topLeft.x() + (width / 2) - (pMWidth / 2), topLeft.y() + height / 2 - metrics.height() / 2);
-    _stateIndicator->setRect(topLeft.x() - NATRON_STATE_INDICATOR_OFFSET,topLeft.y() - NATRON_STATE_INDICATOR_OFFSET,
-                             width + NATRON_STATE_INDICATOR_OFFSET * 2,height + NATRON_STATE_INDICATOR_OFFSET * 2);
-    if (_previewPixmap) {
-        _previewPixmap->setPos(topLeft.x() + iconWidth + NODE_WIDTH / 4. ,
-                               topLeft.y() + height / 2 - NATRON_PREVIEW_HEIGHT / 2 + 10);
+    if (_expressionIndicator) {
+        _expressionIndicator->refreshPosition( topLeft + QPointF(width,0) );
     }
-
+    if (_availableViewsIndicator) {
+        _availableViewsIndicator->refreshPosition(topLeft);
+    }
+    if (_passThroughIndicator) {
+        _passThroughIndicator->refreshPosition(bottomRight );
+    }
+    
+    int indicatorOffset = TO_DPIX(NATRON_STATE_INDICATOR_OFFSET);
+    _persistentMessage->setPos(topLeft.x() + (width / 2) - (pMWidth / 2), topLeft.y() + height / 2 - metrics.height() / 2);
+    _stateIndicator->setRect(topLeft.x() - indicatorOffset,topLeft.y() - indicatorOffset,
+                             width + indicatorOffset * 2,height + indicatorOffset * 2);
+   
     _disabledBtmLeftTopRight->setLine( QLineF( bbox.bottomLeft(),bbox.topRight() ) );
     _disabledTopLeftBtmRight->setLine( QLineF( bbox.topLeft(),bbox.bottomRight() ) );
 
@@ -1165,7 +1201,7 @@ NodeGui::markInputNull(Edge* e)
 }
 
 void
-NodeGui::updatePreviewImage(int time)
+NodeGui::updatePreviewImage(double time)
 {
     NodePtr node = getNode();
     if ( isVisible() && node->isPreviewEnabled()  && node->getApp()->getProject()->isAutoPreviewEnabled() ) {
@@ -1177,12 +1213,14 @@ NodeGui::updatePreviewImage(int time)
 
         ensurePreviewCreated();
 
-        QtConcurrent::run(this,&NodeGui::computePreviewImage,time);
+        boost::shared_ptr<NodeGui> thisShared = shared_from_this();
+        assert(thisShared);
+        appPTR->appendTaskToPreviewThread(thisShared, time);
     }
 }
 
 void
-NodeGui::forceComputePreview(int time)
+NodeGui::forceComputePreview(double time)
 {
     NodePtr node = getNode();
     if (!node) {
@@ -1196,48 +1234,48 @@ NodeGui::forceComputePreview(int time)
         }
 
         ensurePreviewCreated();
-
-        QtConcurrent::run(this,&NodeGui::computePreviewImage,time);
+        boost::shared_ptr<NodeGui> thisShared = shared_from_this();
+        assert(thisShared);
+        appPTR->appendTaskToPreviewThread(thisShared, time);
     }
 }
 
 void
-NodeGui::computePreviewImage(int time)
+NodeGui::onPreviewImageComputed()
 {
-    NodePtr node = getNode();
-    if ( node->isRenderingPreview() ) {
-        return;
-    }
-
-
-    int w = NATRON_PREVIEW_WIDTH;
-    int h = NATRON_PREVIEW_HEIGHT;
-    size_t dataSize = 4 * w * h;
+    assert(QThread::currentThread() == qApp->thread());
+    assert(_previewPixmap);
+    
     {
-#ifndef __NATRON_WIN32__
-        unsigned int* buf = (unsigned int*)calloc(dataSize,1);
-#else
-        unsigned int* buf = (unsigned int*)malloc(dataSize);
-        for (int i = 0; i < w * h; ++i) {
-            buf[i] = qRgba(0,0,0,255);
-        }
-#endif
-        bool success = node->makePreviewImage(time, &w, &h, buf);
-
-        if (success) {
-            QImage img(reinterpret_cast<const uchar*>(buf), w, h, QImage::Format_ARGB32_Premultiplied);
-            QPixmap prev_pixmap = QPixmap::fromImage(img);
-            _previewPixmap->setPixmap(prev_pixmap);
-            QPointF topLeft = mapFromParent( pos() );
-            QRectF bbox = boundingRect();
-
-            int iconWidth = _pluginIcon ? NATRON_PLUGIN_ICON_SIZE + PLUGIN_ICON_OFFSET * 2 : 0;
-            _previewPixmap->setPos(topLeft.x() + iconWidth + NODE_WIDTH / 4. ,
-                                   topLeft.y() + bbox.height() / 2 - NATRON_PREVIEW_HEIGHT / 2 + 10);
-        }
-        free(buf);
+        QMutexLocker k(&_previewDataMutex);
+        QImage img(reinterpret_cast<const uchar*>(&_previewData.front()), _previewW, _previewH, QImage::Format_ARGB32_Premultiplied);
+        QPixmap pix = QPixmap::fromImage(img);
+        _previewPixmap->setPixmap(pix);
     }
+    const QPointF topLeft = mapFromParent(pos());
+    int width,height;
+    {
+        QMutexLocker k(&_mtSafeSizeMutex);
+        height = _mtSafeHeight;
+        width = _mtSafeWidth;
+    }
+    QRectF bbox(topLeft.x(), topLeft.y(), width, height);
+    refreshPreviewAndLabelPosition(bbox);
+
 }
+
+void
+NodeGui::copyPreviewImageBuffer(const std::vector<unsigned int>& data, int width, int height)
+{
+    {
+        QMutexLocker k(&_previewDataMutex);
+        _previewData = data;
+        _previewW = width;
+        _previewH = height;
+    }
+    Q_EMIT previewImageComputed();
+}
+
 
 bool
 NodeGui::getOverlayColor(double* r, double* g, double* b) const
@@ -1271,9 +1309,7 @@ NodeGui::initializeInputsForInspector()
     ///If the node is something else (switch, merge) show 2 inputs and another one aside an hide all others.
 
     bool isViewer = dynamic_cast<ViewerInstance*>(node->getLiveInstance()) != 0;
-
     int maxInitiallyOnTopVisibleInputs = isViewer ? 1 : 2;
-
     double piDividedbyX = M_PI / (maxInitiallyOnTopVisibleInputs + 1);
 
     double angle =  piDividedbyX;
@@ -1296,24 +1332,7 @@ NodeGui::initializeInputsForInspector()
         }
     }
 
-
-    bool inputAsideDisplayed = false;
-    for (U32 i = 0; i < _inputEdges.size(); ++i) {
-        if (_inputEdges[i]->hasSource() || node->getLiveInstance()->isInputMask(i)) {
-            _inputEdges[i]->setVisible(true);
-        } else {
-            if ((int)i < maxInitiallyOnTopVisibleInputs) {
-                _inputEdges[i]->setVisible(true);
-            } else {
-                if (!inputAsideDisplayed) {
-                    _inputEdges[i]->setVisible(true);
-                    inputAsideDisplayed = true;
-                } else {
-                    _inputEdges[i]->setVisible(false);
-                }
-            }
-        }
-    }
+    refreshEdgesVisility();
 
 }
 
@@ -1451,45 +1470,58 @@ NodeGui::boundingRect() const
 }
 
 void
-NodeGui::checkOptionalEdgesVisibility()
+NodeGui::refreshEdgesVisility()
 {
     QPointF mousePos = mapFromScene(_graph->mapToScene(_graph->mapFromGlobal(QCursor::pos())));
-    bool visible = contains(mousePos) || getIsSelected();
-    setOptionalInputsVisibleInternal(visible);
+    bool hovered = contains(mousePos);
+    refreshEdgesVisibilityInternal(hovered);
 }
 
 void
-NodeGui::setOptionalInputsVisibleInternal(bool visible)
+NodeGui::refreshEdgesVisility(bool hovered)
 {
-    _optionalInputsVisible = visible;
     
-    NodePtr node = getNode();
-    bool isReader = node->getLiveInstance()->isReader();
+    refreshEdgesVisibilityInternal(hovered);
+}
+
+
+void
+NodeGui::refreshEdgesVisibilityInternal(bool hovered)
+{
     for (U32 i = 0; i < _inputEdges.size() ; ++i) {
-        if (isReader || (node->getLiveInstance()->isInputOptional(i) &&
-                         node->getLiveInstance()->isInputMask(i) &&
-                         !_inputEdges[i]->isRotoEdge())) {
-            
-            bool nodeVisible = _optionalInputsVisible;
-            if (!_optionalInputsVisible && node->getRealInput(i) ) {
-                nodeVisible = true;
+        _inputEdges[i]->refreshState(hovered);
+    }
+    
+    boost::shared_ptr<Natron::Node> node = getNode();
+    InspectorNode* isInspector = dynamic_cast<InspectorNode*>(node.get());
+    if (isInspector) {
+        
+        bool isViewer = dynamic_cast<ViewerInstance*>(node->getLiveInstance()) != 0;
+        int maxInitiallyOnTopVisibleInputs = isViewer ? 1 : 2;
+        bool inputAsideDisplayed = false;
+        
+        /*
+         * If optional inputs are displayed, only show one input on th left side of the node
+         */
+        for (int i = maxInitiallyOnTopVisibleInputs; i < (int)_inputEdges.size(); ++i) {
+            if (!_inputEdges[i]->isVisible() || _inputEdges[i]->isMask()) {
+                continue;
             }
-            
-            _inputEdges[i]->setVisible(nodeVisible);
-            
+            if (!inputAsideDisplayed) {
+                if (!_inputEdges[i]->getSource()) {
+                    inputAsideDisplayed = true;
+                }
+            } else {
+                if (!_inputEdges[i]->getSource()) {
+                    _inputEdges[i]->setVisible(false);
+                }
+            }
         }
     }
-
+    
+    update();
 }
 
-void
-NodeGui::setOptionalInputsVisible(bool visible)
-{
-
-    if (visible != _optionalInputsVisible) {
-        setOptionalInputsVisibleInternal(visible);
-    }
-}
 
 QRectF
 NodeGui::boundingRectWithEdges() const
@@ -1577,19 +1609,7 @@ NodeGui::setUserSelected(bool b)
         }
     }
 
-    bool optionalInputsAutoHidden = _graph->areOptionalInputsAutoHidden();
-    if (optionalInputsAutoHidden) {
-        if (!b) {
-            QPointF evpt = mapFromScene(_graph->mapToScene(_graph->mapFromGlobal(QCursor::pos())));
-            QRectF bbox = boundingRect();
-            if (!bbox.contains(evpt)) {
-                setOptionalInputsVisible(false);
-            }
-        } else {
-            setOptionalInputsVisible(true);
-        }
-    }
-
+    refreshEdgesVisility();
     refreshStateIndicator();
 
 
@@ -1599,7 +1619,8 @@ NodeGui::setUserSelected(bool b)
 bool
 NodeGui::getIsSelected() const
 {
-    QMutexLocker l(&_selectedMutex); return _selected;
+    QMutexLocker l(&_selectedMutex);
+    return _selected;
 }
 
 
@@ -1640,7 +1661,7 @@ NodeGui::connectEdge(int edgeNumber)
         initializeInputsForInspector();
     }
     
-    checkOptionalEdgesVisibility();
+    refreshEdgesVisility();
 
     return true;
 
@@ -1968,13 +1989,13 @@ NodeGui::onPersistentMessageChanged()
     } else {
 
         if (type == 1) {
-            _persistentMessage->setPlainText(tr("ERROR"));
+            _persistentMessage->setText(tr("ERROR"));
             QColor errColor(128,0,0,255);
-            _persistentMessage->setDefaultTextColor(errColor);
+            _persistentMessage->setBrush(errColor);
         } else if (type == 2) {
-            _persistentMessage->setPlainText(tr("WARNING"));
+            _persistentMessage->setText(tr("WARNING"));
             QColor warColor(180,180,0,255);
-            _persistentMessage->setDefaultTextColor(warColor);
+            _persistentMessage->setBrush(warColor);
         } else {
             return;
         }
@@ -2148,19 +2169,6 @@ NodeGui::setMergeHintActive(bool active)
 
 }
 
-void
-NodeGui::setVisibleDetails(bool visible)
-{
-    if (!isVisible()) {
-        return;
-    }
-    if (_nameItem) {
-        _nameItem->setVisible(visible);
-    }
-    for (InputEdges::iterator it = _inputEdges.begin(); it != _inputEdges.end(); ++it) {
-        (*it)->setVisibleDetails(visible);
-    }
-}
 
 void
 NodeGui::onInputNRenderingStarted(int input)
@@ -2501,10 +2509,11 @@ NodeGui::toggleBitDepthIndicator(bool on,
 struct NodeGuiIndicatorPrivate
 {
     QGraphicsEllipseItem* ellipse;
-    QGraphicsTextItem* textItem;
+    QGraphicsSimpleTextItem* textItem;
     QGradientStops gradStops;
 
-    NodeGuiIndicatorPrivate(int depth,
+    NodeGuiIndicatorPrivate(NodeGraph* graph,
+                            int depth,
                             const QString & text,
                             const QPointF & topLeft,
                             int width,
@@ -2529,12 +2538,19 @@ struct NodeGuiIndicatorPrivate
         ellipse->setBrush(radialGrad);
 
 
-        textItem = new QGraphicsTextItem(text,parent);
-        //QFont font(appFont,appFontSize);
-        QFontMetrics fm(textItem->font());
-        textItem->setPos(topLeft.x()  - 2 * width / 3, topLeft.y() - 2 * fm.height() / 3);
-        //textItem->setFont(font);
-        textItem->setDefaultTextColor(textColor);
+        textItem = new NodeGraphSimpleTextItem(graph,parent,false);
+        textItem->setText(text);
+        
+        
+        QPointF sceneCenter = ellipse->mapToScene(ellipse->mapFromParent(ellipseCenter));
+        QRectF textBr = textItem->mapToScene(textItem->boundingRect()).boundingRect();
+        sceneCenter.ry() -= (textBr.height() / 2.);
+        sceneCenter.rx() -= (textBr.width() / 2.);
+        QPointF textPos = textItem->mapToParent(textItem->mapFromScene(sceneCenter));
+        textItem->setPos(textPos);
+
+        
+        textItem->setBrush(textColor);
         textItem->setZValue(depth);
 #if QT_VERSION < 0x050000
         textItem->scale(0.8, 0.8);
@@ -2544,7 +2560,8 @@ struct NodeGuiIndicatorPrivate
     }
 };
 
-NodeGuiIndicator::NodeGuiIndicator(int depth,
+NodeGuiIndicator::NodeGuiIndicator(NodeGraph* graph,
+                                   int depth,
                                    const QString & text,
                                    const QPointF & topLeft,
                                    int width,
@@ -2552,7 +2569,7 @@ NodeGuiIndicator::NodeGuiIndicator(int depth,
                                    const QGradientStops & gradient,
                                    const QColor & textColor,
                                    QGraphicsItem* parent)
-    : _imp( new NodeGuiIndicatorPrivate(depth,text,topLeft,width,height,gradient,textColor,parent) )
+    : _imp( new NodeGuiIndicatorPrivate(graph,depth,text,topLeft,width,height,gradient,textColor,parent) )
 {
 }
 
@@ -2594,10 +2611,15 @@ NodeGuiIndicator::refreshPosition(const QPointF & topLeft)
     QRadialGradient radialGrad(ellipseRect.center(),ellipseRad);
     radialGrad.setStops(_imp->gradStops);
     _imp->ellipse->setBrush(radialGrad);
-
-    QFont font = _imp->textItem->font();
-    QFontMetrics fm(font);
-    _imp->textItem->setPos(topLeft.x()  - 2 * r.width() / 3, topLeft.y() - 2 * fm.height() / 3);
+    QPointF ellipseCenter = ellipseRect.center();
+    
+    
+    QPointF sceneCenter = _imp->ellipse->mapToScene(_imp->ellipse->mapFromParent(ellipseCenter));
+    QRectF textBr = _imp->textItem->mapToScene(_imp->textItem->boundingRect()).boundingRect();
+    sceneCenter.ry() -= (textBr.height() / 2.);
+    sceneCenter.rx() -= (textBr.width() / 2.);
+    QPointF textPos = _imp->textItem->mapToParent(_imp->textItem->mapFromScene(sceneCenter));
+    _imp->textItem->setPos(textPos);
 }
 
 ///////////////////
@@ -2661,23 +2683,8 @@ NodeGui::setNameItemHtml(const QString & name,
     QString textLabel;
     textLabel.append("<div align=\"center\">");
     bool hasFontData = true;
-    QString extraLayerStr;
     
-    std::string selectedLayer;
-    bool foundLayer = getNode()->getSelectedLayer(-1,selectedLayer);
-    if (foundLayer) {
-        if (selectedLayer != ImageComponents::getRGBAComponents().getComponentsGlobalName() &&
-            selectedLayer != ImageComponents::getRGBComponents().getComponentsGlobalName() &&
-            selectedLayer != ImageComponents::getAlphaComponents().getComponentsGlobalName() &&
-            selectedLayer != "None" &&
-            selectedLayer != "All") {
-            extraLayerStr.append("<br>");
-            extraLayerStr.push_back('(');
-            extraLayerStr.append(selectedLayer.c_str());
-            extraLayerStr.push_back(')');
-        }
-    }
-    
+
     if ( !label.isEmpty() ) {
         QString labelCopy = label;
 
@@ -2701,9 +2708,9 @@ NodeGui::setNameItemHtml(const QString & name,
             QString toFind("\">");
             int endFontTag = labelCopy.indexOf(toFind,startFontTag);
             int i = endFontTag += toFind.size();
-            labelCopy.insert(i == -1 ? 0 : i, name + extraLayerStr + "<br>");
+            labelCopy.insert(i == -1 ? 0 : i, name + _channelsExtraLabel + "<br>");
         } else {
-            labelCopy.prepend(name + extraLayerStr + "<br>");
+            labelCopy.prepend(name + _channelsExtraLabel + "<br>");
         }
         textLabel.append(labelCopy);
 
@@ -2715,10 +2722,14 @@ NodeGui::setNameItemHtml(const QString & name,
                            .arg(QApplication::font().family()));
         textLabel.append(fontTag);
         textLabel.append(name);
-        textLabel.append(extraLayerStr);
+        textLabel.append(_channelsExtraLabel);
         textLabel.append("</font>");
     }
     textLabel.append("</div>");
+    QString oldText = _nameItem->toHtml();
+    if (textLabel == oldText) {
+        return;
+    }
     _nameItem->setHtml(textLabel);
     _nameItem->adjustSize();
 
@@ -2727,6 +2738,10 @@ NodeGui::setNameItemHtml(const QString & name,
     QColor color;
     if (hasFontData) {
         KnobGuiString::parseFont(textLabel, &f, &color);
+    }
+    bool antialias = appPTR->getCurrentSettings()->isNodeGraphAntiAliasingEnabled();
+    if (!antialias) {
+        f.setStyleStrategy(QFont::NoAntialias);
     }
     _nameItem->setFont(f);
 
@@ -2740,6 +2755,28 @@ NodeGui::setNameItemHtml(const QString & name,
 void
 NodeGui::onOutputLayerChanged()
 {
+    QString extraLayerStr;
+    
+    std::string selectedLayer;
+    bool foundLayer = getNode()->getSelectedLayerChoiceRaw(-1,selectedLayer);
+    if (!foundLayer) {
+        return;
+    }
+
+    bool isCurLayerColorComp = selectedLayer == kNatronAlphaPlaneUserName || selectedLayer == kNatronRGBPlaneUserName || selectedLayer == kNatronRGBAPlaneUserName;
+    
+    if (!isCurLayerColorComp &&
+        selectedLayer != "None" &&
+        selectedLayer != "All") {
+        extraLayerStr.append("<br>");
+        extraLayerStr.push_back('(');
+        extraLayerStr.append(selectedLayer.c_str());
+        extraLayerStr.push_back(')');
+    }
+    if (extraLayerStr == _channelsExtraLabel) {
+        return;
+    }
+    _channelsExtraLabel = extraLayerStr;
     setNameItemHtml(getNode()->getLabel().c_str(),_nodeLabel);
 }
 
@@ -2764,12 +2801,14 @@ NodeGui::onNodeExtraLabelChanged(const QString & label)
     if (getNode()->getPlugin()->getPluginID() == QString(PLUGINID_OFX_MERGE)) {
         assert(_mergeIcon);
         QString op = KnobGuiString::getNatronHtmlTagContent(label);
-        //Remove surrounding parenthesis
-        if (op[0] == QChar('(')) {
-            op.remove(0, 1);
-        }
-        if (op[op.size() - 1] == QChar(')')) {
-            op.remove(op.size() - 1,1);
+        if  (!op.isEmpty()) {
+            //Remove surrounding parenthesis
+            if (op[0] == QChar('(')) {
+                op.remove(0, 1);
+            }
+            if (op[op.size() - 1] == QChar(')')) {
+                op.remove(op.size() - 1,1);
+            }
         }
         QPixmap pix;
         getPixmapForMergeOperator(op, &pix);
@@ -2904,15 +2943,6 @@ NodeGui::refreshKnobsAfterTimeChange(SequenceTime time)
 }
 
 void
-NodeGui::onGuiFrozenChanged(bool frozen)
-{
-    if ( ( _settingsPanel ) ) {
-
-        getNode()->getLiveInstance()->onGuiFrozenChange(frozen);
-    }
-}
-
-void
 NodeGui::onSettingsPanelClosedChanged(bool closed)
 {
     if (!_settingsPanel) {
@@ -2967,93 +2997,6 @@ NodeGui::onParentMultiInstancePositionChanged(int x,
     refreshPosition(x, y,true);
 }
 
-//////////Dot node gui
-DotGui::DotGui(QGraphicsItem* parent)
-: NodeGui(parent)
-, diskShape(NULL)
-, ellipseIndicator(NULL)
-{
-}
-
-void
-DotGui::createGui()
-{
-    double depth = getBaseDepth();
-    setZValue(depth);
-
-    diskShape = new QGraphicsEllipseItem(this);
-    diskShape->setZValue(depth);
-    QPointF topLeft = mapFromParent( pos() );
-    diskShape->setRect( QRectF(topLeft.x(),topLeft.y(),DOT_GUI_DIAMETER,DOT_GUI_DIAMETER) );
-
-    ellipseIndicator = new QGraphicsEllipseItem(this);
-    ellipseIndicator->setRect(QRectF(topLeft.x() - NATRON_STATE_INDICATOR_OFFSET,
-                                     topLeft.y() - NATRON_STATE_INDICATOR_OFFSET,
-                                     DOT_GUI_DIAMETER + NATRON_STATE_INDICATOR_OFFSET * 2,
-                                     DOT_GUI_DIAMETER + NATRON_STATE_INDICATOR_OFFSET * 2));
-    ellipseIndicator->hide();
-}
-
-void
-DotGui::refreshStateIndicator()
-{
-    bool showIndicator = true;
-    if (getIsSelected()) {
-        ellipseIndicator->setBrush(QColor(255,255,255,128));
-    } else {
-        showIndicator = false;
-    }
-
-    if (showIndicator && !ellipseIndicator->isVisible()) {
-        ellipseIndicator->show();
-    } else if (!showIndicator && ellipseIndicator->isVisible()) {
-        ellipseIndicator->hide();
-    } else {
-        update();
-    }
-
-}
-
-void
-DotGui::applyBrush(const QBrush & brush)
-{
-    diskShape->setBrush(brush);
-}
-
-NodeSettingsPanel*
-DotGui::createPanel(QVBoxLayout* container,
-                    const boost::shared_ptr<NodeGui> & thisAsShared)
-{
-    NodeSettingsPanel* panel = new NodeSettingsPanel( boost::shared_ptr<MultiInstancePanel>(),
-                                                      getDagGui()->getGui(),
-                                                      thisAsShared,
-                                                      container,container->parentWidget() );
-
-    ///Always close the panel by default for Dots
-    panel->setClosed(true);
-
-    return panel;
-}
-
-QRectF
-DotGui::boundingRect() const
-{
-    QTransform t;
-    QRectF bbox = diskShape->boundingRect();
-    QPointF center = bbox.center();
-
-    t.translate( center.x(), center.y() );
-    t.scale( scale(), scale() );
-    t.translate( -center.x(), -center.y() );
-
-    return t.mapRect(bbox);
-}
-
-QPainterPath
-DotGui::shape() const
-{
-    return diskShape->shape();
-}
 
 void
 NodeGui::onInternalNameChanged(const QString & s)
@@ -3073,10 +3016,45 @@ NodeGui::onInternalNameChanged(const QString & s)
 void
 NodeGui::setName(const QString & newName)
 {
+    
+    
+    std::string stdName = newName.toStdString();
+    stdName = Natron::makeNameScriptFriendly(stdName);
+    std::string oldScriptName = getNode()->getScriptName();
+    try {
+        getNode()->setScriptName(stdName);
+    } catch (const std::exception& e) {
+        Natron::errorDialog(tr("Rename").toStdString(), tr("Could not set node script-name to ").toStdString() + stdName + ": " + e.what());
+        return;
+    }
+    
+    ///Update expressions on all knobs
+    const std::vector<boost::shared_ptr<KnobI> >& knobs = getNode()->getKnobs();
+    for (std::vector<boost::shared_ptr<KnobI> >::const_iterator it = knobs.begin(); it != knobs.end(); ++it) {
+        std::list<boost::shared_ptr<KnobI> > listeners;
+        (*it)->getListeners(listeners);
+        for (std::list<boost::shared_ptr<KnobI> > ::iterator it2 = listeners.begin() ; it2 != listeners.end(); ++it2) {
+            for (int i = 0; i < (*it2)->getDimension() ;++i) {
+                
+                std::string expr = (*it2)->getExpression(i);
+                bool hasRet = (*it2)->isExpressionUsingRetVariable(i);
+                if (!expr.empty()) {
+                    QString qexpr(expr.c_str());
+                    qexpr.replace(oldScriptName.c_str(), stdName.c_str());
+                    try {
+                        (*it2)->setExpression(i, qexpr.toStdString(), hasRet);
+                    } catch (...) {
+                        
+                    }
+                }
+            }
+        }
+    }
+    
     _settingNameFromGui = true;
-    getNode()->setLabel(newName.toStdString());
+    getNode()->setLabel(stdName);
     _settingNameFromGui = false;
-
+    
     onInternalNameChanged(newName);
 }
 
@@ -3160,260 +3138,6 @@ NodeGui::getSize(double* w, double* h) const
     *h = s.height();
 }
 
-struct ExportGroupTemplateDialogPrivate
-{
-    Gui* gui;
-    NodeCollection* group;
-    QGridLayout* mainLayout;
-
-    Natron::Label* labelLabel;
-    LineEdit* labelEdit;
-
-    Natron::Label* idLabel;
-    LineEdit* idEdit;
-
-    Natron::Label* groupingLabel;
-    LineEdit* groupingEdit;
-
-    Natron::Label* fileLabel;
-    LineEdit* fileEdit;
-    Button* openButton;
-
-    Natron::Label* iconPathLabel;
-    LineEdit* iconPath;
-
-    Natron::Label* descriptionLabel;
-    LineEdit* descriptionEdit;
-
-    QDialogButtonBox *buttons;
-
-    ExportGroupTemplateDialogPrivate(NodeCollection* group,Gui* gui)
-    : gui(gui)
-    , group(group)
-    , mainLayout(0)
-    , labelLabel(0)
-    , labelEdit(0)
-    , idLabel(0)
-    , idEdit(0)
-    , groupingLabel(0)
-    , groupingEdit(0)
-    , fileLabel(0)
-    , fileEdit(0)
-    , openButton(0)
-    , iconPathLabel(0)
-    , iconPath(0)
-    , descriptionLabel(0)
-    , descriptionEdit(0)
-    , buttons(0)
-    {
-
-    }
-};
-
-ExportGroupTemplateDialog::ExportGroupTemplateDialog(NodeCollection* group,Gui* gui,QWidget* parent)
-: QDialog(parent)
-, _imp(new ExportGroupTemplateDialogPrivate(group,gui))
-{
-    _imp->mainLayout = new QGridLayout(this);
-
-
-    _imp->idLabel = new Natron::Label(tr("Unique ID"),this);
-    QString idTt = Natron::convertFromPlainText(tr("The unique ID is used by " NATRON_APPLICATION_NAME "to identify the plug-in in various "
-                                               "places in the application. Generally this contains domain and sub-domains names "
-                                               "such as fr.inria.group.XXX. If 2 plug-ins happen to have the same ID they will be "
-                                               "gathered by version. If 2 plug-ins have the same ID and version, the first loaded in the"
-                                               " search-paths will take precedence over the other."), Qt::WhiteSpaceNormal);
-    _imp->idEdit = new LineEdit(this);
-    _imp->idEdit->setPlaceholderText("org.organization.pyplugs.XXX");
-    _imp->idEdit->setToolTip(idTt);
-
-
-    _imp->labelLabel = new Natron::Label(tr("Label"),this);
-    QString labelTt = Natron::convertFromPlainText(tr("Set the label of the group as the user will see it in the user interface."), Qt::WhiteSpaceNormal);
-    _imp->labelLabel->setToolTip(labelTt);
-    _imp->labelEdit = new LineEdit(this);
-    _imp->labelEdit->setPlaceholderText("MyPlugin");
-    QObject::connect(_imp->labelEdit,SIGNAL(editingFinished()), this , SLOT(onLabelEditingFinished()));
-    _imp->labelEdit->setToolTip(labelTt);
-
-
-    _imp->groupingLabel = new Natron::Label(tr("Grouping"),this);
-    QString groupingTt = Natron::convertFromPlainText(tr("The grouping of the plug-in specifies where the plug-in will be located in the menus. "
-                                                     "E.g: Color/Transform, or Draw. Each sub-level must be separated by a '/'."), Qt::WhiteSpaceNormal);
-    _imp->groupingLabel->setToolTip(groupingTt);
-
-    _imp->groupingEdit = new LineEdit(this);
-    _imp->groupingEdit->setPlaceholderText("Color/Transform");
-    _imp->groupingEdit->setToolTip(groupingTt);
-
-
-    _imp->iconPathLabel = new Natron::Label(tr("Icon relative path"),this);
-    QString iconTt = Natron::convertFromPlainText(tr("Set here the file path of an optional icon to identify the plug-in. "
-                                                 "The path is relative to the Python script."), Qt::WhiteSpaceNormal);
-    _imp->iconPathLabel->setToolTip(iconTt);
-    _imp->iconPath = new LineEdit(this);
-    _imp->iconPath->setPlaceholderText("Label.png");
-    _imp->iconPath->setToolTip(iconTt);
-
-    _imp->descriptionLabel = new Natron::Label(tr("Description"),this);
-    QString descTt =  Natron::convertFromPlainText(tr("Set here the (optional) plug-in description that the user will see when clicking the "
-                                                  " \"?\" button on the settings panel of the node."), Qt::WhiteSpaceNormal);
-    _imp->descriptionEdit = new LineEdit(this);
-    _imp->descriptionEdit->setToolTip(descTt);
-    _imp->descriptionEdit->setPlaceholderText(tr("This plug-in can be used to produce XXX effect..."));
-
-    _imp->fileLabel = new Natron::Label(tr("Directory"),this);
-    QString fileTt  = Natron::convertFromPlainText(tr("Specify here the directory where to export the Python script."), Qt::WhiteSpaceNormal);
-    _imp->fileLabel->setToolTip(fileTt);
-    _imp->fileEdit = new LineEdit(this);
-
-
-    _imp->fileEdit->setToolTip(fileTt);
-
-
-    QPixmap openPix;
-    appPTR->getIcon(Natron::NATRON_PIXMAP_OPEN_FILE, NATRON_MEDIUM_BUTTON_ICON_SIZE, &openPix);
-    _imp->openButton = new Button(QIcon(openPix),"",this);
-    _imp->openButton->setFocusPolicy(Qt::NoFocus);
-    _imp->openButton->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
-    QObject::connect( _imp->openButton, SIGNAL( clicked() ), this, SLOT( onButtonClicked() ) );
-
-    _imp->buttons = new QDialogButtonBox(QDialogButtonBox::StandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel),
-                                         Qt::Horizontal,this);
-    QObject::connect(_imp->buttons, SIGNAL(accepted()), this, SLOT(onOkClicked()));
-    QObject::connect(_imp->buttons, SIGNAL(rejected()), this, SLOT(reject()));
-
-
-    _imp->mainLayout->addWidget(_imp->idLabel, 0, 0 , 1 , 1);
-    _imp->mainLayout->addWidget(_imp->idEdit, 0, 1,  1 , 2);
-    _imp->mainLayout->addWidget(_imp->labelLabel, 1, 0 , 1 , 1);
-    _imp->mainLayout->addWidget(_imp->labelEdit, 1, 1,  1 , 2);
-    _imp->mainLayout->addWidget(_imp->groupingLabel, 2, 0,  1 , 1);
-    _imp->mainLayout->addWidget(_imp->groupingEdit, 2, 1,  1 , 2);
-    _imp->mainLayout->addWidget(_imp->iconPathLabel, 3, 0 , 1 , 1);
-    _imp->mainLayout->addWidget(_imp->iconPath, 3, 1 , 1 , 2);
-    _imp->mainLayout->addWidget(_imp->descriptionLabel, 4, 0 , 1 , 1);
-    _imp->mainLayout->addWidget(_imp->descriptionEdit, 4, 1 , 1 , 2);
-    _imp->mainLayout->addWidget(_imp->fileLabel, 5, 0 , 1 , 1);
-    _imp->mainLayout->addWidget(_imp->fileEdit, 5, 1, 1 , 1);
-    _imp->mainLayout->addWidget(_imp->openButton, 5, 2, 1, 1);
-    _imp->mainLayout->addWidget(_imp->buttons, 6, 0, 1, 3);
-
-    resize(400,sizeHint().height());
-
-
-}
-
-ExportGroupTemplateDialog::~ExportGroupTemplateDialog()
-{
-
-}
-
-void
-ExportGroupTemplateDialog::onButtonClicked()
-{
-    std::vector<std::string> filters;
-
-    const QString& path = _imp->gui->getLastPluginDirectory();
-    SequenceFileDialog dialog(this,filters,false,SequenceFileDialog::eFileDialogModeDir,path.toStdString(),_imp->gui,false);
-    if (dialog.exec()) {
-        std::string selection = dialog.selectedFiles();
-        _imp->fileEdit->setText(selection.c_str());
-        QDir d = dialog.currentDirectory();
-        _imp->gui->updateLastPluginDirectory(d.absolutePath());
-    }
-}
-
-void
-ExportGroupTemplateDialog::onLabelEditingFinished()
-{
-    if (_imp->idEdit->text().isEmpty()) {
-        _imp->idEdit->setText(_imp->labelEdit->text());
-    }
-}
-
-void
-ExportGroupTemplateDialog::onOkClicked()
-{
-    QString dirPath = _imp->fileEdit->text();
-
-    if (!dirPath.isEmpty() && dirPath[dirPath.size() - 1] == QChar('/')) {
-        dirPath.remove(dirPath.size() - 1, 1);
-    }
-    QDir d(dirPath);
-
-    if (!d.exists()) {
-        Natron::errorDialog(tr("Error").toStdString(), tr("You must specify a directory to save the script").toStdString());
-        return;
-    }
-    QString pluginLabel = _imp->labelEdit->text();
-    if (pluginLabel.isEmpty()) {
-        Natron::errorDialog(tr("Error").toStdString(), tr("You must specify a label to name the script").toStdString());
-        return;
-    } else {
-        pluginLabel = Natron::makeNameScriptFriendly(pluginLabel.toStdString()).c_str();
-    }
-
-    QString pluginID = _imp->idEdit->text();
-    if (pluginID.isEmpty()) {
-        Natron::errorDialog(tr("Error").toStdString(), tr("You must specify a unique ID to identify the script").toStdString());
-        return;
-    }
-
-    QString iconPath = _imp->iconPath->text();
-    QString grouping = _imp->groupingEdit->text();
-    QString description = _imp->descriptionEdit->text();
-
-    QString filePath = d.absolutePath() + "/" + pluginLabel + ".py";
-
-    QStringList filters;
-    filters.push_back(QString(pluginLabel + ".py"));
-    if (!d.entryList(filters,QDir::Files | QDir::NoDotAndDotDot).isEmpty()) {
-        Natron::StandardButtonEnum rep = Natron::questionDialog(tr("Existing plug-in").toStdString(),
-                                                                tr("A group plug-in with the same name already exists "
-                                                                   "would you like to "
-                                                                   "override it?").toStdString(), false);
-        if  (rep == Natron::eStandardButtonNo) {
-            return;
-        }
-    }
-
-    bool foundInPath = false;
-    QStringList groupSearchPath = appPTR->getAllNonOFXPluginsPaths();
-    for (QStringList::iterator it = groupSearchPath.begin(); it != groupSearchPath.end(); ++it) {
-        if (!it->isEmpty() && it->at(it->size() - 1) == QChar('/')) {
-            it->remove(it->size() - 1, 1);
-        }
-        if (*it == dirPath) {
-            foundInPath = true;
-        }
-    }
-
-    if (!foundInPath) {
-
-        QString message = dirPath + tr(" does not exist in the group plug-in search path, would you like to add it?");
-        Natron::StandardButtonEnum rep = Natron::questionDialog(tr("Plug-in path").toStdString(),
-                                                                message.toStdString(), false);
-
-        if  (rep == Natron::eStandardButtonYes) {
-            appPTR->getCurrentSettings()->appendPythonGroupsPath(dirPath.toStdString());
-        }
-
-    }
-
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadWrite | QIODevice::Truncate)) {
-        Natron::errorDialog(tr("Error").toStdString(), QString(tr("Cannot open ") + filePath).toStdString());
-        return;
-    }
-
-    QTextStream ts(&file);
-    QString content;
-    _imp->group->exportGroupToPython(pluginID, pluginLabel, description, iconPath, grouping, content);
-    ts << content;
-
-    accept();
-}
 
 void
 NodeGui::exportGroupAsPythonScript()
@@ -3452,173 +3176,162 @@ void
 NodeGui::addDefaultPositionInteract(const boost::shared_ptr<KnobDouble>& point)
 {
     assert(QThread::currentThread() == qApp->thread());
-    if (!_defaultOverlay) {
-        _defaultOverlay.reset(new DefaultOverlay(shared_from_this()));
+    if (!_hostOverlay) {
+        _hostOverlay.reset(new HostOverlay(shared_from_this()));
     }
-    if (_defaultOverlay->addPositionParam(point)) {
+    if (_hostOverlay->addPositionParam(point)) {
         getDagGui()->getGui()->redrawAllViewers();
     }
 }
 
-
-boost::shared_ptr<DefaultOverlay>
-NodeGui::getDefaultOverlay() const
+void
+NodeGui::addTransformInteract(const boost::shared_ptr<KnobDouble>& translate,
+                          const boost::shared_ptr<KnobDouble>& scale,
+                          const boost::shared_ptr<KnobBool>& scaleUniform,
+                          const boost::shared_ptr<KnobDouble>& rotate,
+                          const boost::shared_ptr<KnobDouble>& skewX,
+                          const boost::shared_ptr<KnobDouble>& skewY,
+                          const boost::shared_ptr<KnobChoice>& skewOrder,
+                          const boost::shared_ptr<KnobDouble>& center)
 {
-    return _defaultOverlay;
+    assert(QThread::currentThread() == qApp->thread());
+    if (!_hostOverlay) {
+        _hostOverlay.reset(new HostOverlay(shared_from_this()));
+    }
+    if (_hostOverlay->addTransformInteract(translate,scale,scaleUniform,rotate,skewX,skewY, skewOrder,center)) {
+        getDagGui()->getGui()->redrawAllViewers();
+    }
+
+}
+
+boost::shared_ptr<HostOverlay>
+NodeGui::getHostOverlay() const
+{
+    return _hostOverlay;
 }
 
 bool
-NodeGui::hasDefaultOverlay() const
+NodeGui::hasHostOverlay() const
 {
-    if (_defaultOverlay) {
+    if (_hostOverlay) {
         return true;
     }
     return false;
 }
 
 void
-NodeGui::setCurrentViewportForDefaultOverlays(OverlaySupport* viewPort)
+NodeGui::setCurrentViewportForHostOverlays(OverlaySupport* viewPort)
 {
-    if (_defaultOverlay) {
-        _defaultOverlay->setCallingViewport(viewPort);
+    if (_hostOverlay) {
+        _hostOverlay->setCallingViewport(viewPort);
     }
 }
 
 void
-NodeGui::drawDefaultOverlay(double time, double scaleX,double scaleY)
+NodeGui::drawHostOverlay(double time, const RenderScale & renderScale)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
-        NatronOverlayInteractSupport::OGLContextSaver s(_defaultOverlay->getLastCallingViewport());
-        _defaultOverlay->draw(time , rs);
+    if (_hostOverlay) {
+        NatronOverlayInteractSupport::OGLContextSaver s(_hostOverlay->getLastCallingViewport());
+        _hostOverlay->draw(time , renderScale);
     }
 }
 
 bool
-NodeGui::onOverlayPenDownDefault(double scaleX,double scaleY,const QPointF & viewportPos, const QPointF & pos, double pressure)
+NodeGui::onOverlayPenDownDefault(const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
-
-       return _defaultOverlay->penDown(getNode()->getLiveInstance()->getCurrentTime(), rs, pos, viewportPos.toPoint(), pressure);
+    if (_hostOverlay) {
+       return _hostOverlay->penDown(getNode()->getLiveInstance()->getCurrentTime(), renderScale, pos, viewportPos.toPoint(), pressure);
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayPenMotionDefault(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure)
+NodeGui::onOverlayPenMotionDefault(const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
-        
-        return _defaultOverlay->penMotion(getNode()->getLiveInstance()->getCurrentTime(), rs, pos, viewportPos.toPoint(), pressure);
+    if (_hostOverlay) {
+        return _hostOverlay->penMotion(getNode()->getLiveInstance()->getCurrentTime(), renderScale, pos, viewportPos.toPoint(), pressure);
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayPenUpDefault(double scaleX,double scaleY,const QPointF & viewportPos, const QPointF & pos, double pressure)
+NodeGui::onOverlayPenUpDefault(const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
-        
-        return _defaultOverlay->penUp(getNode()->getLiveInstance()->getCurrentTime(), rs, pos, viewportPos.toPoint(), pressure);
+    if (_hostOverlay) {
+        return _hostOverlay->penUp(getNode()->getLiveInstance()->getCurrentTime(), renderScale, pos, viewportPos.toPoint(), pressure);
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayKeyDownDefault(double scaleX,double scaleY,Natron::Key key,Natron::KeyboardModifiers /*modifiers*/)
+NodeGui::onOverlayKeyDownDefault(const RenderScale & renderScale, Natron::Key key,Natron::KeyboardModifiers /*modifiers*/)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
+    if (_hostOverlay) {
         QByteArray keyStr;
-        return _defaultOverlay->keyDown(getNode()->getLiveInstance()->getCurrentTime(), rs,(int)key,keyStr.data());
+        return _hostOverlay->keyDown(getNode()->getLiveInstance()->getCurrentTime(), renderScale, (int)key,keyStr.data());
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayKeyUpDefault(double scaleX,double scaleY,Natron::Key key,Natron::KeyboardModifiers /*modifiers*/)
+NodeGui::onOverlayKeyUpDefault(const RenderScale & renderScale, Natron::Key key,Natron::KeyboardModifiers /*modifiers*/)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
+    if (_hostOverlay) {
         QByteArray keyStr;
-        return _defaultOverlay->keyUp(getNode()->getLiveInstance()->getCurrentTime(), rs,(int)key,keyStr.data());
+        return _hostOverlay->keyUp(getNode()->getLiveInstance()->getCurrentTime(), renderScale, (int)key,keyStr.data());
 
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayKeyRepeatDefault(double scaleX,double scaleY,Natron::Key key,Natron::KeyboardModifiers /*modifiers*/)
+NodeGui::onOverlayKeyRepeatDefault(const RenderScale & renderScale, Natron::Key key,Natron::KeyboardModifiers /*modifiers*/)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
+    if (_hostOverlay) {
         QByteArray keyStr;
-        return _defaultOverlay->keyRepeat(getNode()->getLiveInstance()->getCurrentTime(), rs,(int)key,keyStr.data());
+        return _hostOverlay->keyRepeat(getNode()->getLiveInstance()->getCurrentTime(), renderScale, (int)key,keyStr.data());
 
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayFocusGainedDefault(double scaleX,double scaleY)
+NodeGui::onOverlayFocusGainedDefault(const RenderScale & renderScale)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
+    if (_hostOverlay) {
         QByteArray keyStr;
-        return _defaultOverlay->gainFocus(getNode()->getLiveInstance()->getCurrentTime(), rs);
+        return _hostOverlay->gainFocus(getNode()->getLiveInstance()->getCurrentTime(), renderScale);
 
     }
     return false;
 }
 
 bool
-NodeGui::onOverlayFocusLostDefault(double scaleX,double scaleY)
+NodeGui::onOverlayFocusLostDefault(const RenderScale & renderScale)
 {
-    if (_defaultOverlay) {
-        RenderScale rs;
-        rs.x = scaleX;
-        rs.y = scaleY;
+    if (_hostOverlay) {
         QByteArray keyStr;
-        return _defaultOverlay->loseFocus(getNode()->getLiveInstance()->getCurrentTime(), rs);
+        return _hostOverlay->loseFocus(getNode()->getLiveInstance()->getCurrentTime(), renderScale);
     }
     return false;
 }
 
 bool
-NodeGui::hasDefaultOverlayForParam(const KnobI* param)
+NodeGui::hasHostOverlayForParam(const KnobI* param)
 {
-    if (_defaultOverlay) {
-        return _defaultOverlay->hasDefaultOverlayForParam(param);
+    if (_hostOverlay) {
+        return _hostOverlay->hasHostOverlayForParam(param);
     }
     return false;
 }
 
 void
-NodeGui::removeDefaultOverlay(KnobI* knob)
+NodeGui::removePositionHostOverlay(KnobI* knob)
 {
-    if (_defaultOverlay) {
-        _defaultOverlay->removeDefaultOverlay(knob);
-        if (_defaultOverlay->isEmpty()) {
-            _defaultOverlay.reset();
+    if (_hostOverlay) {
+        _hostOverlay->removePositionHostOverlay(knob);
+        if (_hostOverlay->isEmpty()) {
+            _hostOverlay.reset();
         }
     }
 }
@@ -3632,7 +3345,7 @@ NodeGui::setPluginIconFilePath(const std::string& filePath)
     if (p.isNull() || !currentSettings->isPluginIconActivatedOnNodeGraph()) {
         return;
     }
-    int size = NATRON_PLUGIN_ICON_SIZE;
+    int size = TO_DPIX(NATRON_PLUGIN_ICON_SIZE);
     if (std::max(p.width(), p.height()) != size) {
         p = p.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
@@ -3642,7 +3355,7 @@ NodeGui::setPluginIconFilePath(const std::string& filePath)
     }
 
     if (!_pluginIcon) {
-        _pluginIcon = new QGraphicsPixmapItem(this);
+        _pluginIcon = new NodeGraphPixmapItem(getDagGui(),this);
         _pluginIcon->setZValue(getBaseDepth() + 1);
         _pluginIconFrame = new QGraphicsRectItem(this);
         _pluginIconFrame->setZValue(getBaseDepth());
@@ -3661,12 +3374,12 @@ NodeGui::setPluginIconFilePath(const std::string& filePath)
         }
         double w,h;
         getSize(&w, &h);
-        w = NODE_WIDTH + NATRON_PLUGIN_ICON_SIZE + PLUGIN_ICON_OFFSET * 2;
+        w = TO_DPIX(NODE_WIDTH) + TO_DPIX(NATRON_PLUGIN_ICON_SIZE) + TO_DPIX(PLUGIN_ICON_OFFSET) * 2;
         resize(w,h);
 
         double x,y;
         getPosition(&x, &y);
-        x -= (NATRON_PLUGIN_ICON_SIZE) / 2. + PLUGIN_ICON_OFFSET;
+        x -= TO_DPIX(NATRON_PLUGIN_ICON_SIZE) / 2. + TO_DPIX(PLUGIN_ICON_OFFSET);
         setPosition(x, y);
 
     }
@@ -3694,3 +3407,90 @@ NodeGui::setOverlayLocked(bool locked)
     assert(QThread::currentThread() == qApp->thread());
     _overlayLocked = locked;
 }
+
+void
+NodeGui::onAvailableViewsChanged()
+{
+    const std::vector<std::string>& views = getNode()->getCreatedViews();
+    if (views.empty() || views.size() == 1) {
+        if (_availableViewsIndicator->isActive()) {
+            _availableViewsIndicator->setActive(false);
+        }
+        return;
+    }
+    
+    const std::vector<std::string>& projectViews = getDagGui()->getGui()->getApp()->getProject()->getProjectViewNames();
+    QStringList qProjectViews;
+    for (std::size_t i = 0; i < projectViews.size(); ++i) {
+        qProjectViews.push_back(projectViews[i].c_str());
+    }
+    
+    QString toolTip;
+    toolTip.append(tr("The following views are available in this node:"));
+    toolTip.append(" ");
+    for (std::size_t i = 0; i < views.size(); ++i) {
+        
+        ///Try to find a match in the project views to have the same case sensitivity
+        QString qView(views[i].c_str());
+        for (QStringList::Iterator it = qProjectViews.begin(); it!=qProjectViews.end(); ++it) {
+            if (it->size() == qView.size() && it->startsWith(qView,Qt::CaseInsensitive)) {
+                qView = *it;
+                break;
+            }
+        }
+        toolTip.append(qView);
+        if (i < views.size() -1) {
+            toolTip.push_back(',');
+        }
+    }
+    _availableViewsIndicator->setToolTip(toolTip);
+    _availableViewsIndicator->setActive(true);
+}
+
+void
+NodeGui::onIdentityStateChanged(int inputNb)
+{
+    if (!_passThroughIndicator) {
+        return;
+    }
+    NodePtr ptInput;
+    NodePtr node = getNode();
+    
+    
+    if (inputNb >= 0) {
+        ptInput = node->getInput(inputNb);
+    }
+    if (ptInput && ptInput == _identityInput.lock()) {
+        return;
+    }
+    _identityInput = ptInput;
+    
+    
+    _passThroughIndicator->setActive(ptInput.get() != 0);
+    if (ptInput) {
+    
+        QString tooltip = tr("This node is a pass-through and produces the same results as");
+        tooltip += ' ';
+        tooltip += QString(ptInput->getLabel().c_str());
+        _passThroughIndicator->setToolTip(tooltip);
+        for (std::size_t i = 0; i < _inputEdges.size(); ++i) {
+            if ((int)i != inputNb) {
+                _inputEdges[i]->setDashed(true);
+            } else {
+                _inputEdges[i]->setDashed(false);
+            }
+        }
+    } else {
+        for (std::size_t i = 0; i < _inputEdges.size(); ++i) {
+            _inputEdges[i]->setDashed(node->getLiveInstance()->isInputMask(i));
+        }
+    }
+    getDagGui()->update();
+}
+
+void
+NodeGui::onHideInputsKnobValueChanged(bool /*hidden*/)
+{
+    refreshEdgesVisility();
+}
+

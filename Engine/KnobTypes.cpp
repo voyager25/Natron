@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,10 +58,10 @@ using std::pair;
 
 /******************************KnobInt**************************************/
 KnobInt::KnobInt(KnobHolder* holder,
-                   const std::string &description,
+                   const std::string &label,
                    int dimension,
                    bool declaredByPlugin)
-: Knob<int>(holder, description, dimension,declaredByPlugin)
+: Knob<int>(holder, label, dimension, declaredByPlugin)
 , _increments(dimension)
 , _disableSlider(false)
 {
@@ -142,10 +142,10 @@ KnobInt::typeName() const
 /******************************KnobBool**************************************/
 
 KnobBool::KnobBool(KnobHolder* holder,
-                     const std::string &description,
+                     const std::string &label,
                      int dimension,
                      bool declaredByPlugin)
-: Knob<bool>(holder, description, dimension,declaredByPlugin)
+: Knob<bool>(holder, label, dimension, declaredByPlugin)
 {
 }
 
@@ -172,29 +172,27 @@ KnobBool::typeName() const
 
 
 KnobDouble::KnobDouble(KnobHolder* holder,
-                         const std::string &description,
+                         const std::string &label,
                          int dimension,
                          bool declaredByPlugin)
-: Knob<double>(holder, description, dimension,declaredByPlugin)
+: Knob<double>(holder, label, dimension, declaredByPlugin)
 , _spatial(false)
 , _increments(dimension)
 , _decimals(dimension)
 , _disableSlider(false)
-, _normalizationXY()
-, _defaultStoredNormalized(false)
-, _hasNativeOverlayHandle(false)
+, _valueIsNormalized(dimension)
+, _defaultValuesAreNormalized(false)
+, _hasHostOverlayHandle(false)
 {
-    _normalizationXY.first = eNormalizedStateNone;
-    _normalizationXY.second = eNormalizedStateNone;
-    
     for (int i = 0; i < dimension; ++i) {
         _increments[i] = 1.;
         _decimals[i] = 2;
+        _valueIsNormalized[i] = eValueIsNormalizedNone;
     }
 }
 
 void
-KnobDouble::setHasNativeOverlayHandle(bool handle)
+KnobDouble::setHasHostOverlayHandle(bool handle)
 {
     KnobHolder* holder = getHolder();
     if (holder) {
@@ -212,17 +210,17 @@ KnobDouble::setHasNativeOverlayHandle(bool handle)
         if (handle) {
             effect->getNode()->addDefaultPositionOverlay(thisSharedDouble);
         } else {
-            effect->getNode()->removeDefaultOverlay(this);
+            effect->getNode()->removePositionHostOverlay(this);
         }
-       _hasNativeOverlayHandle = handle;
+       _hasHostOverlayHandle = handle;
     }
     
 }
 
 bool
-KnobDouble::getHasNativeOverlayHandle() const
+KnobDouble::getHasHostOverlayHandle() const
 {
-    return _hasNativeOverlayHandle;
+    return _hasHostOverlayHandle;
 }
 
 void
@@ -458,39 +456,11 @@ getInputRoD(EffectInstance* effect,
 #endif
 }
 
-void
-KnobDouble::setSpatial(bool spatial)
-{
-    _spatial = spatial;
-}
-
-bool
-KnobDouble::getIsSpatial() const
-{
-    return _spatial;
-}
-
-void
-KnobDouble::setDefaultValuesNormalized(int dims,
-                                        double defaults[])
-{
-    assert( dims == getDimension() );
-    _defaultStoredNormalized = true;
-    for (int i = 0; i < dims; ++i) {
-        setDefaultValue(defaults[i],i);
-    }
-}
-
-bool
-KnobDouble::areDefaultValuesNormalized() const
-{
-    return _defaultStoredNormalized;
-}
 
 void
 KnobDouble::denormalize(int dimension,
-                         double time,
-                         double* value) const
+                        double time,
+                        double* value) const
 {
     EffectInstance* effect = dynamic_cast<EffectInstance*>( getHolder() );
     
@@ -501,9 +471,11 @@ KnobDouble::denormalize(int dimension,
     }
     RectD rod;
     getInputRoD(effect,time,rod);
-    if (dimension == 0) {
+    ValueIsNormalizedEnum e = getValueIsNormalized(dimension);
+    // the second expression (with e == eValueIsNormalizedNone) is used when denormalizing default values
+    if (e == eValueIsNormalizedX || (e == eValueIsNormalizedNone && dimension == 0)) {
         *value *= rod.width();
-    } else if (dimension == 1) {
+    } else if (e == eValueIsNormalizedY || (e == eValueIsNormalizedNone && dimension == 1)) {
         *value *= rod.height();
     }
 }
@@ -522,9 +494,11 @@ KnobDouble::normalize(int dimension,
     }
     RectD rod;
     getInputRoD(effect,time,rod);
-    if (dimension == 0) {
+    ValueIsNormalizedEnum e = getValueIsNormalized(dimension);
+    // the second expression (with e == eValueIsNormalizedNone) is used when normalizing default values
+    if (e == eValueIsNormalizedX || (e == eValueIsNormalizedNone && dimension == 0)) {
         *value /= rod.width();
-    } else if (dimension == 1) {
+    } else if (e == eValueIsNormalizedY || (e == eValueIsNormalizedNone && dimension == 1)) {
         *value /= rod.height();
     }
 }
@@ -532,13 +506,13 @@ KnobDouble::normalize(int dimension,
 /******************************KnobButton**************************************/
 
 KnobButton::KnobButton(KnobHolder*  holder,
-                         const std::string &description,
+                         const std::string &label,
                          int dimension,
                          bool declaredByPlugin)
-: Knob<bool>(holder, description, dimension,declaredByPlugin)
+: Knob<bool>(holder, label, dimension, declaredByPlugin)
 , _renderButton(false)
 {
-    setIsPersistant(false);
+    //setIsPersistant(false);
 }
 
 bool
@@ -568,11 +542,13 @@ KnobButton::trigger()
 
 /******************************KnobChoice**************************************/
 
+#define KNOBCHOICE_MAX_ENTRIES_HELP 40 // don't show help in the tootlip if there are more entries that this
+
 KnobChoice::KnobChoice(KnobHolder* holder,
-                         const std::string &description,
+                         const std::string &label,
                          int dimension,
                          bool declaredByPlugin)
-: Knob<int>(holder, description, dimension,declaredByPlugin)
+: Knob<int>(holder, label, dimension, declaredByPlugin)
 , _entriesMutex()
 , _addNewChoice(false)
 , _isCascading(false)
@@ -620,32 +596,65 @@ KnobChoice::populateChoices(const std::vector<std::string> &entries,
                              const std::vector<std::string> &entriesHelp)
 {
     assert( entriesHelp.empty() || entriesHelp.size() == entries.size() );
-    std::vector<std::string> curEntries;
+    //std::vector<std::string> curEntries;
     {
         QMutexLocker l(&_entriesMutex);
-        curEntries = _entries;
+      //  curEntries = _entries;
         _entriesHelp = entriesHelp;
         _entries = entries;
     }
-    int cur_i = getValue();
+    
+    /*
+     Try to restore the last choice. 
+     This has been commented-out because it will loose the user choice in case of alias knobs
+     */
+    /*int cur_i = getValue();
     std::string curEntry;
     if (cur_i >= 0 && cur_i < (int)curEntries.size()) {
         curEntry = curEntries[cur_i];
     }
     if (!curEntry.empty()) {
         for (std::size_t i = 0; i < entries.size(); ++i) {
-            if (entries[i] == curEntry) {
+            if (entries[i] == curEntry && cur_i != (int)i) {
                 blockValueChanges();
-                setValue(cur_i, 0);
+                setValue((int)i, 0);
                 unblockValueChanges();
                 break;
             }
         }
-    }
+    }*/
     if (_signalSlotHandler) {
         _signalSlotHandler->s_helpChanged();
     }
     Q_EMIT populated();
+}
+
+void
+KnobChoice::resetChoices()
+{
+    {
+        QMutexLocker l(&_entriesMutex);
+        _entries.clear();
+        _entriesHelp.clear();
+    }
+    if (_signalSlotHandler) {
+        _signalSlotHandler->s_helpChanged();
+    }
+    Q_EMIT entriesReset();
+}
+
+void
+KnobChoice::appendChoice(const std::string& entry, const std::string& help)
+{
+    {
+        QMutexLocker l(&_entriesMutex);
+        _entriesHelp.push_back(help);
+        _entries.push_back(entry);
+    }
+    if (_signalSlotHandler) {
+        _signalSlotHandler->s_helpChanged();
+    }
+    Q_EMIT entryAppended(QString(entry.c_str()), QString(help.c_str()));
 }
 
 std::vector<std::string>
@@ -684,9 +693,11 @@ KnobChoice::getActiveEntryText_mt_safe() const
     int activeIndex = getValue();
     
     QMutexLocker l(&_entriesMutex);
-    assert( activeIndex < (int)_entries.size() );
+    if ( activeIndex < (int)_entries.size()) {
+        return _entries[activeIndex];
+    }
+    return std::string();
     
-    return _entries[activeIndex];
 }
 
 
@@ -709,22 +720,36 @@ trim(std::string const & str)
     return str.substr(first, last - first + 1);
 }
 
+static void
+whitespacify(std::string & str)
+{
+    std::replace( str.begin(), str.end(), '\t', ' ');
+    std::replace( str.begin(), str.end(), '\f', ' ');
+    std::replace( str.begin(), str.end(), '\v', ' ');
+    std::replace( str.begin(), str.end(), '\n', ' ');
+    std::replace( str.begin(), str.end(), '\r', ' ');
+}
+
 std::string
 KnobChoice::getHintToolTipFull() const
 {
     assert(QThread::currentThread() == qApp->thread());
     
-    bool gothelp = false;
+    int gothelp = 0;
     
     if ( !_entriesHelp.empty() ) {
         assert( _entriesHelp.size() == _entries.size() );
         for (U32 i = 0; i < _entries.size(); ++i) {
             if ( !_entriesHelp.empty() && !_entriesHelp[i].empty() ) {
-                gothelp = true;
+                ++gothelp;
             }
         }
     }
-    
+
+    if (gothelp > KNOBCHOICE_MAX_ENTRIES_HELP) {
+        // too many entries
+        gothelp = 0;
+    }
     std::stringstream ss;
     if ( !getHintToolTip().empty() ) {
         ss << trim( getHintToolTip() );
@@ -737,9 +762,13 @@ KnobChoice::getHintToolTipFull() const
     if (gothelp) {
         for (U32 i = 0; i < _entriesHelp.size(); ++i) {
             if ( !_entriesHelp[i].empty() ) { // no help line is needed if help is unavailable for this option
-                ss << trim(_entries[i]);
+                std::string entry = trim(_entries[i]);
+                whitespacify(entry);
+                std::string help = trim(_entriesHelp[i]);
+                whitespacify(help);
+                ss << entry;
                 ss << ": ";
-                ss << trim(_entriesHelp[i]);
+                ss << help;
                 if (i < _entriesHelp.size() - 1) {
                     ss << '\n';
                 }
@@ -822,13 +851,58 @@ KnobChoice::choiceRestoration(KnobChoice* knob,const ChoiceExtraData* data)
     }
     
 }
+
+void
+KnobChoice::onOriginalKnobPopulated()
+{
+    
+    KnobChoice* isChoice = dynamic_cast<KnobChoice*>(sender());
+    if (!isChoice) {
+        return;
+    }
+    populateChoices(isChoice->_entries,isChoice->_entriesHelp);
+}
+
+void
+KnobChoice::onOriginalKnobEntriesReset()
+{
+    resetChoices();
+}
+
+void
+KnobChoice::onOriginalKnobEntryAppend(const QString& text,const QString& help)
+{
+    appendChoice(text.toStdString(), help.toStdString());
+}
+
+void
+KnobChoice::handleSignalSlotsForAliasLink(const boost::shared_ptr<KnobI>& alias,bool connect)
+{
+    assert(alias);
+    KnobChoice* aliasIsChoice = dynamic_cast<KnobChoice*>(alias.get());
+    if (!aliasIsChoice) {
+        return;
+    }
+    if (connect) {
+        QObject::connect(this, SIGNAL(populated()), aliasIsChoice, SLOT(onOriginalKnobPopulated()));
+        QObject::connect(this, SIGNAL(entriesReset()), aliasIsChoice, SLOT(onOriginalKnobEntriesReset()));
+        QObject::connect(this, SIGNAL(entryAppended(QString,QString)), aliasIsChoice,
+                         SLOT(onOriginalKnobEntryAppend(QString,QString)));
+    } else {
+        QObject::disconnect(this, SIGNAL(populated()), aliasIsChoice, SLOT(onOriginalKnobPopulated()));
+        QObject::disconnect(this, SIGNAL(entriesReset()), aliasIsChoice, SLOT(onOriginalKnobEntriesReset()));
+        QObject::disconnect(this, SIGNAL(entryAppended(QString,QString)), aliasIsChoice,
+                         SLOT(onOriginalKnobEntryAppend(QString,QString)));
+    }
+}
+
 /******************************KnobSeparator**************************************/
 
 KnobSeparator::KnobSeparator(KnobHolder* holder,
-                               const std::string &description,
+                               const std::string &label,
                                int dimension,
                                bool declaredByPlugin)
-: Knob<bool>(holder, description, dimension,declaredByPlugin)
+: Knob<bool>(holder, label, dimension, declaredByPlugin)
 {
 }
 
@@ -861,10 +935,10 @@ KnobSeparator::typeName() const
  **/
 
 KnobColor::KnobColor(KnobHolder* holder,
-                       const std::string &description,
+                       const std::string &label,
                        int dimension,
                        bool declaredByPlugin)
-: Knob<double>(holder, description, dimension,declaredByPlugin)
+: Knob<double>(holder, label, dimension, declaredByPlugin)
 , _allDimensionsEnabled(true)
 , _simplifiedMode(false)
 {
@@ -923,12 +997,13 @@ KnobColor::isSimplified() const
 
 
 KnobString::KnobString(KnobHolder* holder,
-                         const std::string &description,
+                         const std::string &label,
                          int dimension,
                          bool declaredByPlugin)
-: AnimatingKnobStringHelper(holder, description, dimension,declaredByPlugin)
+: AnimatingKnobStringHelper(holder, label, dimension, declaredByPlugin)
 , _multiLine(false)
 , _richText(false)
+, _customHtmlText(false)
 , _isLabel(false)
 , _isCustom(false)
 {
@@ -988,13 +1063,21 @@ KnobString::hasContentWithoutHtmlTags() const
     return true;
 }
 
+void
+KnobString::setAsLabel()
+{
+    setAnimationEnabled(false); //< labels cannot animate
+    // hideLabel(); // labels do not have a label
+    _isLabel = true;
+}
+
 /******************************KnobGroup**************************************/
 
 KnobGroup::KnobGroup(KnobHolder* holder,
-                       const std::string &description,
+                       const std::string &label,
                        int dimension,
                        bool declaredByPlugin)
-: Knob<bool>(holder, description, dimension,declaredByPlugin)
+: Knob<bool>(holder, label, dimension, declaredByPlugin)
 , _isTab(false)
 {
 }
@@ -1069,36 +1152,38 @@ KnobGroup::removeKnob(KnobI* k)
     }
 }
 
-void
+bool
 KnobGroup::moveOneStepUp(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
             if (i == 0) {
-                break;
+                return false;
             }
             boost::weak_ptr<KnobI> tmp = _children[i - 1];
             _children[i - 1] = _children[i];
             _children[i] = tmp;
-            break;
+            return true;
         }
     }
+    throw std::invalid_argument("Given knob does not belong to this group");
 }
 
-void
+bool
 KnobGroup::moveOneStepDown(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
             if (i == _children.size() - 1) {
-                break;
+                return false;
             }
             boost::weak_ptr<KnobI> tmp = _children[i + 1];
             _children[i + 1] = _children[i];
             _children[i] = tmp;
-            break;
+            return true;
         }
     }
+    throw std::invalid_argument("Given knob does not belong to this group");
 }
 
 void
@@ -1148,11 +1233,12 @@ KnobGroup::getChildren() const
 /******************************PAGE_KNOB**************************************/
 
 KnobPage::KnobPage(KnobHolder* holder,
-                     const std::string &description,
+                     const std::string &label,
                      int dimension,
                      bool declaredByPlugin)
-: Knob<bool>(holder, description, dimension,declaredByPlugin)
+: Knob<bool>(holder, label, dimension, declaredByPlugin)
 {
+    setIsPersistant(false);
 }
 
 bool
@@ -1258,36 +1344,38 @@ KnobPage::removeKnob(KnobI* k)
     }
 }
 
-void
+bool
 KnobPage::moveOneStepUp(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
             if (i == 0) {
-                break;
+                return false;
             }
             boost::weak_ptr<KnobI> tmp = _children[i - 1];
             _children[i - 1] = _children[i];
             _children[i] = tmp;
-            break;
+            return true;
         }
     }
+    throw std::invalid_argument("Given knob does not belong to this page");
 }
 
-void
+bool
 KnobPage::moveOneStepDown(KnobI* k)
 {
     for (U32 i = 0; i < _children.size(); ++i) {
         if (_children[i].lock().get() == k) {
             if (i == _children.size() - 1) {
-                break;
+                return false;
             }
             boost::weak_ptr<KnobI> tmp = _children[i + 1];
             _children[i + 1] = _children[i];
             _children[i] = tmp;
-            break;
+            return true;
         }
     }
+    throw std::invalid_argument("Given knob does not belong to this page");
 }
 
 
@@ -1295,10 +1383,10 @@ KnobPage::moveOneStepDown(KnobI* k)
 
 
 KnobParametric::KnobParametric(KnobHolder* holder,
-                                 const std::string &description,
+                                 const std::string &label,
                                  int dimension,
                                  bool declaredByPlugin)
-: Knob<double>(holder,description,dimension,declaredByPlugin)
+: Knob<double>(holder,label,dimension, declaredByPlugin)
 , _curvesMutex()
 , _curves(dimension)
 , _defaultCurves(dimension)
@@ -1644,7 +1732,7 @@ KnobParametric::cloneExtraDataAndCheckIfChanged(KnobI* other,int dimension) {
 
 void
 KnobParametric::cloneExtraData(KnobI* other,
-                                SequenceTime offset,
+                                double offset,
                                 const RangeD* range,
                                 int dimension)
 {

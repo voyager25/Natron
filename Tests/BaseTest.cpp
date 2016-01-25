@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -248,8 +248,9 @@ TEST_F(BaseTest,GenerateDot)
     assert(w.writer);
     w.firstFrame = INT_MIN;
     w.lastFrame = INT_MAX;
+    w.frameStep = INT_MIN;
     works.push_back(w);
-    _app->startWritersRendering(false,works);
+    _app->startWritersRendering(false, false, works);
     
     EXPECT_TRUE(QFile::exists(filePath));
     QFile::remove(filePath);
@@ -284,7 +285,7 @@ TEST_F(BaseTest,SimpleNodeConnections) {
 
     ///create the writer and set its output filename
     boost::shared_ptr<Node> writer = createNode(_writeOIIOPluginID);
-
+    ASSERT_TRUE(writer && generator);
     connectNodes(generator, writer, 0, true);
     connectNodes(generator, writer, 0, false); //< expect it to fail
     disconnectNodes(generator, writer, true);

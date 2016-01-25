@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,6 +60,9 @@ GuiApplicationManagerPrivate::GuiApplicationManagerPrivate(GuiApplicationManager
 , fontconfigUpdateWatcher()
 , updateSplashscreenTimer()
 , fontconfigMessageDots(3)
+, previewRenderThread()
+, dpiX(96)
+, dpiY(96)
 {
 }
 
@@ -120,27 +123,31 @@ GuiApplicationManagerPrivate::removePluginToolButton(const QStringList& grouping
 
 
 boost::shared_ptr<PluginGroupNode>
-GuiApplicationManagerPrivate::findPluginToolButtonInternal(const boost::shared_ptr<PluginGroupNode>& parent,
+GuiApplicationManagerPrivate::findPluginToolButtonInternal(const std::list<boost::shared_ptr<PluginGroupNode> >& children,
+                                                           const boost::shared_ptr<PluginGroupNode>& parent,
                                                            const QStringList & grouping,
                                                            const QString & name,
+                                                           const QStringList & groupingIcon,
                                                            const QString & iconPath,
                                                            int major,
                                                            int minor,
                                                            bool isUserCreatable)
 {
     assert(grouping.size() > 0);
-    
-    const std::list<boost::shared_ptr<PluginGroupNode> >& children = parent->getChildren();
+    assert(groupingIcon.size() == grouping.size() -1 || groupingIcon.isEmpty());
     
     for (std::list<boost::shared_ptr<PluginGroupNode> >::const_iterator it = children.begin(); it != children.end(); ++it) {
         if ((*it)->getID() == grouping[0]) {
             
             if (grouping.size() > 1) {
-                QStringList newGrouping;
+                QStringList newGrouping,newIconsGrouping;
                 for (int i = 1; i < grouping.size(); ++i) {
                     newGrouping.push_back(grouping[i]);
                 }
-                return findPluginToolButtonInternal(*it, newGrouping, name, iconPath, major,minor, isUserCreatable);
+                for (int i = 1; i < groupingIcon.size(); ++i) {
+                    newIconsGrouping.push_back(groupingIcon[i]);
+                }
+                return findPluginToolButtonInternal((*it)->getChildren(),*it, newGrouping, name, newIconsGrouping, iconPath, major,minor, isUserCreatable);
             }
             if (major == (*it)->getMajorVersion()) {
                 return *it;
@@ -149,16 +156,30 @@ GuiApplicationManagerPrivate::findPluginToolButtonInternal(const boost::shared_p
             }
         }
     }
-    boost::shared_ptr<PluginGroupNode> ret(new PluginGroupNode(grouping[0],grouping.size() == 1 ? name : grouping[0],iconPath,major,minor, isUserCreatable));
-    parent->tryAddChild(ret);
-    ret->setParent(parent);
+
+    QString iconFilePath;
+    if (grouping.size() > 1) {
+        iconFilePath = groupingIcon.isEmpty() ? QString() : groupingIcon[0];
+    } else {
+        iconFilePath = iconPath;
+    }
+    boost::shared_ptr<PluginGroupNode> ret(new PluginGroupNode(grouping[0],grouping.size() == 1 ? name : grouping[0],iconFilePath,major,minor, isUserCreatable));
+    if (parent) {
+        parent->tryAddChild(ret);
+        ret->setParent(parent);
+    } else {
+        _topLevelToolButtons.push_back(ret);
+    }
     
     if (grouping.size() > 1) {
-        QStringList newGrouping;
+        QStringList newGrouping,newIconsGrouping;
         for (int i = 1; i < grouping.size(); ++i) {
             newGrouping.push_back(grouping[i]);
         }
-        return findPluginToolButtonInternal(ret, newGrouping, name, iconPath, major,minor, isUserCreatable);
+        for (int i = 1; i < groupingIcon.size(); ++i) {
+            newIconsGrouping.push_back(groupingIcon[i]);
+        }
+        return findPluginToolButtonInternal(ret->getChildren(),ret, newGrouping, name, newIconsGrouping, iconPath, major,minor, isUserCreatable);
     }
     return ret;
 }
@@ -339,7 +360,9 @@ void
 GuiApplicationManagerPrivate::addStandardKeybind(const QString & grouping,
                                                  const QString & id,
                                                  const QString & description,
-                                                 QKeySequence::StandardKey key)
+                                                 QKeySequence::StandardKey key,
+                                                 const Qt::KeyboardModifiers & fallbackmodifiers,
+                                                 Qt::Key fallbacksymbol)
 {
     AppShortcuts::iterator foundGroup = _actionShortcuts.find(grouping);
     if ( foundGroup != _actionShortcuts.end() ) {
@@ -353,6 +376,12 @@ GuiApplicationManagerPrivate::addStandardKeybind(const QString & grouping,
     Qt::Key symbol;
 
     extractKeySequence(QKeySequence(key), modifiers, symbol);
+    
+    if (symbol == (Qt::Key)0) {
+        symbol = fallbacksymbol;
+        modifiers = fallbackmodifiers;
+    }
+    
     KeyBoundAction* kA = new KeyBoundAction;
     kA->grouping = grouping;
     kA->description = description;

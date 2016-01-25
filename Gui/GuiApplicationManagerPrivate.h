@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <list>
 #include <map>
 #include <string>
@@ -34,11 +36,9 @@
 #include <boost/scoped_ptr.hpp>
 #endif
 
-#include <QFutureWatcher>
-
-#include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
+#include <QFutureWatcher>
 #include <QtCore/QString>
 #include <QtCore/QTimer>
 CLANG_DIAG_ON(deprecated)
@@ -46,15 +46,14 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/Variant.h"
 #include "Engine/CLArgs.h"
+#include "Engine/EngineFwd.h"
 
 #include "Gui/ActionShortcuts.h" // AppShortcuts
 #include "Gui/GuiApplicationManager.h" // PythonUserCommand
 #include "Gui/NodeClipBoard.h"
+#include "Gui/GuiFwd.h"
+#include "Gui/PreviewThread.h"
 
-class PluginGroupNode;
-class KnobGuiFactory;
-class Curve;
-class SplashScreen;
 
 struct KnobsClipBoard
 {
@@ -100,7 +99,12 @@ struct GuiApplicationManagerPrivate
     boost::shared_ptr<QFutureWatcher<void> > fontconfigUpdateWatcher;
     QTimer updateSplashscreenTimer;
     int fontconfigMessageDots;
+        
+    PreviewThread previewRenderThread;
     
+    int dpiX,dpiY;
+
+
     GuiApplicationManagerPrivate(GuiApplicationManager* publicInterface);
 
     void createColorPickerCursor();
@@ -109,7 +113,8 @@ struct GuiApplicationManagerPrivate
     void removePluginToolButton(const QStringList& grouping);
 
     void addStandardKeybind(const QString & grouping,const QString & id,
-                            const QString & description,QKeySequence::StandardKey key);
+                            const QString & description,QKeySequence::StandardKey key,
+                            const Qt::KeyboardModifiers & fallbackmodifiers,Qt::Key fallbacksymbol);
 
     void addKeybind(const QString & grouping,const QString & id,
                     const QString & description,
@@ -137,9 +142,11 @@ struct GuiApplicationManagerPrivate
                           const QString & description,
                           const Qt::KeyboardModifiers & modifiers,Qt::MouseButton button);
     
-    boost::shared_ptr<PluginGroupNode>  findPluginToolButtonInternal(const boost::shared_ptr<PluginGroupNode>& parent,
+    boost::shared_ptr<PluginGroupNode>  findPluginToolButtonInternal(const std::list<boost::shared_ptr<PluginGroupNode> >& children,
+                                                                     const boost::shared_ptr<PluginGroupNode>& parent,
                                                                      const QStringList & grouping,
                                                                      const QString & name,
+                                                                     const QStringList & groupingIcon,
                                                                      const QString & iconPath,
                                                                      int major,
                                                                      int minor,

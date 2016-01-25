@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,15 +43,16 @@
 #endif
 
 
-#include <QtConcurrentRun>
-#include <QCoreApplication>
-#include <QTimer>
-#include <QThreadPool>
-#include <QDir>
-#include <QTemporaryFile>
-#include <QHostInfo>
-#include <QFileInfo>
-#include <QDebug>
+#include <QtCore/QtConcurrentRun>
+#include <QtCore/QCoreApplication>
+#include <QtCore/QTimer>
+#include <QtCore/QThreadPool>
+#include <QtCore/QDir>
+#include <QtCore/QTemporaryFile>
+#include <QtCore/QFileInfo>
+#include <QtCore/QDebug>
+#include <QtCore/QTextStream>
+#include <QtNetwork/QHostInfo>
 
 #ifdef __NATRON_WIN32__
 #include <ofxhUtilities.h> // for wideStringToString
@@ -160,7 +161,8 @@ public:
 bool
 Project::loadProject(const QString & path,
                      const QString & name,
-                     bool isUntitledAutosave)
+                     bool isUntitledAutosave,
+                     bool attemptToLoadAutosave)
 {
 
     reset(false);
@@ -173,17 +175,21 @@ Project::loadProject(const QString & path,
         QString realName = name;
         
         bool isAutoSave = isUntitledAutosave;
-        if (!appPTR->isBackground() && !isUntitledAutosave) {
+        if (!getApp()->isBackground() && !isUntitledAutosave) {
             // In Gui mode, attempt to load an auto-save for this project if there's one.
             QString autosaveFileName;
             bool hasAutoSave = findAutoSaveForProject(realPath, name,&autosaveFileName);
             if (hasAutoSave) {
-                QString text = tr("A recent auto-save of %1 was found.\n"
-                                  "Would you like to use it instead? "
-                                  "Clicking No will remove this auto-save.").arg(name);
-                Natron::StandardButtonEnum ret = Natron::questionDialog(tr("Auto-save").toStdString(),
-                                                                        text.toStdString(),false, Natron::StandardButtons(Natron::eStandardButtonYes | Natron::eStandardButtonNo),
-                                                                        Natron::eStandardButtonYes);
+                
+                Natron::StandardButtonEnum ret = Natron::eStandardButtonNo;
+                if (attemptToLoadAutosave) {
+                    QString text = tr("A recent auto-save of %1 was found.\n"
+                                      "Would you like to use it instead? "
+                                      "Clicking No will remove this auto-save.").arg(name);
+                    ret = Natron::questionDialog(tr("Auto-save").toStdString(),
+                                                 text.toStdString(),false, Natron::StandardButtons(Natron::eStandardButtonYes | Natron::eStandardButtonNo),
+                                                 Natron::eStandardButtonYes);
+                }
                 if ( (ret == Natron::eStandardButtonNo) || (ret == Natron::eStandardButtonEscape) ) {
                     QFile::remove(realPath + autosaveFileName);
                 } else {
@@ -205,7 +211,7 @@ Project::loadProject(const QString & path,
         }
     } catch (const std::exception & e) {
         Natron::errorDialog( QObject::tr("Project loader").toStdString(), QObject::tr("Error while loading project").toStdString() + ": " + e.what() );
-        if ( !appPTR->isBackground() ) {
+        if ( !getApp()->isBackground() ) {
             getApp()->createNode(  CreateNodeArgs(PLUGINID_NATRON_VIEWER,
                                                   "",
                                                   -1,-1,
@@ -223,7 +229,7 @@ Project::loadProject(const QString & path,
     } catch (...) {
 
         Natron::errorDialog( QObject::tr("Project loader").toStdString(), QObject::tr("Unkown error while loading project").toStdString() );
-        if ( !appPTR->isBackground() ) {
+        if ( !getApp()->isBackground() ) {
             getApp()->createNode(  CreateNodeArgs(PLUGINID_NATRON_VIEWER,
                                                   "",
                                                   -1,-1,
@@ -246,7 +252,10 @@ Project::loadProject(const QString & path,
 
 bool
 Project::loadProjectInternal(const QString & path,
-                             const QString & name,bool isAutoSave,bool isUntitledAutosave, bool* mustSave)
+                             const QString & name,
+                             bool isAutoSave,
+                             bool isUntitledAutosave,
+                             bool* mustSave)
 {
     
     Natron::FlagSetter loadingProjectRAII(true,&_imp->isLoadingProject,&_imp->isLoadingProjectMutex);
@@ -333,10 +342,10 @@ Project::loadProjectInternal(const QString & path,
     if (isAutoSave) {
         _imp->autoSetProjectFormat = false;
         if (!isUntitledAutosave) {
-            QString projectName(_imp->getProjectFilename().c_str());
-            int found = projectName.lastIndexOf(".autosave");
+            QString projectFilename(_imp->getProjectFilename().c_str());
+            int found = projectFilename.lastIndexOf(".autosave");
             if (found != -1) {
-                _imp->setProjectFilename(projectName.left(found).toStdString());
+                _imp->setProjectFilename(projectFilename.left(found).toStdString());
             }
             _imp->hasProjectBeenSavedByUser = true;
         } else {
@@ -348,11 +357,12 @@ Project::loadProjectInternal(const QString & path,
         _imp->ageSinceLastSave = QDateTime();
         _imp->lastAutoSaveFilePath = filePath;
         
-        QString projectName(_imp->getProjectFilename().c_str());
-        Q_EMIT projectNameChanged(projectName + " (*)");
+        QString projectPath(_imp->getProjectPath().c_str());
+        QString projectFilename(_imp->getProjectFilename().c_str());
+        Q_EMIT projectNameChanged(projectPath + projectFilename, true);
 
     } else {
-        Q_EMIT projectNameChanged(name);
+        Q_EMIT projectNameChanged(path + name, false);
     }
     
     ///Try to take the project lock by creating a lock file
@@ -546,7 +556,7 @@ Project::saveProjectInternal(const QString & path,
     
     try {
         boost::archive::xml_oarchive oArchive(ofile);
-        bool bgProject = appPTR->isBackground();
+        bool bgProject = getApp()->isBackground();
         oArchive << boost::serialization::make_nvp("Background_project",bgProject);
         ProjectSerialization projectSerializationObj( getApp() );
         save(&projectSerializationObj);
@@ -592,14 +602,15 @@ Project::saveProjectInternal(const QString & path,
             _imp->hasProjectBeenSavedByUser = true;
             _imp->ageSinceLastSave = time;
         }
-        Q_EMIT projectNameChanged(name); //< notify the gui so it can update the title
+        Q_EMIT projectNameChanged(path + name, false); //< notify the gui so it can update the title
 
         //Create the lock file corresponding to the project
         createLockFile();
     } else if (updateProjectProperties) {
         if (!isRenderSave) {
-            QString projectName(_imp->getProjectFilename().c_str());
-            Q_EMIT projectNameChanged(projectName + " (*)");
+            QString projectPath(_imp->getProjectPath().c_str());
+            QString projectFilename(_imp->getProjectFilename().c_str());
+           Q_EMIT projectNameChanged(projectPath + projectFilename, true);
         }
     }
     if (updateProjectProperties) {
@@ -613,7 +624,7 @@ void
 Project::autoSave()
 {
     ///don't autosave in background mode...
-    if ( appPTR->isBackground() ) {
+    if ( getApp()->isBackground() ) {
         return;
     }
     
@@ -628,7 +639,7 @@ Project::triggerAutoSave()
     ///Should only be called in the main-thread, that is upon user interaction.
     assert( QThread::currentThread() == qApp->thread() );
 
-    if ( appPTR->isBackground() || !appPTR->isLoaded() || isProjectClosing() ) {
+    if ( getApp()->isBackground() || !appPTR->isLoaded() || isProjectClosing() ) {
         return;
     }
     {
@@ -644,7 +655,7 @@ Project::triggerAutoSave()
 void
 Project::onAutoSaveTimerTriggered()
 {
-    assert( !appPTR->isBackground() );
+    assert( !getApp()->isBackground() );
 
     if (!getApp()) {
         return;
@@ -762,24 +773,25 @@ Project::initializeKnobs()
     _imp->addFormatKnob->setName("newFormat");
     page->addKnob(_imp->addFormatKnob);
 
-    _imp->viewsCount = Natron::createKnob<KnobInt>(this, "Number of Views");
-    _imp->viewsCount->setName("noViews");
-    _imp->viewsCount->setAnimationEnabled(false);
-    _imp->viewsCount->setMinimum(1);
-    _imp->viewsCount->setDisplayMinimum(1);
-    _imp->viewsCount->setDefaultValue(1,0);
-    _imp->viewsCount->disableSlider();
-    _imp->viewsCount->setEvaluateOnChange(false);
-    _imp->viewsCount->setAddNewLine(false);
-    page->addKnob(_imp->viewsCount);
-
-    _imp->mainView = Natron::createKnob<KnobInt>(this, "Main View");
-    _imp->mainView->setName("mainView");
-    _imp->mainView->disableSlider();
-    _imp->mainView->setDefaultValue(0);
-    _imp->mainView->setMinimum(0);
-    _imp->mainView->setAnimationEnabled(false);
-    page->addKnob(_imp->mainView);
+    boost::shared_ptr<KnobPage> viewsPage = Natron::createKnob<KnobPage>(this, "Views");
+    
+    _imp->viewsList = Natron::createKnob<KnobPath>(this, "Views List");
+    _imp->viewsList->setName("viewsList");
+    _imp->viewsList->setHintToolTip("The list of the views in the project");
+    _imp->viewsList->setAnimationEnabled(false);
+    _imp->viewsList->setEvaluateOnChange(false);
+    _imp->viewsList->setAsStringList(true);
+    std::list<std::pair<std::string,std::string> > defaultViews;
+    defaultViews.push_back(std::make_pair("Main",""));
+    std::string encodedDefaultViews = KnobPath::encodeToMultiPathFormat(defaultViews);
+    _imp->viewsList->setDefaultValue(encodedDefaultViews);
+    viewsPage->addKnob(_imp->viewsList);
+    
+    _imp->setupForStereoButton = Natron::createKnob<KnobButton>(this, "Setup views for stereo");
+    _imp->setupForStereoButton->setName("setupForStereo");
+    _imp->setupForStereoButton->setHintToolTip("Quickly setup the views list for stereo");
+    _imp->setupForStereoButton->setEvaluateOnChange(false);
+    viewsPage->addKnob(_imp->setupForStereoButton);
 
     _imp->previewMode = Natron::createKnob<KnobBool>(this, "Auto Previews");
     _imp->previewMode->setName("autoPreviews");
@@ -859,7 +871,8 @@ Project::initializeKnobs()
     _imp->projectName = Natron::createKnob<KnobString>(this, "Project Name");
     _imp->projectName->setName("projectName");
     _imp->projectName->setIsPersistant(false);
-    _imp->projectName->setAsLabel();
+//    _imp->projectName->setAsLabel();
+    _imp->projectName->setDefaultEnabled(0,false);
     _imp->projectName->setAnimationEnabled(false);
     _imp->projectName->setDefaultValue(NATRON_PROJECT_UNTITLED);
     infoPage->addKnob(_imp->projectName);
@@ -868,13 +881,15 @@ Project::initializeKnobs()
     _imp->projectPath->setName("projectPath");
     _imp->projectPath->setIsPersistant(false);
     _imp->projectPath->setAnimationEnabled(false);
-    _imp->projectPath->setAsLabel();
+    _imp->projectPath->setDefaultEnabled(0,false);
+   // _imp->projectPath->setAsLabel();
     infoPage->addKnob(_imp->projectPath);
     
     _imp->natronVersion = Natron::createKnob<KnobString>(this, "Saved With");
     _imp->natronVersion->setName("softwareVersion");
     _imp->natronVersion->setHintToolTip("The version of " NATRON_APPLICATION_NAME " that saved this project for the last time.");
-    _imp->natronVersion->setAsLabel();
+   // _imp->natronVersion->setAsLabel();
+    _imp->natronVersion->setDefaultEnabled(0, false);
     _imp->natronVersion->setEvaluateOnChange(false);
     _imp->natronVersion->setAnimationEnabled(false);
     
@@ -884,7 +899,8 @@ Project::initializeKnobs()
     _imp->originalAuthorName = Natron::createKnob<KnobString>(this, "Original Author");
     _imp->originalAuthorName->setName("originalAuthor");
     _imp->originalAuthorName->setHintToolTip("The user name and host name of the original author of the project.");
-    _imp->originalAuthorName->setAsLabel();
+    //_imp->originalAuthorName->setAsLabel();
+    _imp->originalAuthorName->setDefaultEnabled(0, false);
     _imp->originalAuthorName->setEvaluateOnChange(false);
     _imp->originalAuthorName->setAnimationEnabled(false);
     std::string authorName = generateGUIUserName();
@@ -894,7 +910,8 @@ Project::initializeKnobs()
     _imp->lastAuthorName = Natron::createKnob<KnobString>(this, "Last Author");
     _imp->lastAuthorName->setName("lastAuthor");
     _imp->lastAuthorName->setHintToolTip("The user name and host name of the last author of the project.");
-    _imp->lastAuthorName->setAsLabel();
+   // _imp->lastAuthorName->setAsLabel();
+    _imp->lastAuthorName->setDefaultEnabled(0, false);
     _imp->lastAuthorName->setEvaluateOnChange(false);
     _imp->lastAuthorName->setAnimationEnabled(false);
     _imp->lastAuthorName->setDefaultValue(authorName);
@@ -904,7 +921,8 @@ Project::initializeKnobs()
     _imp->projectCreationDate = Natron::createKnob<KnobString>(this, "Created On");
     _imp->projectCreationDate->setName("creationDate");
     _imp->projectCreationDate->setHintToolTip("The creation date of the project.");
-    _imp->projectCreationDate->setAsLabel();
+    //_imp->projectCreationDate->setAsLabel();
+    _imp->projectCreationDate->setDefaultEnabled(0, false);
     _imp->projectCreationDate->setEvaluateOnChange(false);
     _imp->projectCreationDate->setAnimationEnabled(false);
     _imp->projectCreationDate->setDefaultValue(QDateTime::currentDateTime().toString().toStdString());
@@ -913,7 +931,8 @@ Project::initializeKnobs()
     _imp->saveDate = Natron::createKnob<KnobString>(this, "Last Saved On");
     _imp->saveDate->setName("lastSaveDate");
     _imp->saveDate->setHintToolTip("The date this project was last saved.");
-    _imp->saveDate->setAsLabel();
+    //_imp->saveDate->setAsLabel();
+    _imp->saveDate->setDefaultEnabled(0, false);
     _imp->saveDate->setEvaluateOnChange(false);
     _imp->saveDate->setAnimationEnabled(false);
     infoPage->addKnob(_imp->saveDate);
@@ -1039,13 +1058,6 @@ Project::getProjectDefaultFormat(Format *f) const
 }
 
 
-    
-void
-Project::ensureAllProcessingThreadsFinished()
-{
-    quitAnyProcessingForAllNodes();
-    QThreadPool::globalInstance()->waitForDone();
-}
 int
 Project::currentFrame() const
 {
@@ -1103,17 +1115,84 @@ Project::setProjectDefaultFormat(const Format & f)
 int
 Project::getProjectViewsCount() const
 {
-    return _imp->viewsCount->getValue();
+    std::list<std::pair<std::string,std::string> > pairs;
+    _imp->viewsList->getVariables(&pairs);
+    return (int)pairs.size();
+}
+    
+const std::vector<std::string>&
+Project::getProjectViewNames() const
+{
+
+    ///Tls is needed to implement getViewName in the multi-plane suite
+    std::vector<std::string>& tls = _imp->tlsData->getOrCreateTLSData()->viewNames;
+    tls.clear();
+    
+    std::list<std::pair<std::string,std::string> > pairs;
+    _imp->viewsList->getVariables(&pairs);
+    for (std::list<std::pair<std::string,std::string> >::iterator it = pairs.begin();
+         it != pairs.end(); ++it) {
+        tls.push_back(it->first);
+    }
+    return tls;
+}
+    
+void
+Project::setupProjectForStereo()
+{
+    std::list<std::pair<std::string,std::string> > pairs;
+    pairs.push_back(std::make_pair("Left",""));
+    pairs.push_back(std::make_pair("Right",""));
+    std::string encoded = KnobPath::encodeToMultiPathFormat(pairs);
+    _imp->viewsList->setValue(encoded,0);
+}
+   
+
+static std::string toLowerString(const std::string& str)
+{
+    std::string ret;
+    std::locale loc;
+    for (std::size_t i = 0; i < str.size(); ++i) {
+        ret.push_back(std::tolower(str[i],loc));
+    }
+    return ret;
+}
+    
+static bool caseInsensitiveCompare(const std::string& lhs, const std::string& rhs)
+{
+    std::string lowerLhs = toLowerString(lhs);
+    std::string lowerRhs = toLowerString(rhs);
+    return lowerLhs == lowerRhs;
 }
 
-int
-Project::getProjectMainView() const
+void
+Project::createProjectViews(const std::vector<std::string>& views)
 {
-    return _imp->mainView->getValue();
+    std::list<std::pair<std::string,std::string> > pairs;
+    _imp->viewsList->getVariables(&pairs);
+    
+    for (std::size_t i = 0; i < views.size(); ++i) {
+        bool found = false;
+        for (std::list<std::pair<std::string,std::string> >::iterator it = pairs.begin(); it != pairs.end(); ++it) {
+            if (caseInsensitiveCompare(it->first,views[i])) {
+                found = true;
+                break;
+            }
+        }
+        if (found || views[i].empty()) {
+            continue;
+        }
+        std::string view = views[i];
+        view[0] = std::toupper(view[0]);
+        pairs.push_back(std::make_pair(view,std::string()));
+    }
+    std::string encoded = KnobPath::encodeToMultiPathFormat(pairs);
+    _imp->viewsList->setValue(encoded,0);
+
 }
 
 QString
-Project::getProjectName() const
+Project::getProjectFilename() const
 {
     return _imp->getProjectFilename().c_str();
 }
@@ -1207,19 +1286,26 @@ Project::endKnobsValuesChanged(Natron::ValueChangedReasonEnum /*reason*/)
 void
 Project::onKnobValueChanged(KnobI* knob,
                             Natron::ValueChangedReasonEnum reason,
-                            SequenceTime /*time*/,
+                            double /*time*/,
                             bool /*originatedFromMainThread*/)
 {
-    if ( knob == _imp->viewsCount.get() ) {
-        int viewsCount = _imp->viewsCount->getValue();
-        getApp()->setupViewersForViews(viewsCount);
-
-        int mainView = _imp->mainView->getValue();
-        if (mainView >= viewsCount) {
-            ///reset view to 0
-            _imp->mainView->setValue(0, 0);
+    if ( knob == _imp->viewsList.get() ) {
+        
+        /**
+         * All cache entries are linked to a view index which may no longer be correct since the user changed the project settings.
+         * The only way to overcome this is to wipe the cache.
+         **/
+        appPTR->clearAllCaches();
+        
+        std::vector<std::string> viewNames = getProjectViewNames();
+        getApp()->setupViewersForViews(viewNames);
+        if (reason == Natron::eValueChangedReasonUserEdited) {
+            ///views change, notify all OneView nodes via getClipPreferences
+            forceComputeInputDependentDataOnAllTrees();
         }
-        _imp->mainView->setMaximum(viewsCount - 1);
+        
+    } else if (knob == _imp->setupForStereoButton.get()) {
+        setupProjectForStereo();
     } else if ( knob == _imp->formatKnob.get() ) {
         int index = _imp->formatKnob->getValue();
         Format frmt;
@@ -1228,7 +1314,7 @@ Project::onKnobValueChanged(KnobI* knob,
             if (reason == Natron::eValueChangedReasonUserEdited) {
                 ///Increase all nodes age in the project so all cache is invalidated: some effects images might rely on the project format
                 NodeList nodes;
-                getNodes_recursive(nodes);
+                getNodes_recursive(nodes,true);
                 for (NodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
                     (*it)->incrementKnobsAge();
                 }
@@ -1289,7 +1375,7 @@ QString
 Project::getLockAbsoluteFilePath() const
 {
     QString projectPath(_imp->getProjectPath().c_str());
-    QString projectName(_imp->getProjectFilename().c_str());
+    QString projectFilename(_imp->getProjectFilename().c_str());
   
     if (projectPath.isEmpty()) {
         return QString();
@@ -1297,7 +1383,7 @@ Project::getLockAbsoluteFilePath() const
     if (!projectPath.endsWith('/')) {
         projectPath.append('/');
     }
-    QString lockFilePath = projectPath + projectName + ".lock";
+    QString lockFilePath = projectPath + projectFilename + ".lock";
     return lockFilePath;
 }
     
@@ -1318,7 +1404,8 @@ Project::createLockFile()
     QString curDateStr = now.toString();
     ts << curDateStr << '\n'
     << lastAuthor << '\n'
-    << QCoreApplication::applicationPid();
+    << (qint64)QCoreApplication::applicationPid() << '\n'
+    << QHostInfo::localHostName();
 }
     
 void
@@ -1331,7 +1418,12 @@ Project::removeLockFile()
 }
     
 bool
-Project::getLockFileInfos(const QString& projectPath,const QString& projectName,QString* authorName,QString* lastSaveDate,qint64* appPID) const
+Project::getLockFileInfos(const QString& projectPath,
+                          const QString& projectName,
+                          QString* authorName,
+                          QString* lastSaveDate,
+                          QString* host,
+                          qint64* appPID) const
 {
     QString realPath = projectPath;
     if (!realPath.endsWith('/')) {
@@ -1359,6 +1451,12 @@ Project::getLockFileInfos(const QString& projectPath,const QString& projectName,
     } else {
         return false;
     }
+    // host is optional and was added later
+    if (!ts.atEnd()) {
+        *host = ts.readLine();
+    } else {
+        *host = tr("unknown host");
+    }
     return true;
 }
     
@@ -1379,13 +1477,13 @@ Project::removeLastAutosave()
      * a oldProject.ntp.autosave file next to it that belonged to the old project, make sure it gets removed too
      */
     QString projectPath(_imp->getProjectPath().c_str());
-    QString projectName(_imp->getProjectFilename().c_str());
+    QString projectFilename(_imp->getProjectFilename().c_str());
     
     if (!projectPath.endsWith('/')) {
         projectPath.append('/');
     }
     
-    QString autoSaveFilePath = projectPath + projectName + ".autosave";
+    QString autoSaveFilePath = projectPath + projectFilename + ".autosave";
     if (QFile::exists(autoSaveFilePath)) {
         QFile::remove(autoSaveFilePath);
     }
@@ -1427,7 +1525,7 @@ void
 Project::resetProject()
 {
     reset(false);
-    if (!appPTR->isBackground()) {
+    if (!getApp()->isBackground()) {
         createViewer();
     }
 }
@@ -1445,12 +1543,14 @@ Project::reset(bool aboutToQuit)
     
     QString lockFilePath = getLockAbsoluteFilePath();
     QString projectPath(_imp->getProjectPath().c_str());
-    QString projectName(_imp->getProjectFilename().c_str());
+    QString projectFilename(_imp->getProjectFilename().c_str());
     ///Remove the lock file if we own it
     if (QFile::exists(lockFilePath)) {
-        QString author,lastsave;
+        QString author;
+        QString lastsave;
+        QString host;
         qint64 pid;
-        if (getLockFileInfos(projectPath, projectName, &author, &lastsave, &pid)) {
+        if (getLockFileInfos(projectPath, projectFilename, &author, &lastsave, &host, &pid)) {
             if (pid == QCoreApplication::applicationPid()) {
                 QFile::remove(lockFilePath);
             }
@@ -1470,9 +1570,9 @@ Project::reset(bool aboutToQuit)
             _imp->autoSaveTimer->stop();
             _imp->additionalFormats.clear();
         }
-        _imp->timeline->removeAllKeyframesIndicators();
+        getApp()->removeAllKeyframesIndicators();
         
-        Q_EMIT projectNameChanged(NATRON_PROJECT_UNTITLED);
+        Q_EMIT projectNameChanged(NATRON_PROJECT_UNTITLED, false);
         
         const std::vector<boost::shared_ptr<KnobI> > & knobs = getKnobs();
         
@@ -1687,7 +1787,7 @@ Project::unescapeXML(const std::string &istr)
 }
 
 void
-Project::makeEnvMap(const std::string& encoded,std::map<std::string,std::string>& variables)
+    Project::makeEnvMapUnordered(const std::string& encoded,std::vector<std::pair<std::string,std::string> >& variables)
 {
     std::string startNameTag(NATRON_ENV_VAR_NAME_START_TAG);
     std::string endNameTag(NATRON_ENV_VAR_NAME_END_TAG);
@@ -1715,16 +1815,26 @@ Project::makeEnvMap(const std::string& encoded,std::map<std::string,std::string>
         
         size_t endValuePos = encoded.find(endValueTag,i);
         assert(endValuePos != std::string::npos && endValuePos < encoded.size());
-
+        
         while (endValuePos != std::string::npos && endValuePos < encoded.size() && i < endValuePos) {
             value.push_back(encoded.at(i));
             ++i;
         }
         
         // In order to use XML tags, the text inside the tags has to be unescaped.
-        variables.insert(std::make_pair(unescapeXML(name), unescapeXML(value)));
+        variables.push_back(std::make_pair(unescapeXML(name), unescapeXML(value)));
         
         i = encoded.find(startNameTag,i);
+    }
+}
+    
+void
+Project::makeEnvMap(const std::string& encoded,std::map<std::string,std::string>& variables)
+{
+    std::vector<std::pair<std::string,std::string> > pairs;
+    makeEnvMapUnordered(encoded,pairs);
+    for (std::size_t i = 0; i < pairs.size(); ++i) {
+        variables[pairs[i].first] = pairs[i].second;
     }
 }
 
@@ -2061,7 +2171,7 @@ Project::recomputeFrameRangeFromReaders()
 void
 Project::createViewer()
 {
-    if (appPTR->isBackground()) {
+    if (getApp()->isBackground()) {
         return;
     }
     getApp()->createNode( CreateNodeArgs(PLUGINID_NATRON_VIEWER,
@@ -2150,7 +2260,6 @@ void Project::extractTreesFromNodes(const std::list<boost::shared_ptr<Natron::No
         if (isOutput) {
             NodesTree tree;
             tree.output.node = *it;
-
             const std::list<Natron::Node* >& outputs = (*it)->getGuiOutputs();
             for (std::list<Natron::Node*>::const_iterator it2 = outputs.begin(); it2!=outputs.end(); ++it2) {
                 int idx = (*it2)->inputIndex(it->get());
@@ -2187,6 +2296,12 @@ bool Project::addFormat(const std::string& formatSpec)
     } else {
         return false;
     }
+}
+    
+void
+Project::setTimeLine(const boost::shared_ptr<TimeLine>& timeline)
+{
+    _imp->timeline = timeline;
 }
     
 } //namespace Natron

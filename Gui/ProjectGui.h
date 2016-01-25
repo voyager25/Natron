@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,30 +41,8 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/Format.h"
 
-class Button;
-class QWidget;
-class QHBoxLayout;
-class QVBoxLayout;
-class ComboBox;
-class SpinBox;
-class LineEdit;
-class KnobColor;
-class DockablePanel;
-class ProjectGuiSerialization;
-class Gui;
-class NodeGui;
-class ViewerInstance;
-class NodeGuiSerialization;
-namespace boost {
-namespace archive {
-class xml_archive;
-}
-}
+#include "Gui/GuiFwd.h"
 
-namespace Natron {
-class Project;
-class Label;
-}
 
 class ProjectGui
     : public QObject
@@ -132,6 +110,7 @@ public Q_SLOTS:
     void initializeKnobsGui();
 
 private:
+    
 
 
     Gui* _gui;

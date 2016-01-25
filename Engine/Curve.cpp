@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -682,6 +682,27 @@ Curve::getNextKeyframeTime(double time,
 
         return true;
     }
+}
+
+int
+Curve::getNKeyFramesInRange(double first, double last) const
+{
+    int ret = 0;
+    QMutexLocker k(&_imp->_lock);
+    KeyFrameSet::const_iterator upper = _imp->keyFrames.end();
+    for (KeyFrameSet::const_iterator it = _imp->keyFrames.begin(); it != _imp->keyFrames.end(); ++it) {
+        if (it->getTime() >= first) {
+            upper = it;
+            break;
+        }
+    }
+    for (; upper != _imp->keyFrames.end(); ++upper) {
+        if (upper->getTime() >= last) {
+            break;
+        }
+        ++ret;
+    }
+    return ret;
 }
 
 bool

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,8 @@
 #include "Global/GlobalDefines.h"
 
 #include "Engine/Knob.h"
+#include "Engine/EngineFwd.h"
+
 
 #define kQSettingsSoftwareMajorVersionSettingName "SoftwareVersionMajor"
 
@@ -40,25 +42,6 @@
    @todo Move this class to QSettings instead*/
 
 
-namespace Natron {
-class LibraryBinary;
-class Plugin;
-}
-
-class KnobI;
-class KnobFile;
-class KnobPage;
-class KnobDouble;
-class KnobInt;
-class KnobBool;
-class KnobButton;
-class KnobGroup;
-class KnobChoice;
-class KnobPath;
-class KnobColor;
-class KnobString;
-class QSettings;
-class KnobSeparator;
 class Settings
     : public KnobHolder
 {
@@ -67,8 +50,32 @@ GCC_DIAG_SUGGEST_OVERRIDE_OFF
 GCC_DIAG_SUGGEST_OVERRIDE_ON
     
 public:
+    enum KnownHostNameEnum {
+        eKnownHostNameNatron = 0,
+        eKnownHostNameNuke,
+        eKnownHostNameFusion,
+        eKnownHostNameVegas,
+        eKnownHostNameToxik,
+        eKnownHostNameScratch,
+        eKnownHostNameDustBuster,
+        eKnownHostNameResolve,
+        eKnownHostNameResolveLite,
+        eKnownHostNameMistika,
+        eKnownHostNamePablo,
+        eKnownHostNameMotionStudio,
+        eKnownHostNameShake,
+        eKnownHostNameBaselight,
+        eKnownHostNameFrameCycler,
+        eKnownHostNameNucoda,
+        eKnownHostNameAvidDS,
+        eKnownHostNameDX,
+        eKnownHostNameTitlerPro,
+        eKnownHostNameRamen,
+        eKnownHostNameTuttleOfx,
+        eKnownHostNameNone,
+    };
 
-    Settings(AppInstance* appInstance);
+    Settings();
 
     virtual ~Settings()
     {
@@ -80,7 +87,7 @@ public:
     {
     }
 
-    virtual void onKnobValueChanged(KnobI* k,Natron::ValueChangedReasonEnum reason,SequenceTime time,
+    virtual void onKnobValueChanged(KnobI* k,Natron::ValueChangedReasonEnum reason,double time,
                                     bool originatedFromMainThread) OVERRIDE FINAL;
 
     Natron::ImageBitDepthEnum getViewersBitDepth() const;
@@ -162,6 +169,8 @@ public:
     bool isCheckForUpdatesEnabled() const;
 
     void setCheckUpdatesEnabled(bool enabled);
+    
+    bool isCrashReportingEnabled() const;
 
     int getMaxPanelsOpened() const;
 
@@ -201,7 +210,12 @@ public:
     bool getIconsBlackAndWhite() const;
 
     std::string getHostName() const;
+    const std::string& getKnownHostName(KnownHostNameEnum e) const {
+        return _knownHostNames[(int)e];
+    }
     std::string getDefaultLayoutFile() const;
+    
+    bool getLoadProjectWorkspce() const;
 
     bool useCursorPositionIncrements() const;
 
@@ -269,7 +283,11 @@ public:
     
     bool isAutoDeclaredVariablePrintActivated() const;
     
+    void setAutoDeclaredVariablePrintEnabled(bool enabled);
+    
     bool isPluginIconActivatedOnNodeGraph() const;
+    
+    bool isNodeGraphAntiAliasingEnabled() const;
     
     void getSunkenColor(double* r,double* g,double* b) const;
     void getBaseColor(double* r,double* g,double* b) const;
@@ -294,6 +312,18 @@ public:
     void getDopeSheetEditorScaleColor(double* r,double* g, double* b) const;
     void getDopeSheetEditorGridColor(double* r,double* g, double* b) const;
 
+    
+    void getSEKeywordColor(double* r,double* g, double* b) const;
+    void getSEOperatorColor(double* r,double* g, double* b) const;
+    void getSEBraceColor(double* r,double* g, double* b) const;
+    void getSEDefClassColor(double* r,double* g, double* b) const;
+    void getSEStringsColor(double* r,double* g, double* b) const;
+    void getSECommentsColor(double* r,double* g, double* b) const;
+    void getSESelfColor(double* r,double* g, double* b) const;
+    void getSENumbersColor(double* r,double* g, double* b) const;
+    void getSECurLineColor(double* r,double* g, double* b) const;
+    
+    
     void getPluginIconFrameColor(int *r, int *g, int *b) const;
     int getDopeSheetEditorNodeSeparationWith() const;
     
@@ -341,6 +371,7 @@ private:
     boost::shared_ptr<KnobBool> _natronSettingsExist;
   
     boost::shared_ptr<KnobBool> _checkForUpdates;
+    boost::shared_ptr<KnobBool> _enableCrashReports;
     boost::shared_ptr<KnobBool> _notifyOnFileChange;
     boost::shared_ptr<KnobInt> _autoSaveDelay;
     boost::shared_ptr<KnobBool> _linearPickers;
@@ -356,10 +387,14 @@ private:
     boost::shared_ptr<KnobInt> _maxPanelsOpened;
     boost::shared_ptr<KnobBool> _useCursorPositionIncrements;
     boost::shared_ptr<KnobFile> _defaultLayoutFile;
+    boost::shared_ptr<KnobBool> _loadProjectsWorkspace;
     boost::shared_ptr<KnobBool> _renderOnEditingFinished;
     boost::shared_ptr<KnobBool> _activateRGBSupport;
     boost::shared_ptr<KnobBool> _activateTransformConcatenationSupport;
-    boost::shared_ptr<KnobString> _hostName;
+    boost::shared_ptr<KnobChoice> _hostName;
+    boost::shared_ptr<KnobString> _customHostName;
+    
+    
     boost::shared_ptr<KnobChoice> _ocioConfigKnob;
     boost::shared_ptr<KnobBool> _warnOcioConfigKnobChanged;
     boost::shared_ptr<KnobBool> _ocioStartupCheck;
@@ -412,6 +447,7 @@ private:
     boost::shared_ptr<KnobBool> _hideOptionalInputsAutomatically;
     boost::shared_ptr<KnobBool> _useInputAForMergeAutoConnect;
     boost::shared_ptr<KnobBool> _usePluginIconsInNodeGraph;
+    boost::shared_ptr<KnobBool> _useAntiAliasing;
     boost::shared_ptr<KnobColor> _defaultNodeColor;
     boost::shared_ptr<KnobColor> _defaultBackdropColor;
     boost::shared_ptr<KnobColor> _defaultGeneratorColor;
@@ -484,6 +520,18 @@ private:
     boost::shared_ptr<KnobColor> _dopeSheetEditorScaleColor;
     boost::shared_ptr<KnobColor> _dopeSheetEditorGridColor;
     
+    boost::shared_ptr<KnobGroup> _scriptEditorColors;
+    boost::shared_ptr<KnobColor> _curLineColor;
+    boost::shared_ptr<KnobColor> _keywordColor;
+    boost::shared_ptr<KnobColor> _operatorColor;
+    boost::shared_ptr<KnobColor> _braceColor;
+    boost::shared_ptr<KnobColor> _defClassColor;
+    boost::shared_ptr<KnobColor> _stringsColor;
+    boost::shared_ptr<KnobColor> _commentsColor;
+    boost::shared_ptr<KnobColor> _selfColor;
+    boost::shared_ptr<KnobColor> _numbersColor;
+    
+    
     struct PerPluginKnobs
     {
         boost::shared_ptr<KnobBool> enabled;
@@ -505,6 +553,7 @@ private:
     };
 
     std::map<const Natron::Plugin*,PerPluginKnobs> _pluginsMap;
+    std::vector<std::string> _knownHostNames;
     bool _restoringSettings;
     bool _ocioRestored;
     bool _settingsExisted;

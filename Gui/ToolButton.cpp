@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 #include <algorithm>
 CLANG_DIAG_OFF(deprecated)
 #include <QMenu>
+#include <qalgorithms.h>
 CLANG_DIAG_ON(deprecated)
 
 #include <boost/weak_ptr.hpp>
@@ -130,7 +131,8 @@ ToolButton::hasChildren() const
 QMenu*
 ToolButton::getMenu() const
 {
-    assert(_imp->_menu); return _imp->_menu;
+    assert(_imp->_menu);
+    return _imp->_menu;
 }
 
 void
@@ -143,13 +145,12 @@ void
 ToolButton::tryAddChild(ToolButton* child)
 {
     assert(_imp->_menu);
-    for (unsigned int i = 0; i < _imp->_children.size(); ++i) {
-        if (_imp->_children[i] == child) {
-            return;
-        }
+    // insert if not present
+    std::vector<ToolButton*> &children = _imp->_children;
+    if (std::find(children.begin(), children.end(), child) == children.end()) {
+        children.push_back(child);
+        _imp->_menu->addAction( child->getAction() );
     }
-    _imp->_children.push_back(child);
-    _imp->_menu->addAction( child->getAction() );
 }
 
 const std::vector<ToolButton*> &
@@ -197,11 +198,8 @@ ToolButton::onTriggered()
 
 struct ToolButtonChildrenSortFunctor
 {
-    bool operator() (const ToolButton* lhs,const ToolButton* rhs) {
-        QAction* lAct = lhs->getAction();
-        QAction* rAct = rhs->getAction();
-        assert(lAct && rAct);
-        return lAct->text() < rAct->text();
+    bool operator() (const QAction* lhs,const QAction* rhs) {
+        return lhs->text() < rhs->text();
     }
 };
 
@@ -212,9 +210,21 @@ ToolButton::sortChildren()
         return;
     }
     assert(_imp->_menu);
+    QList<QAction*> actions = _imp->_menu->actions();
+    qSort(actions.begin(), actions.end(), ToolButtonChildrenSortFunctor());
     _imp->_menu->clear();
-    std::sort(_imp->_children.begin(), _imp->_children.end(),ToolButtonChildrenSortFunctor());
-    for (std::size_t i = 0; i < _imp->_children.size(); ++i) {
-        _imp->_menu->addAction(_imp->_children[i]->getAction());
+    
+    std::vector<ToolButton*> sortedChildren;
+    for (QList<QAction*>::Iterator it = actions.begin(); it!=actions.end(); ++it) {
+        /// find toolbutton if possible
+        for (U32 i = 0; i < _imp->_children.size(); ++i) {
+            if (_imp->_children[i]->getAction() == *it) {
+                sortedChildren.push_back(_imp->_children[i]);
+                break;
+            }
+        }
+        _imp->_menu->addAction(*it);
     }
+    _imp->_children = sortedChildren;
+
 }

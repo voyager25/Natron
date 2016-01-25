@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@
 #include "Engine/NodeGroup.h" // kNatronGroupInputIsOptionalParamName, kNatronGroupInputIsMaskParamName
 
 std::string
-GroupInput::getDescription() const
+GroupInput::getPluginDescription() const
 {
     return "This node can only be used within a Group. It adds an input arrow to the group.";
 }
@@ -61,7 +61,7 @@ void
 GroupInput::knobChanged(KnobI* k,
                  Natron::ValueChangedReasonEnum /*reason*/,
                  int /*view*/,
-                 SequenceTime /*time*/,
+                 double /*time*/,
                  bool /*originatedFromMainThread*/)
 {
     if (k == optional.lock().get()) {
@@ -78,4 +78,33 @@ GroupInput::knobChanged(KnobI* k,
         group->notifyInputMaskStateChanged(getNode());
         
     }
+}
+
+Natron::ImagePremultiplicationEnum
+GroupInput::getOutputPremultiplication() const
+{
+    NodePtr thisNode = getNode();
+    boost::shared_ptr<NodeCollection> group = thisNode->getGroup();
+    NodeGroup* isGroup = dynamic_cast<NodeGroup*>(group.get());
+    assert(isGroup);
+    if (!isGroup) {
+        return Natron::eImagePremultiplicationPremultiplied;
+    }
+    int inputNb = -1;
+    std::vector<NodePtr> groupInputs;
+    isGroup->getInputs(&groupInputs, false);
+    for (std::size_t i = 0; i < groupInputs.size(); ++i) {
+        if (groupInputs[i] == thisNode) {
+            inputNb = i;
+            break;
+        }
+    }
+    assert(inputNb != -1);
+    if (inputNb != -1) {
+        Natron::EffectInstance* input = isGroup->getInput(inputNb);
+        if (input) {
+            return input->getOutputPremultiplication();
+        }
+    }
+    return Natron::eImagePremultiplicationPremultiplied;
 }

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,32 +26,49 @@
 #include "AppManagerPrivate.h"
 
 #include <clocale>
+#include <csignal>
 #include <cstddef>
 #include <stdexcept>
 
+#if defined(Q_OS_LINUX)
+#include <sys/signal.h>
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
+#include <ucontext.h>
+#include <execinfo.h>
+#endif
+
+#ifdef Q_OS_UNIX
+#include <stdio.h>
+#include <stdlib.h>
+#ifdef Q_OS_MAC
+#include <sys/sysctl.h>
+#include <libproc.h>
+#endif
+#endif
+
 #include <QtCore/QDebug>
+#include <QtCore/QDir>
 #include <QtCore/QTextCodec>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QSettings>
+#include <QtCore/QThreadPool>
+#include <QtCore/QTextStream>
 #include <QtNetwork/QAbstractSocket>
 #include <QtNetwork/QLocalServer>
 #include <QtNetwork/QLocalSocket>
 
-#ifdef NATRON_USE_BREAKPAD
-#if defined(Q_OS_MAC)
-#include "client/mac/handler/exception_handler.h"
-#elif defined(Q_OS_LINUX)
-#include "client/linux/handler/exception_handler.h"
-#elif defined(Q_OS_WIN32)
-#include "client/windows/handler/exception_handler.h"
-#endif
-#endif
+
+#include "Global/ProcInfo.h"
+
 
 #include "Engine/AppInstance.h"
 #include "Engine/BackDrop.h"
 #include "Engine/CLArgs.h"
 #include "Engine/DiskCacheNode.h"
 #include "Engine/Dot.h"
+#include "Engine/ExistenceCheckThread.h"
 #include "Engine/GroupInput.h"
 #include "Engine/GroupOutput.h"
 #include "Engine/LibraryBinary.h"
@@ -62,8 +79,10 @@
 #include "Engine/OfxHost.h"
 #include "Engine/ProcessHandler.h" // ProcessInputChannel
 #include "Engine/Project.h"
+#include "Engine/PrecompNode.h"
 #include "Engine/RotoPaint.h"
 #include "Engine/RotoSmear.h"
+#include "Engine/StandardPaths.h"
 #include "Engine/ViewerInstance.h" // RenderStatsMap
 
 
@@ -73,21 +92,104 @@ AppManager* AppManager::_instance = 0;
 
 
 
-#ifdef NATRON_USE_BREAKPAD
-#ifdef DEBUG
-inline
-void crash_application()
-{
-#ifdef __NATRON_UNIX__
-    sleep(2);
-#endif
-    volatile int* a = (int*)(NULL);
-    // coverity[var_deref_op]
-    *a = 1;
-}
-#endif // DEBUG
-#endif // NATRON_USE_BREAKPAD
 
+#ifdef __NATRON_LINUX__
+
+//namespace  {
+static void
+handleShutDownSignal( int /*signalId*/ )
+{
+    if (appPTR) {
+        std::cerr << "\nCaught termination signal, exiting!" << std::endl;
+        appPTR->quitApplication();
+    }
+}
+
+static void
+setShutDownSignal(int signalId)
+{
+#if defined(__NATRON_UNIX__)
+    struct sigaction sa;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = handleShutDownSignal;
+    if (sigaction(signalId, &sa, NULL) == -1) {
+        std::perror("setting up termination signal");
+        std::exit(1);
+    }
+#else
+    std::signal(signalId, handleShutDownSignal);
+#endif
+}
+#endif
+
+
+#if defined(__NATRON_LINUX__)
+
+#define NATRON_UNIX_BACKTRACE_STACK_DEPTH 16
+
+static void
+backTraceSigSegvHandler(int sig, siginfo_t *info,
+                   void *secret) {
+    
+    void *trace[NATRON_UNIX_BACKTRACE_STACK_DEPTH];
+    char **messages = (char **)NULL;
+    int i, trace_size = 0;
+    ucontext_t *uc = (ucontext_t *)secret;
+    
+    /* Do something useful with siginfo_t */
+    if (sig == SIGSEGV) {
+        QThread* curThread = QThread::currentThread();
+        std::string threadName;
+        if (curThread) {
+            threadName = (qApp && qApp->thread() == curThread) ? "Main" : curThread->objectName().toStdString();
+        }
+        std::cerr << "Caught segmentation fault (SIGSEGV) from thread "  << threadName << "(" << curThread << "), faulty address is " <<
+             #ifndef __x86_64__
+                     (void*)uc->uc_mcontext.gregs[REG_EIP]
+             #else
+                     (void*)uc->uc_mcontext.gregs[REG_RIP]
+             #endif
+                     << " from " << info->si_addr << std::endl;
+    } else {
+        printf("Got signal %d#92;n", sig);
+    }
+    
+    trace_size = backtrace(trace, NATRON_UNIX_BACKTRACE_STACK_DEPTH);
+    /* overwrite sigaction with caller's address */
+#ifndef __x86_64__
+       trace[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+#else
+       trace[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
+#endif
+
+    
+    messages = backtrace_symbols(trace, trace_size);
+    /* skip first stack frame (points here) */
+    std::cerr << "Backtrace:" << std::endl;
+    for (i = 1; i < trace_size; ++i) {
+        std::cerr << "[Frame " << i << "]: " << messages[i] << std::endl;
+    }
+    exit(1);
+}
+
+static void
+setSigSegvSignal()
+{
+    struct sigaction sa;
+    sigemptyset (&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_SIGINFO;
+    /* if SA_SIGINFO is set, sa_sigaction is to be used instead of sa_handler. */
+    sa.sa_sigaction = backTraceSigSegvHandler;
+   
+    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+        std::perror("setting up sigsegv signal");
+        std::exit(1);
+    }
+}
+#endif
+
+//} // anon namespace
 
 void
 AppManager::saveCaches() const
@@ -109,7 +211,7 @@ AppManager::AppManager()
 {
     assert(!_instance);
     _instance = this;
-    
+
     QObject::connect(this, SIGNAL(s_requestOFXDialogOnMainThread(Natron::OfxImageEffectInstance*, void*)), this, SLOT(onOFXDialogOnMainThreadReceived(Natron::OfxImageEffectInstance*, void*)));
 }
 
@@ -192,8 +294,32 @@ AppManager::load(int &argc,
 
 AppManager::~AppManager()
 {
-    while (!_imp->_appInstances.empty()) {
-        _imp->_appInstances.begin()->second.app->quit();
+    
+#ifdef NATRON_USE_BREAKPAD
+    if (_imp->breakpadAliveThread) {
+        _imp->breakpadAliveThread->quitThread();
+    }
+#endif
+    
+    bool appsEmpty;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        appsEmpty = _imp->_appInstances.empty();
+    }
+    while (!appsEmpty) {
+        AppInstance* front = 0;
+        {
+            QMutexLocker k(&_imp->_appInstancesMutex);
+            front = _imp->_appInstances.begin()->second.app;
+        }
+        if (front) {
+            front->quit();
+        }
+        {
+            QMutexLocker k(&_imp->_appInstancesMutex);
+            appsEmpty = _imp->_appInstances.empty();
+        }
+        
     }
     
     for (PluginsMap::iterator it = _imp->_plugins.begin(); it != _imp->_plugins.end(); ++it) {
@@ -213,6 +339,7 @@ AppManager::~AppManager()
     } catch (std::runtime_error) {
         // ignore errors
     }
+    
 
 
     ///Caches may have launched some threads to delete images, wait for them to be done
@@ -228,12 +355,6 @@ AppManager::~AppManager()
     
     tearDownPython();
     
-#ifdef NATRON_USE_BREAKPAD
-    if (_imp->crashReporter) {
-        _imp->crashReporter->terminate();
-    }
-#endif
-    
     _instance = 0;
 
     delete qApp;
@@ -245,16 +366,47 @@ void
 AppManager::quit(AppInstance* instance)
 {
     instance->aboutToQuit();
-    std::map<int, AppInstanceRef>::iterator found = _imp->_appInstances.find( instance->getAppID() );
-    assert( found != _imp->_appInstances.end() );
-    found->second.status = eAppInstanceStatusInactive;
+    
+    int nbApps;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        std::map<int, AppInstanceRef>::iterator found = _imp->_appInstances.find( instance->getAppID() );
+        assert( found != _imp->_appInstances.end() );
+        found->second.status = eAppInstanceStatusInactive;
+        nbApps = (int)_imp->_appInstances.size();
+    }
     ///if we exited the last instance, exit the event loop, this will make
     /// the exec() function return.
-    if (_imp->_appInstances.size() == 1) {
+    if (nbApps == 1) {
         assert(qApp);
         qApp->quit();
     }
     delete instance;
+}
+
+void
+AppManager::quitApplication()
+{
+    bool appsEmpty;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        appsEmpty = _imp->_appInstances.empty();
+    }
+    while (!appsEmpty) {
+        AppInstance* app = 0;
+        {
+            QMutexLocker k(&_imp->_appInstancesMutex);
+            app = _imp->_appInstances.begin()->second.app;
+        }
+        if (app) {
+            quit(app);
+        }
+        
+        {
+            QMutexLocker k(&_imp->_appInstancesMutex);
+            appsEmpty = _imp->_appInstances.empty();
+        }
+    }
 }
 
 void
@@ -338,10 +490,33 @@ AppManager::loadInternal(const CLArgs& cl)
 
     Natron::Log::instance(); //< enable logging
     
+    
+    bool mustSetSignalsHandlers = true;
 #ifdef NATRON_USE_BREAKPAD
-    _imp->initBreakpad();
+    //Enabled breakpad only if the process was spawned from the crash reporter
+    const QString& breakpadProcessExec = cl.getBreakpadProcessExecutableFilePath();
+    if (!breakpadProcessExec.isEmpty() && QFile::exists(breakpadProcessExec)) {
+        _imp->breakpadProcessExecutableFilePath = breakpadProcessExec;
+        _imp->breakpadProcessPID = (Q_PID)cl.getBreakpadProcessPID();
+        const QString& breakpadPipePath = cl.getBreakpadPipeFilePath();
+        const QString& breakpadComPipePath = cl.getBreakpadComPipeFilePath();
+        int breakpad_client_fd = cl.getBreakpadClientFD();
+        _imp->initBreakpad(breakpadPipePath, breakpadComPipePath, breakpad_client_fd);
+        mustSetSignalsHandlers = false;
+    }
 #endif
     
+#if defined(__NATRON_LINUX__)
+    if (mustSetSignalsHandlers) {
+        setShutDownSignal(SIGINT);   // shut down on ctrl-c
+        setShutDownSignal(SIGTERM);   // shut down on killall
+        //Catch SIGSEGV only when google-breakpad is not active
+        setSigSegvSignal();
+    }
+#endif
+    (void)mustSetSignalsHandlers;
+    
+    _imp->_settings.reset(new Settings());
     _imp->_settings->initializeKnobsPublic();
     ///Call restore after initializing knobs
     _imp->_settings->restoreSettings();
@@ -422,7 +597,7 @@ AppManager::loadInternalAfterInitGui(const CLArgs& cl)
     if (cl.isInterpreterMode()) {
         _imp->_appType = eAppTypeInterpreter;
     } else if ( isBackground() ) {
-        if ( !cl.getFilename().isEmpty() ) {
+        if ( !cl.getScriptFilename().isEmpty() ) {
             if (!cl.getIPCPipeName().isEmpty()) {
                 _imp->_appType = eAppTypeBackgroundAutoRunLaunchedFromGui;
             } else {
@@ -437,13 +612,13 @@ AppManager::loadInternalAfterInitGui(const CLArgs& cl)
     
     //Now that the locale is set, re-parse the command line arguments because the filenames might have non UTF-8 encodings
     CLArgs args;
-    if (!cl.getFilename().isEmpty()) {
+    if (!cl.getScriptFilename().isEmpty()) {
         args = CLArgs(qApp->arguments(), cl.isBackgroundMode());
     } else{
         args = cl;
     }
     
-    AppInstance* mainInstance = newAppInstance(args);
+    AppInstance* mainInstance = newAppInstance(args, false);
     
     hideSplashScreen();
     
@@ -473,13 +648,18 @@ AppManager::loadInternalAfterInitGui(const CLArgs& cl)
 }
 
 AppInstance*
-AppManager::newAppInstance(const CLArgs& cl)
+AppManager::newAppInstanceInternal(const CLArgs& cl, bool alwaysBackground, bool makeEmptyInstance)
 {
-    AppInstance* instance = makeNewInstance(_imp->_availableID);
+    AppInstance* instance;
+    if (!alwaysBackground) {
+        instance = makeNewInstance(_imp->_availableID);
+    } else {
+        instance = new AppInstance(_imp->_availableID);
+    }
     ++_imp->_availableID;
-
+    
     try {
-        instance->load(cl);
+        instance->load(cl, makeEmptyInstance);
     } catch (const std::exception & e) {
         Natron::errorDialog( NATRON_APPLICATION_NAME,e.what(), false );
         removeInstance(_imp->_availableID);
@@ -493,17 +673,31 @@ AppManager::newAppInstance(const CLArgs& cl)
         --_imp->_availableID;
         return NULL;
     }
-
-
+    
+    
     ///flag that we finished loading the Appmanager even if it was already true
     _imp->_loaded = true;
-
+    
     return instance;
+}
+
+AppInstance*
+AppManager::newBackgroundInstance(const CLArgs& cl, bool makeEmptyInstance)
+{
+    return newAppInstanceInternal(cl, true, makeEmptyInstance);
+}
+
+AppInstance*
+AppManager::newAppInstance(const CLArgs& cl, bool makeEmptyInstance)
+{
+    return newAppInstanceInternal(cl, false, makeEmptyInstance);
 }
 
 AppInstance*
 AppManager::getAppInstance(int appID) const
 {
+    QMutexLocker k(&_imp->_appInstancesMutex);
+    
     std::map<int,AppInstanceRef>::const_iterator it;
 
     it = _imp->_appInstances.find(appID);
@@ -517,21 +711,30 @@ AppManager::getAppInstance(int appID) const
 int
 AppManager::getNumInstances() const
 {
+    QMutexLocker k(&_imp->_appInstancesMutex);
     return (int)_imp->_appInstances.size();
 }
 
 const std::map<int,AppInstanceRef> &
 AppManager::getAppInstances() const
 {
+    assert(QThread::currentThread() == qApp->thread());
     return _imp->_appInstances;
 }
 
 void
 AppManager::removeInstance(int appID)
 {
-    _imp->_appInstances.erase(appID);
-    if ( !_imp->_appInstances.empty() ) {
-        setAsTopLevelInstance(_imp->_appInstances.begin()->first);
+    int newApp = -1;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        _imp->_appInstances.erase(appID);
+        if ( !_imp->_appInstances.empty() ) {
+            newApp = _imp->_appInstances.begin()->first;
+        }
+    }
+    if (newApp != -1) {
+        setAsTopLevelInstance(newApp);
     }
 }
 
@@ -560,7 +763,12 @@ AppManager::clearDiskCache()
 void
 AppManager::clearNodeCache()
 {
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin(); it != copy.end(); ++it) {
         it->second.app->clearAllLastRenderedImages();
     }
     _imp->_nodeCache->clear();
@@ -578,12 +786,17 @@ AppManager::clearAllCaches()
     clearDiskCache();
     clearNodeCache();
 
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
     ///for each app instance clear all its nodes cache
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin(); it != copy.end(); ++it) {
         it->second.app->clearOpenFXPluginsCaches();
     }
     
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin(); it != copy.end(); ++it) {
         it->second.app->renderAllViewers(true);
     }
     
@@ -610,6 +823,7 @@ AppManager::wipeAndCreateDiskCacheStructure()
 AppInstance*
 AppManager::getTopLevelInstance () const
 {
+    QMutexLocker k(&_imp->_appInstancesMutex);
     std::map<int,AppInstanceRef>::const_iterator it = _imp->_appInstances.find(_imp->_topLevelInstanceID);
 
     if ( it == _imp->_appInstances.end() ) {
@@ -629,8 +843,12 @@ AppManager::isLoaded() const
 void
 AppManager::abortAnyProcessing()
 {
- 
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin(); it != copy.end(); ++it) {
         
         it->second.app->getProject()->quitAnyProcessingForAllNodes();
     }
@@ -659,6 +877,8 @@ AppManager::registerAppInstance(AppInstance* app)
 
     ref.app = app;
     ref.status = Natron::eAppInstanceStatusActive;
+    
+    QMutexLocker k(&_imp->_appInstancesMutex);
     _imp->_appInstances.insert( std::make_pair(app->getAppID(),ref) );
 }
 
@@ -753,7 +973,14 @@ AppManager::onAllPluginsLoaded()
     
         assert(!it->second.empty());
         PluginMajorsOrdered::iterator first = it->second.begin();
-        if (!(*first)->getIsUserCreatable()) {
+        bool isUserCreatable = false;
+        for (PluginMajorsOrdered::iterator it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
+            if ((*it2)->getIsUserCreatable()) {
+                isUserCreatable = true;
+                break;
+            }
+        }
+        if (!isUserCreatable) {
             continue;
         }
         
@@ -764,11 +991,21 @@ AppManager::onAllPluginsLoaded()
             if (it->first == it2->first) {
                 continue;
             }
+            
+            
             PluginMajorsOrdered::iterator other = it2->second.begin();
-            if (!(*other)->getIsUserCreatable()) {
+            bool isOtherUserCreatable = false;
+            for (PluginMajorsOrdered::iterator it3 = it2->second.begin(); it3 != it2->second.end(); ++it3) {
+                if ((*it3)->getIsUserCreatable()) {
+                    isOtherUserCreatable = true;
+                    break;
+                }
+            }
+
+            if (!isOtherUserCreatable) {
                 continue;
             }
-            
+        
             QString otherLabelWithoutSuffix = Plugin::makeLabelWithoutSuffix((*other)->getPluginLabel());
             if (otherLabelWithoutSuffix == labelWithoutSuffix) {
                 QString otherGrouping = (*other)->getGrouping().join("/");
@@ -784,11 +1021,38 @@ AppManager::onAllPluginsLoaded()
         
         
         for (PluginMajorsOrdered::iterator it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
-            (*it2)->setLabelWithoutSuffix(labelWithoutSuffix);
+            if ((*it2)->getIsUserCreatable()) {
+                (*it2)->setLabelWithoutSuffix(labelWithoutSuffix);
+                onPluginLoaded(*it2);
+            }
         }
         
-        onPluginLoaded(*first);
         
+        
+    }
+}
+
+template <typename PLUGIN>
+void
+AppManager::registerBuiltInPlugin(const QString& iconPath, bool isDeprecated, bool internalUseOnly)
+{
+    boost::shared_ptr<EffectInstance> node( PLUGIN::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
+    std::map<std::string,void(*)()> functions;
+    functions.insert( std::make_pair("BuildEffect", (void(*)())&PLUGIN::BuildEffect) );
+    LibraryBinary *binary = new LibraryBinary(functions);
+    assert(binary);
+    
+    std::list<std::string> grouping;
+    node->getPluginGrouping(&grouping);
+    QStringList qgrouping;
+    
+    for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
+        qgrouping.push_back( it->c_str() );
+    }
+    Natron::Plugin* p = registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(),
+                                       iconPath, QStringList(), node->isReader(), node->isWriter(), binary, node->renderThreadSafety() == Natron::eRenderSafetyUnsafe, node->getMajorVersion(), node->getMinorVersion(), isDeprecated);
+    if (internalUseOnly) {
+        p->setForInternalUseOnly(true);
     }
 }
 
@@ -796,159 +1060,26 @@ void
 AppManager::loadBuiltinNodePlugins(std::map<std::string,std::vector< std::pair<std::string,double> > >* /*readersMap*/,
                                    std::map<std::string,std::vector< std::pair<std::string,double> > >* /*writersMap*/)
 {
-    {
-        boost::shared_ptr<EffectInstance> node( BackDrop::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&BackDrop::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(), NATRON_IMAGES_PATH "backdrop_icon.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
+    registerBuiltInPlugin<BackDrop>(NATRON_IMAGES_PATH "backdrop_icon.png", false, false);
+    registerBuiltInPlugin<GroupOutput>(NATRON_IMAGES_PATH "output_icon.png", false, false);
+    registerBuiltInPlugin<GroupInput>(NATRON_IMAGES_PATH "input_icon.png", false, false);
+    registerBuiltInPlugin<NodeGroup>(NATRON_IMAGES_PATH "group_icon.png", false, false);
+    registerBuiltInPlugin<Dot>(NATRON_IMAGES_PATH "dot_icon.png", false, false);
+    registerBuiltInPlugin<DiskCacheNode>(NATRON_IMAGES_PATH "diskcache_icon.png", false, false);
+    registerBuiltInPlugin<RotoPaint>(NATRON_IMAGES_PATH "GroupingIcons/Set2/paint_grouping_2.png", false, false);
+    registerBuiltInPlugin<RotoNode>(NATRON_IMAGES_PATH "rotoNodeIcon.png", false, false);
+    registerBuiltInPlugin<RotoSmear>("", false, true);
+    registerBuiltInPlugin<PrecompNode>(NATRON_IMAGES_PATH "precompNodeIcon.png", false, false);
+    if (!isBackground()) {
+        registerBuiltInPlugin<ViewerInstance>(NATRON_IMAGES_PATH "viewer_icon.png", false, false);
     }
-    {
-        boost::shared_ptr<EffectInstance> node( GroupOutput::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&GroupOutput::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(), NATRON_IMAGES_PATH "output_icon.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> node( GroupInput::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&GroupInput::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(), NATRON_IMAGES_PATH "input_icon.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> groupNode( NodeGroup::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&NodeGroup::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        groupNode->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, groupNode->getPluginID().c_str(), groupNode->getPluginLabel().c_str(), NATRON_IMAGES_PATH "group_icon.png", "", false, false, binary, false, groupNode->getMajorVersion(), groupNode->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> dotNode( Dot::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&Dot::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-
-        std::list<std::string> grouping;
-        dotNode->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, dotNode->getPluginID().c_str(), dotNode->getPluginLabel().c_str(), NATRON_IMAGES_PATH "dot_icon.png", "", false, false, binary, false, dotNode->getMajorVersion(), dotNode->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> node( DiskCacheNode::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&DiskCacheNode::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(), NATRON_IMAGES_PATH "diskcache_icon.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> node( RotoPaint::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&RotoPaint::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(),
-                       NATRON_IMAGES_PATH "GroupingIcons/Set2/paint_grouping_2.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> node( RotoNode::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&RotoNode::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(),
-                       NATRON_IMAGES_PATH "rotoNodeIcon.png", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
-    }
-    {
-        boost::shared_ptr<EffectInstance> node( RotoSmear::BuildEffect( boost::shared_ptr<Natron::Node>() ) );
-        std::map<std::string,void(*)()> functions;
-        functions.insert( std::make_pair("BuildEffect", (void(*)())&RotoSmear::BuildEffect) );
-        LibraryBinary *binary = new LibraryBinary(functions);
-        assert(binary);
-        
-        std::list<std::string> grouping;
-        node->getPluginGrouping(&grouping);
-        QStringList qgrouping;
-        
-        for (std::list<std::string>::iterator it = grouping.begin(); it != grouping.end(); ++it) {
-            qgrouping.push_back( it->c_str() );
-        }
-        Natron::Plugin* p = registerPlugin(qgrouping, node->getPluginID().c_str(), node->getPluginLabel().c_str(),
-                        "", "", false, false, binary, false, node->getMajorVersion(), node->getMinorVersion(), false);
-        p->setForInternalUseOnly(true);
-    }
-
 }
 
 static bool findAndRunScriptFile(const QString& path,const QStringList& files,const QString& script)
 {
+#ifdef NATRON_RUN_WITHOUT_PYTHON
+    return false;
+#endif
     for (QStringList::const_iterator it = files.begin(); it != files.end(); ++it) {
         if (*it == script) {
             QFile file(path + *it);
@@ -996,26 +1127,21 @@ static bool findAndRunScriptFile(const QString& path,const QStringList& files,co
     return false;
 }
 
-QString
-AppManager::getSystemNonOFXPluginsPath() const
-{
-    return  Natron::StandardPaths::writableLocation(Natron::StandardPaths::eStandardLocationData) +
-      QDir::separator() + "Plugins";
-}
 
 QStringList
 AppManager::getAllNonOFXPluginsPaths() const
 {
     QStringList templatesSearchPath;
     
-    QString dataLocation = Natron::StandardPaths::writableLocation(Natron::StandardPaths::eStandardLocationData);
-    QString mainPath = dataLocation + QDir::separator() + "Plugins";
-    
+    //add ~/.Natron
+    QString dataLocation = QDir::homePath();
+    QString mainPath = dataLocation + "." + QString(NATRON_APPLICATION_NAME);
+
     QDir mainPathDir(mainPath);
     if (!mainPathDir.exists()) {
         QDir dataDir(dataLocation);
         if (dataDir.exists()) {
-            dataDir.mkdir("Plugins");
+            dataDir.mkdir("." + QString(NATRON_APPLICATION_NAME));
         }
     }
     
@@ -1024,15 +1150,21 @@ AppManager::getAllNonOFXPluginsPaths() const
     std::list<std::string> userSearchPaths;
     _imp->_settings->getPythonGroupsSearchPaths(&userSearchPaths);
     
+
+    //This is the bundled location for PyPlugs
     QDir cwd( QCoreApplication::applicationDirPath() );
     cwd.cdUp();
-    QString natronBundledPluginsPath = QString(cwd.absolutePath() +  "/Plugins");
+    QString natronBundledPluginsPath = QString(cwd.absolutePath() +  "/Plugins/PyPlugs");
+    
+    //Also take a look at PyPlugs embedded in the qrc
+    QString natronBuiltinPluginsPath = QString(":/Resources/PyPlugs");
 
     bool preferBundleOverSystemWide = _imp->_settings->preferBundledPlugins();
     bool useBundledPlugins = _imp->_settings->loadBundledPlugins();
     if (preferBundleOverSystemWide && useBundledPlugins) {
         ///look-in the bundled plug-ins
         templatesSearchPath.push_back(natronBundledPluginsPath);
+        templatesSearchPath.push_back(natronBuiltinPluginsPath);
     }
     
     ///look-in the main system wide plugin path
@@ -1055,6 +1187,7 @@ AppManager::getAllNonOFXPluginsPaths() const
     if (!preferBundleOverSystemWide && useBundledPlugins) {
         ///look-in the bundled plug-ins
         templatesSearchPath.push_back(natronBundledPluginsPath);
+        templatesSearchPath.push_back(natronBuiltinPluginsPath);
     }
     return templatesSearchPath;
 }
@@ -1088,7 +1221,10 @@ static void addToPythonPathFunctor(const QDir& directory)
         std::string message = QObject::tr("Could not add").toStdString() + ' ' + directory.absolutePath().toStdString() + ' ' +
          QObject::tr("to python path").toStdString() + ": " + err;
         std::cerr << message << std::endl;
-        appPTR->writeToOfxLog_mt_safe(message.c_str());
+        AppInstance* topLevel = appPTR->getTopLevelInstance();
+        if (topLevel) {
+            topLevel->appendToScriptEditor(message.c_str());
+        }
     }
 
 }
@@ -1146,6 +1282,10 @@ AppManager::loadPythonGroups()
     
     ///For all search paths, first add the path to the python path, then run in order the init.py and initGui.py
     for (int i = 0; i < templatesSearchPath.size(); ++i) {
+        //Adding Qt resources to Python path is useless as Python does not know how to use it
+        if (templatesSearchPath[i].startsWith(":/Resources")) {
+            continue;
+        }
         QDir d(templatesSearchPath[i]);
         operateOnPathRecursive(&addToPythonPathFunctor,d);
     }
@@ -1181,11 +1321,15 @@ AppManager::loadPythonGroups()
     if (!foundInit) {
         QString message = QObject::tr("init.py script not loaded");
         appPTR->setLoadingStatus(message);
-        std::cout << message.toStdString() << std::endl;
+        if (!appPTR->isBackground()) {
+            std::cout << message.toStdString() << std::endl;
+        }
     } else {
         QString message = QObject::tr("init.py script loaded");
         appPTR->setLoadingStatus(message);
-        std::cout << message.toStdString() << std::endl;
+        if (!appPTR->isBackground()) {
+            std::cout << message.toStdString() << std::endl;
+        }
     }
     
     if (!appPTR->isBackground()) {
@@ -1193,12 +1337,16 @@ AppManager::loadPythonGroups()
         if (!foundInitGui) {
             QString message = QObject::tr("initGui.py script not loaded");
             appPTR->setLoadingStatus(message);
-            std::cout << message.toStdString() << std::endl;
+            if (!appPTR->isBackground()) {
+                std::cout << message.toStdString() << std::endl;
+            }
 
         } else {
             QString message = QObject::tr("initGui.py script loaded");
             appPTR->setLoadingStatus(message);
-            std::cout << message.toStdString() << std::endl;
+            if (!appPTR->isBackground()) {
+                std::cout << message.toStdString() << std::endl;
+            }
         }
         
     }
@@ -1241,10 +1389,13 @@ AppManager::loadPythonGroups()
         std::string pluginLabel,pluginID,pluginGrouping,iconFilePath,pluginDescription;
         unsigned int version;
         
-        if (getGroupInfos(modulePath.toStdString(),moduleName.toStdString(), &pluginID, &pluginLabel, &iconFilePath, &pluginGrouping, &pluginDescription, &version)) {
+        bool gotInfos = getGroupInfos(modulePath.toStdString(),moduleName.toStdString(), &pluginID, &pluginLabel, &iconFilePath, &pluginGrouping, &pluginDescription, &version);
+
+        
+        if (gotInfos) {
             qDebug() << "Loading " << moduleName;
             QStringList grouping = QString(pluginGrouping.c_str()).split(QChar('/'));
-            Natron::Plugin* p = registerPlugin(grouping, pluginID.c_str(), pluginLabel.c_str(), iconFilePath.c_str(), QString(), false, false, 0, false, version, 0, false);
+            Natron::Plugin* p = registerPlugin(grouping, pluginID.c_str(), pluginLabel.c_str(), iconFilePath.c_str(), QStringList(), false, false, 0, false, version, 0, false);
             
             p->setPythonModule(modulePath + moduleName);
             
@@ -1258,7 +1409,7 @@ AppManager::registerPlugin(const QStringList & groups,
                            const QString & pluginID,
                            const QString & pluginLabel,
                            const QString & pluginIconPath,
-                           const QString & groupIconPath,
+                           const QStringList & groupIconPath,
                            bool isReader,
                            bool isWriter,
                            Natron::LibraryBinary* binary,
@@ -1307,6 +1458,7 @@ AppManager::findExistingFormat(int w,
 void
 AppManager::setAsTopLevelInstance(int appID)
 {
+    QMutexLocker k(&_imp->_appInstancesMutex);
     if (_imp->_topLevelInstanceID == appID) {
         return;
     }
@@ -1320,10 +1472,21 @@ AppManager::setAsTopLevelInstance(int appID)
             }
         } else {
             if ( !isBackground() ) {
-                it->second.app->connectViewersToViewerCache();
+                if (it->second.app) {
+                    it->second.app->connectViewersToViewerCache();
+                    setOFXHostHandle(it->second.app->getOfxHostOSHandle());
+                }
+
             }
         }
     }
+    
+}
+
+void
+AppManager::setOFXHostHandle(void* handle)
+{
+    _imp->ofxHost->setOfxHostOSHandle(handle);
 }
 
 void
@@ -1562,11 +1725,11 @@ AppManager::removeAllTexturesFromCacheWithMatchingIDAndDifferentKey(const CacheE
 }
 
 void
-AppManager::removeAllCacheEntriesForHolder(const CacheEntryHolder* holder)
+AppManager::removeAllCacheEntriesForHolder(const CacheEntryHolder* holder,bool blocking)
 {
-    _imp->_nodeCache->removeAllEntriesForHolderPublic(holder);
-    _imp->_diskCache->removeAllEntriesForHolderPublic(holder);
-    _imp->_viewerCache->removeAllEntriesForHolderPublic(holder);
+    _imp->_nodeCache->removeAllEntriesForHolderPublic(holder,blocking);
+    _imp->_diskCache->removeAllEntriesForHolderPublic(holder,blocking);
+    _imp->_viewerCache->removeAllEntriesForHolderPublic(holder,blocking);
 }
 
 const QString &
@@ -1765,7 +1928,12 @@ AppManager::decreaseNCacheFilesOpened()
 void
 AppManager::onMaxPanelsOpenedChanged(int maxPanels)
 {
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin(); it != copy.end(); ++it) {
         it->second.app->onMaxPanelsOpenedChanged(maxPanels);
     }
 }
@@ -1824,7 +1992,7 @@ AppManager::clearOfxLog_mt_safe()
 }
 
 void
-AppManager::exitApp()
+AppManager::exitApp(bool /*warnUserForSave*/)
 {
     const std::map<int,AppInstanceRef> & instances = getAppInstances();
 
@@ -1946,7 +2114,14 @@ void
 AppManager::onOCIOConfigPathChanged(const std::string& path)
 {
     _imp->currentOCIOConfigPath = path;
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin() ; it != _imp->_appInstances.end(); ++it) {
+    
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
+    
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin() ; it != copy.end(); ++it) {
         it->second.app->onOCIOConfigPathChanged(path);
     }
 }
@@ -2030,12 +2205,12 @@ AppManager::onOFXDialogOnMainThreadReceived(Natron::OfxImageEffectInstance* inst
     assert(QThread::currentThread() == qApp->thread());
     if (instance == NULL) {
         // instance may be NULL if using OfxDialogSuiteV1
-        GlobalOFXTLS& tls = _imp->ofxHost->getCurrentThreadTLS();
-        instance = tls.lastEffectCallingMainEntry;
+        Natron::OfxHost::OfxHostDataTLSPtr tls = _imp->ofxHost->getTLSData();
+        instance = tls->lastEffectCallingMainEntry;
     } else {
 #ifdef DEBUG
-        GlobalOFXTLS& tls = _imp->ofxHost->getCurrentThreadTLS();
-        assert(instance == tls.lastEffectCallingMainEntry);
+        Natron::OfxHost::OfxHostDataTLSPtr tls = _imp->ofxHost->getTLSData();
+        assert(instance == tls->lastEffectCallingMainEntry);
 #endif
     }
 #ifdef OFX_SUPPORTS_DIALOG
@@ -2270,7 +2445,7 @@ AppManager::initPython(int argc,char* argv[])
     static const std::wstring pythonHome(Natron::s2ws("../Frameworks/Python.framework/Versions/" NATRON_PY_VERSION_STRING "/lib"));
 #endif
     Py_SetPythonHome(const_cast<wchar_t*>(pythonHome.c_str()));
-    PySys_SetArgv(argc,_imp->args.data()); /// relative module import
+    PySys_SetArgv(argc, &_imp->args.front()); /// relative module import
 #else
 #ifdef __NATRON_WIN32__
     static const std::string pythonHome(".");
@@ -2280,7 +2455,7 @@ AppManager::initPython(int argc,char* argv[])
     static const std::string pythonHome("../Frameworks/Python.framework/Versions/" NATRON_PY_VERSION_STRING "/lib");
 #endif
     Py_SetPythonHome(const_cast<char*>(pythonHome.c_str()));
-    PySys_SetArgv(argc,_imp->args.data()); /// relative module import
+    PySys_SetArgv(argc, &_imp->args.front()); /// relative module import
 #endif
     
     _imp->mainModule = PyImport_ImportModule("__main__"); //create main module , new ref
@@ -2298,6 +2473,19 @@ AppManager::initPython(int argc,char* argv[])
     //PyEval_ReleaseThread(_imp->mainThreadState);
     
     std::string err;
+#ifdef DEBUG
+    /// print info about python lib
+    {
+        printf("Py_GetProgramName is %s\n", Py_GetProgramName());
+        printf("Py_GetPrefix is %s\n", Py_GetPrefix());
+        printf("Py_GetExecPrefix is %s\n", Py_GetPrefix());
+        printf("Py_GetProgramFullPath is %s\n", Py_GetProgramFullPath());
+        printf("Py_GetPath is %s\n", Py_GetPath());
+        printf("Py_GetPythonHome is %s\n", Py_GetPythonHome());
+        bool ok = interpretPythonScript("from distutils.sysconfig import get_python_lib; print('Python library is in ' + get_python_lib())", &err, 0);
+        assert(ok);
+    }
+#endif
     bool ok = interpretPythonScript("import sys\nfrom math import *\nimport " + std::string(NATRON_ENGINE_PYTHON_MODULE_NAME), &err, 0);
     assert(ok);
     if (!ok) {
@@ -2404,7 +2592,12 @@ AppManager::wasProjectCreatedDuringRC2Or3() const
 void
 AppManager::toggleAutoHideGraphInputs()
 {
-    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
+    for (std::map<int,AppInstanceRef>::iterator it = copy.begin(); it != copy.end(); ++it) {
         it->second.app->toggleAutoHideGraphInputs();
     }
 }
@@ -2429,76 +2622,55 @@ AppManager::launchPythonInterpreter()
 int
 AppManager::isProjectAlreadyOpened(const std::string& projectFilePath) const
 {
-        for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
+    QMutexLocker k(&_imp->_appInstancesMutex);
+    for (std::map<int,AppInstanceRef>::iterator it = _imp->_appInstances.begin(); it != _imp->_appInstances.end(); ++it) {
         boost::shared_ptr<Natron::Project> proj = it->second.app->getProject();
-                if (proj) {
-                        QString path = proj->getProjectPath();
-                        QString name = proj->getProjectName();
-                        std::string existingProject = path.toStdString() + name.toStdString();
-                        if (existingProject == projectFilePath) {
-                                return it->first;
-                        }
-                }
+        if (proj) {
+            QString path = proj->getProjectPath();
+            QString name = proj->getProjectFilename();
+            std::string existingProject = path.toStdString() + name.toStdString();
+            if (existingProject == projectFilePath) {
+                return it->first;
+            }
+        }
     }
-        return -1;
+    return -1;
 }
 
 void
-AppManager::onCrashReporterOutputWritten()
+AppManager::onBreakpadPipeConnectionMade()
 {
 #ifdef NATRON_USE_BREAKPAD
-    
-    ///always running in the main thread
-    assert( QThread::currentThread() == qApp->thread() );
-    
-    QString str = _imp->crashServerConnection->readLine();
-    while ( str.endsWith('\n') ) {
-        str.chop(1);
-    }
-
-    if (str.startsWith("-i")) {
-        //At this point, the CrashReporter just notified us it is ready, so we can create our exception handler safely
-        //because we know the pipe is opened on the other side.
-        
-#if defined(Q_OS_MAC)
-        _imp->breakpadHandler.reset(new google_breakpad::ExceptionHandler( std::string(), 0, 0/*dmpcb*/,  0, true,
-                                                                          _imp->crashReporterBreakpadPipe.toStdString().c_str()));
-#elif defined(Q_OS_LINUX)
-        _imp->breakpadHandler.reset(new google_breakpad::ExceptionHandler( google_breakpad::MinidumpDescriptor(std::string()), 0, 0/*dmpCb*/,
-                                                                          0, true, handle));
-#elif defined(Q_OS_WIN32)
-        _imp->breakpadHandler.reset(new google_breakpad::ExceptionHandler( std::wstring(), 0, 0/*dmpcb*/,
-                                                                          google_breakpad::ExceptionHandler::HANDLER_ALL,
-                                                                          MiniDumpNormal,
-                                                                          filename.toStdWString(),
-                                                                          0));
+#ifndef Q_OS_LINUX
+    assert(_imp->breakpadPipeConnection);
+    _imp->createBreakpadHandler(-1);
 #endif
-        
-        //crash_application();
-
-    } else {
-        qDebug() << "Error: Unable to interpret message.";
-        throw std::runtime_error("AppManager::onCrashReporterOutputWritten() received erroneous message");
-    }
-
 #endif
 
 }
 
 void
-AppManager::onNewCrashReporterConnectionPending()
+AppManager::onBreakpadComPipeConnectionMade()
 {
 #ifdef NATRON_USE_BREAKPAD
-    ///accept only 1 connection!
-    if (_imp->crashServerConnection) {
-        return;
-    }
-    
-    _imp->crashServerConnection = _imp->crashClientServer->nextPendingConnection();
-    
-    QObject::connect( _imp->crashServerConnection, SIGNAL( readyRead() ), this, SLOT( onCrashReporterOutputWritten() ) );
+    assert(_imp->crashReporterComPipeConnection);
+    _imp->breakpadAliveThread.reset(new ExistenceCheckerThread(NATRON_NATRON_TO_BREAKPAD_EXISTENCE_CHECK,
+                                                         NATRON_NATRON_TO_BREAKPAD_EXISTENCE_CHECK_ACK,
+                                                         _imp->crashReporterComPipeConnection));
+    QObject::connect(_imp->breakpadAliveThread.get(), SIGNAL(otherProcessUnreachable()), this, SLOT(onCrashReporterNoLongerResponding()));
+    _imp->breakpadAliveThread->start();
 #endif
 }
+
+void
+AppManager::onCrashReporterNoLongerResponding()
+{
+#ifdef NATRON_USE_BREAKPAD
+    //Crash reporter seems to no longer exist, quit
+    exitApp(false);
+#endif
+}
+
 
 void
 AppManager::setOnProjectLoadedCallback(const std::string& pythonFunc)
@@ -2512,10 +2684,12 @@ AppManager::setOnProjectCreatedCallback(const std::string& pythonFunc)
     _imp->_settings->setOnProjectCreatedCB(pythonFunc);
 }
 
-GlobalOFXTLS&
-AppManager::getCurrentThreadTLS()
+
+OFX::Host::ImageEffect::Descriptor*
+AppManager::getPluginContextAndDescribe(OFX::Host::ImageEffect::ImageEffectPlugin* plugin,
+                                                                Natron::ContextEnum* ctx)
 {
-    return _imp->ofxHost->getCurrentThreadTLS();
+    return _imp->ofxHost->getPluginContextAndDescribe(plugin, ctx);
 }
 
 std::list<std::string>
@@ -2570,6 +2744,46 @@ AppManager::mapUNCPathToPathWithDriveLetter(const QString& uncPath) const
     return uncPath;
 }
 #endif
+
+std::string
+AppManager::isImageFileSupportedByNatron(const std::string& ext)
+{
+    std::string readId;
+    try {
+        readId = appPTR->getCurrentSettings()->getReaderPluginIDForFileType(ext);
+    } catch (...) {
+        return std::string();
+    }
+    return readId;
+}
+
+AppTLS*
+AppManager::getAppTLS() const
+{
+    return &_imp->globalTLS;
+}
+
+bool
+AppManager::hasThreadsRendering() const
+{
+    std::map<int,AppInstanceRef> copy;
+    {
+        QMutexLocker k(&_imp->_appInstancesMutex);
+        copy = _imp->_appInstances;
+    }
+    for (std::map<int,AppInstanceRef>::const_iterator it = copy.begin(); it!=copy.end(); ++it) {
+        if (it->second.app->getProject()->hasNodeRendering()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const Natron::OfxHost*
+AppManager::getOFXHost() const
+{
+    return _imp->ofxHost.get();
+}
 
 namespace Natron {
 void
@@ -2797,6 +3011,7 @@ bool interpretPythonScript(const std::string& script,std::string* error,std::str
         }
 
         if (error && !error->empty()) {
+            *error = "While executing script:\n" + script + "Python error:\n" + *error;
             return false;
         }
         return true;
@@ -2885,15 +3100,14 @@ PythonGILLocker::~PythonGILLocker()
 //    PyGILState_Release(state);
 }
     
-bool
-getGroupInfos(const std::string& modulePath,
-              const std::string& pythonModule,
-              std::string* pluginID,
-              std::string* pluginLabel,
-              std::string* iconFilePath,
-              std::string* grouping,
-              std::string* description,
-              unsigned int* version)
+static bool getGroupInfosInternal(const std::string& modulePath,
+                                  const std::string& pythonModule,
+                                  std::string* pluginID,
+                                  std::string* pluginLabel,
+                                  std::string* iconFilePath,
+                                  std::string* grouping,
+                                  std::string* description,
+                                  unsigned int* version)
 {
 #ifdef NATRON_RUN_WITHOUT_PYTHON
     return false;
@@ -2914,8 +3128,10 @@ getGroupInfos(const std::string& modulePath,
                    "version = 1\n"
                    "if hasattr(%1,\"getVersion\") and hasattr(%1.getVersion,\"__call__\"):\n"
                    "    version = %1.getVersion()\n"
-                   "if hasattr(%1,\"getDescription\") and hasattr(%1.getDescription,\"__call__\"):\n"
-                   "    global description\n"
+                   "description=\"\"\n"
+                   "if hasattr(%1,\"getPluginDescription\") and hasattr(%1.getPluginDescription,\"__call__\"):\n"
+                   "    description = %1.getPluginDescription()\n"
+                   "elif hasattr(%1,\"getDescription\") and hasattr(%1.getDescription,\"__call__\"):\n" // Check old function name for compat
                    "    description = %1.getDescription()\n"
                    "if hasattr(%1,\"getPluginID\") and hasattr(%1.getPluginID,\"__call__\"):\n"
                    "    pluginID = %1.getPluginID()\n"
@@ -2945,119 +3161,157 @@ getGroupInfos(const std::string& modulePath,
     if (PyObject_IsTrue(retObj) == 0) {
         Py_XDECREF(retObj);
         return false;
-    } else {
-        Py_XDECREF(retObj);
-        
-        std::string deleteScript("del ret\n"
-                                 "del templateLabel\n");
-        
-        
-        PyObject* labelObj = 0;
-        labelObj = PyObject_GetAttrString(mainModule,"templateLabel"); //new ref
-        
-        PyObject* idObj = 0;
-        idObj = PyObject_GetAttrString(mainModule,"pluginID"); //new ref
-        
-        PyObject* iconObj = 0;
-        if (PyObject_HasAttrString(mainModule, "templateIcon")) {
-            iconObj = PyObject_GetAttrString(mainModule,"templateIcon"); //new ref
-        }
-        PyObject* iconGrouping = 0;
-        if (PyObject_HasAttrString(mainModule, "templateGrouping")) {
-            iconGrouping = PyObject_GetAttrString(mainModule,"templateGrouping"); //new ref
-        }
-        
-        PyObject* versionObj = 0;
-        if (PyObject_HasAttrString(mainModule, "version")) {
-            versionObj = PyObject_GetAttrString(mainModule,"version"); //new ref
-        }
-        
-        PyObject* pluginDescriptionObj = 0;
-        if (PyObject_HasAttrString(mainModule, "description")) {
-            pluginDescriptionObj = PyObject_GetAttrString(mainModule,"description"); //new ref
-        }
-        
-        assert(labelObj);
-        
-        *pluginLabel = PY3String_asString(labelObj);
-        Py_XDECREF(labelObj);
-        
-        if (idObj) {
-            *pluginID = PY3String_asString(idObj);
-            deleteScript.append("del pluginID\n");
-            Py_XDECREF(idObj);
-        }
-        
-        if (iconObj) {
-            *iconFilePath = PY3String_asString(iconObj);
-            QFileInfo iconInfo(QString(modulePath.c_str()) + QString(iconFilePath->c_str()));
-            *iconFilePath =  iconInfo.canonicalFilePath().toStdString();
-
-            deleteScript.append("del templateIcon\n");
-            Py_XDECREF(iconObj);
-        }
-        if (iconGrouping) {
-            *grouping = PY3String_asString(iconGrouping);
-            deleteScript.append("del templateGrouping\n");
-            Py_XDECREF(iconGrouping);
-        }
-        
-        if (versionObj) {
-            *version = (unsigned int)PyLong_AsLong(versionObj);
-            deleteScript.append("del version\n");
-            Py_XDECREF(versionObj);
-        }
-        
-        if (pluginDescriptionObj) {
-            *description = PY3String_asString(pluginDescriptionObj);
-            deleteScript.append("del description\n");
-            Py_XDECREF(pluginDescriptionObj);
-        }
-        
-        if (grouping->empty()) {
-            *grouping = PLUGIN_GROUP_OTHER;
-        }
-        
-        
-        bool ok = interpretPythonScript(deleteScript, &err, NULL);
-        assert(ok);
-        if (!ok) {
-          throw std::runtime_error("getGroupInfos(): interpretPythonScript("+deleteScript+" failed!");
-        }
-        return true;
     }
+    Py_XDECREF(retObj);
+    
+    std::string deleteScript("del ret\n"
+                             "del templateLabel\n");
+    
+    
+    PyObject* labelObj = 0;
+    labelObj = PyObject_GetAttrString(mainModule,"templateLabel"); //new ref
+    
+    PyObject* idObj = 0;
+    idObj = PyObject_GetAttrString(mainModule,"pluginID"); //new ref
+    
+    PyObject* iconObj = 0;
+    if (PyObject_HasAttrString(mainModule, "templateIcon")) {
+        iconObj = PyObject_GetAttrString(mainModule,"templateIcon"); //new ref
+    }
+    PyObject* iconGrouping = 0;
+    if (PyObject_HasAttrString(mainModule, "templateGrouping")) {
+        iconGrouping = PyObject_GetAttrString(mainModule,"templateGrouping"); //new ref
+    }
+    
+    PyObject* versionObj = 0;
+    if (PyObject_HasAttrString(mainModule, "version")) {
+        versionObj = PyObject_GetAttrString(mainModule,"version"); //new ref
+    }
+    
+    PyObject* pluginDescriptionObj = 0;
+    if (PyObject_HasAttrString(mainModule, "description")) {
+        pluginDescriptionObj = PyObject_GetAttrString(mainModule,"description"); //new ref
+    }
+    
+    assert(labelObj);
+    
+    *pluginLabel = PY3String_asString(labelObj);
+    Py_XDECREF(labelObj);
+    
+    if (idObj) {
+        *pluginID = PY3String_asString(idObj);
+        deleteScript.append("del pluginID\n");
+        Py_XDECREF(idObj);
+    }
+    
+    if (iconObj) {
+        *iconFilePath = PY3String_asString(iconObj);
+        QFileInfo iconInfo(QString(modulePath.c_str()) + QString(iconFilePath->c_str()));
+        *iconFilePath =  iconInfo.canonicalFilePath().toStdString();
+        
+        deleteScript.append("del templateIcon\n");
+        Py_XDECREF(iconObj);
+    }
+    if (iconGrouping) {
+        *grouping = PY3String_asString(iconGrouping);
+        deleteScript.append("del templateGrouping\n");
+        Py_XDECREF(iconGrouping);
+    }
+    
+    if (versionObj) {
+        *version = (unsigned int)PyLong_AsLong(versionObj);
+        deleteScript.append("del version\n");
+        Py_XDECREF(versionObj);
+    }
+    
+    if (pluginDescriptionObj) {
+        *description = PY3String_asString(pluginDescriptionObj);
+        deleteScript.append("del description\n");
+        Py_XDECREF(pluginDescriptionObj);
+    }
+    
+    if (grouping->empty()) {
+        *grouping = PLUGIN_GROUP_OTHER;
+    }
+    
+    
+    bool ok = interpretPythonScript(deleteScript, &err, NULL);
+    assert(ok);
+    if (!ok) {
+        throw std::runtime_error("getGroupInfos(): interpretPythonScript("+deleteScript+" failed!");
+    }
+    return true;
+    
+}
+  
+    
+bool
+getGroupInfosFromQtResourceFile(const std::string& resourceFileName,
+                                const std::string& modulePath,
+                                const std::string& pythonModule,
+                                std::string* pluginID,
+                                std::string* pluginLabel,
+                                std::string* iconFilePath,
+                                std::string* grouping,
+                                std::string* description,
+                                unsigned int* version)
+{
+    QString qModulePath(resourceFileName.c_str());
+    assert(qModulePath.startsWith(":/Resources"));
+    
+    QFile moduleContent(qModulePath);
+    if (!moduleContent.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return false;
+    }
+    
+    QByteArray utf8bytes = QString(pythonModule.c_str()).toUtf8();
+    char *moduleName = utf8bytes.data();
+    
+    PyObject* moduleCode = Py_CompileString(moduleContent.readAll().constData(), moduleName, Py_file_input);
+    PyObject* module = PyImport_ExecCodeModule(moduleName, moduleCode);
+    if (!module) {
+        return false;
+    }
+    
+    //Now that the module is loaded, use the regular version
+    return getGroupInfosInternal(modulePath,pythonModule, pluginID, pluginLabel, iconFilePath, grouping, description, version);
+    //PyDict_SetItemString(priv->globals, moduleName, module);
+    
 }
     
-#if 0
-void saveRestoreVariable(const std::string& variableBaseName,std::string* scriptToExec,std::string* restoreScript)
+bool
+getGroupInfos(const std::string& modulePath,
+              const std::string& pythonModule,
+              std::string* pluginID,
+              std::string* pluginLabel,
+              std::string* iconFilePath,
+              std::string* grouping,
+              std::string* description,
+              unsigned int* version)
 {
-    PyObject* mainModule = getMainModule();
-    std::string attr = variableBaseName;
-    if (!scriptToExec->empty() && scriptToExec->at(scriptToExec->size() - 1) != '\n') {
-        scriptToExec->append("\n");
-    }
-    if (!restoreScript->empty() && restoreScript->at(restoreScript->size() - 1) != '\n') {
-        restoreScript->append("\n");
-    }
-    std::string toSave;
-    std::string toRestore;
-    std::string attrBak;
-    while (PyObject_HasAttrString(mainModule,attr.c_str())) {
-        attrBak = attr + "_bak";
-        toSave.insert(0,attrBak + " = " + attr + "\n");
-        toRestore.insert(0,attr + " = " + attrBak + "\n");
-        attr.append("_bak");
-    }
-    if (!attrBak.empty()) {
-        toRestore.append("del " + attrBak + "\n");
-    }
-    scriptToExec->append(toSave);
-    restoreScript->append(toRestore);
-}
+#ifdef NATRON_RUN_WITHOUT_PYTHON
+    return false;
 #endif
+    
+    {
+        std::string tofind(":/Resources");
+        if (modulePath.substr(0,tofind.size()) == tofind) {
+            std::string resourceFileName = modulePath + pythonModule + ".py";
+            return getGroupInfosFromQtResourceFile(resourceFileName, modulePath, pythonModule, pluginID, pluginLabel, iconFilePath, grouping, description, version);
+        }
+    }
+    
+    return getGroupInfosInternal(modulePath, pythonModule, pluginID, pluginLabel, iconFilePath, grouping, description, version);
+    
+}
+
+
     
 void getFunctionArguments(const std::string& pyFunc,std::string* error,std::vector<std::string>* args)
 {
+#ifdef NATRON_RUN_WITHOUT_PYTHON
+    return;
+#endif
     std::stringstream ss;
     ss << "import inspect\n";
     ss << "args_spec = inspect.getargspec(" << pyFunc << ")\n";
@@ -3102,4 +3356,44 @@ void getFunctionArguments(const std::string& pyFunc,std::string* error,std::vect
     }
 }
     
+/**
+ * @brief Given a fullyQualifiedName, e.g: app1.Group1.Blur1
+ * this function returns the PyObject attribute of Blur1 if it is defined, or Group1 otherwise
+ * If app1 or Group1 does not exist at this point, this is a failure.
+ **/
+PyObject*
+getAttrRecursive(const std::string& fullyQualifiedName,PyObject* parentObj,bool* isDefined)
+{
+#ifdef NATRON_RUN_WITHOUT_PYTHON
+    return 0;
+#endif
+    std::size_t foundDot = fullyQualifiedName.find(".");
+    std::string attrName = foundDot == std::string::npos ? fullyQualifiedName : fullyQualifiedName.substr(0, foundDot);
+    PyObject* obj = 0;
+    if (PyObject_HasAttrString(parentObj, attrName.c_str())) {
+        obj = PyObject_GetAttrString(parentObj, attrName.c_str());
+    }
+    
+    ///We either found the parent object or we are on the last object in which case we return the parent
+    if (!obj) {
+        //assert(fullyQualifiedName.find(".") == std::string::npos);
+        *isDefined = false;
+        return parentObj;
+    } else {
+        std::string recurseName;
+        if (foundDot != std::string::npos) {
+            recurseName = fullyQualifiedName;
+            recurseName.erase(0, foundDot + 1);
+        }
+        if (!recurseName.empty()) {
+            return getAttrRecursive(recurseName, obj, isDefined);
+        } else {
+            *isDefined = true;
+            return obj;
+        }
+    }
+    
+}
+
+
 } //Namespace Natron

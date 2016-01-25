@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,8 +36,7 @@
 #endif
 #include "Global/Macros.h"
 #include "Global/GlobalDefines.h"
-
-namespace boost { namespace serialization { class access; } }
+#include "Engine/EngineFwd.h"
 
 #define NATRON_CURVE_X_SPACING_EPSILON 1e-6
 /**
@@ -45,7 +44,6 @@ namespace boost { namespace serialization { class access; } }
  * to interpolate a Curve. The _leftDerivative and _rightDerivative can be
  * used by the interpolation method of the curve.
  **/
-class Curve;
 
 class KeyFrame
 {
@@ -125,9 +123,7 @@ struct KeyFrame_compare_time
 typedef std::set<KeyFrame, KeyFrame_compare_time> KeyFrameSet;
 
 
-class KnobI;
 struct CurvePrivate;
-class RectD;
 
 class Curve
 {
@@ -213,6 +209,11 @@ public:
     bool getNextKeyframeTime(double time,KeyFrame* k) const WARN_UNUSED_RETURN;
 
     bool getKeyFrameWithTime(double time, KeyFrame* k) const WARN_UNUSED_RETURN;
+    
+    /*
+     * @brief Returns the number of keyframes in the range [first,last[
+     */
+    int getNKeyFramesInRange(double first, double last) const WARN_UNUSED_RETURN;
 
     bool getKeyFrameWithIndex(int index, KeyFrame* k) const WARN_UNUSED_RETURN;
 

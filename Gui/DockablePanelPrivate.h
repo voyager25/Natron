@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <map>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
@@ -32,8 +34,6 @@
 #include <boost/weak_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
-
-#include "Global/Macros.h"
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -47,48 +47,25 @@ CLANG_DIAG_ON(uninitialized)
 #include "Global/GlobalDefines.h"
 
 #include "Engine/DockablePanelI.h"
+
 #include "Gui/DockablePanel.h"
+#include "Gui/GuiFwd.h"
 
-class QHBoxLayout;
-class QVBoxLayout;
-class QUndoStack;
-class QUndoCommand;
-class QGridLayout;
-class QTabWidget;
-
-class KnobI;
-class KnobGui;
-class KnobHolder;
-class NodeGui;
-class Gui;
-class KnobPage;
-class Button;
-class RotoPanel;
-class MultiInstancePanel;
-class KnobGroup;
-class LineEdit;
-class FloatingWidget;
-
-class VerticalColorBar;
-class TabGroup;
-
-namespace Natron {
-    class Label;
-}
 
 struct Page
 {
     QWidget* tab;
     int currentRow;
     TabGroup* groupAsTab; //< to gather group knobs that are set as a tab
-
+    boost::weak_ptr<KnobPage> pageKnob;
+    
     Page()
-    : tab(0), currentRow(0),groupAsTab(0)
+    : tab(0), currentRow(0),groupAsTab(0), pageKnob()
     {
     }
 
     Page(const Page & other)
-    : tab(other.tab), currentRow(other.currentRow), groupAsTab(other.groupAsTab)
+    : tab(other.tab), currentRow(other.currentRow), groupAsTab(other.groupAsTab), pageKnob(other.pageKnob)
     {
     }
 };
@@ -115,6 +92,9 @@ struct DockablePanelPrivate
     VerticalColorBar* _verticalColorBar;
 
     /*Tab related*/
+    QWidget* _rightContainer;
+    QVBoxLayout* _rightContainerLayout;
+    
     QTabWidget* _tabWidget;
     Button* _centerNodeButton;
     Button* _enterInGroupButton;
@@ -172,7 +152,7 @@ struct DockablePanelPrivate
                          const boost::shared_ptr<QUndoStack>& stack);
     
     /*inserts a new page to the dockable panel.*/
-    PageMap::iterator getOrCreatePage(KnobPage* page);
+    PageMap::iterator getOrCreatePage(const boost::shared_ptr<KnobPage>& page);
 
     boost::shared_ptr<KnobPage> ensureDefaultPageKnobCreated() ;
 

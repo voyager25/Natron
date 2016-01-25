@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,66 +37,28 @@
 #include <boost/enable_shared_from_this.hpp>
 #endif
 
-#include "Global/GlobalDefines.h"
-#include "Engine/FitCurve.h"
-#include "Engine/RotoItem.h"
-
 CLANG_DIAG_OFF(deprecated-declarations)
 #include <QObject>
 #include <QMutex>
 #include <QMetaType>
 CLANG_DIAG_ON(deprecated-declarations)
 
-#define kRotoLayerBaseName "Layer"
-#define kRotoBezierBaseName "Bezier"
-#define kRotoOpenBezierBaseName "Pencil"
-#define kRotoEllipseBaseName "Ellipse"
-#define kRotoRectangleBaseName "Rectangle"
-#define kRotoPaintBrushBaseName "Brush"
-#define kRotoPaintEraserBaseName "Eraser"
-#define kRotoPaintBlurBaseName "Blur"
-#define kRotoPaintSmearBaseName "Smear"
-#define kRotoPaintSharpenBaseName "Sharpen"
-#define kRotoPaintCloneBaseName "Clone"
-#define kRotoPaintRevealBaseName "Reveal"
-#define kRotoPaintDodgeBaseName "Dodge"
-#define kRotoPaintBurnBaseName "Burn"
+#include "Global/GlobalDefines.h"
+#include "Engine/FitCurve.h"
+#include "Engine/RotoItem.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Image;
-class ImageComponents;
-class Node;
-}
-namespace boost { namespace serialization { class access; } }
-
-class RectI;
-class RectD;
-class KnobI;
-class KnobBool;
-class KnobDouble;
-class KnobInt;
-class KnobChoice;
-class KnobColor;
-typedef struct _cairo_pattern cairo_pattern_t;
-
-class Curve;
-class Bezier;
-class RotoItemSerialization;
-class BezierCP;
 
 /**
  * @class A base class for all items made by the roto context
  **/
-class RotoContext;
-class RotoLayer;
-
-namespace Transform {
-struct Matrix3x3;
-}
 
 /**
  * @class A RotoLayer is a group of RotoItem. This allows the context to sort
  * and build hierarchies of layers.
+ * Children items are rendered in reverse order of their ordering in the children list
+ * i.e: the last item will be rendered first, etc...
+ * Visually, in the GUI the top-most item of a layer corresponds to the first item in the children list
  **/
 struct RotoLayerPrivate;
 class RotoLayer

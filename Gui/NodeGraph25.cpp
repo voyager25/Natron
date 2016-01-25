@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -234,10 +234,8 @@ NodeGraph::keyPressEvent(QKeyEvent* e)
 {
     boost::shared_ptr<NodeCollection> collection = getGroup();
     NodeGroup* isGroup = dynamic_cast<NodeGroup*>(collection.get());
-    bool isGroupEditable = true;
     bool groupEdited = true;
     if (isGroup) {
-        isGroupEditable = isGroup->isSubGraphEditable();
         groupEdited = isGroup->getNode()->hasPyPlugBeenEdited();
     }
     
@@ -361,9 +359,9 @@ NodeGraph::keyPressEvent(QKeyEvent* e)
             getLastSelectedViewer()->previousFrame();
         }
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevKF, modifiers, key) ) {
-        getGui()->getApp()->getTimeLine()->goToPreviousKeyframe();
+        getGui()->getApp()->goToPreviousKeyframe();
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerNextKF, modifiers, key) ) {
-        getGui()->getApp()->getTimeLine()->goToNextKeyframe();
+        getGui()->getApp()->goToNextKeyframe();
     } else if ( isKeybind(kShortcutGroupNodegraph, kShortcutIDActionGraphRearrangeNodes, modifiers, key) ) {
         _imp->rearrangeSelectedNodes();
     } else if ( isKeybind(kShortcutGroupNodegraph, kShortcutIDActionGraphDisableNodes, modifiers, key) ) {
@@ -436,14 +434,14 @@ NodeGraph::keyPressEvent(QKeyEvent* e)
         
         if (!intercepted) {
             accept = false;
-            QGraphicsView::keyPressEvent(e);
         }
     }
     if (accept) {
         takeClickFocus();
         e->accept();
     } else {
-        handleUnCaughtKeyPressEvent();
+        handleUnCaughtKeyPressEvent(e);
+        QGraphicsView::keyPressEvent(e);
     }
 } // keyPressEvent
 

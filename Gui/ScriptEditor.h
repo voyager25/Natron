@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef SCRIPTEDITOR_H
 #define SCRIPTEDITOR_H
 
@@ -26,12 +25,13 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
 #endif
 
-#include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QWidget>
@@ -39,8 +39,8 @@ CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 #include "Gui/PanelWidget.h"
+#include "Gui/GuiFwd.h"
 
-class Gui;
 
 struct ScriptEditorPrivate;
 
@@ -66,7 +66,11 @@ public:
     
     void printAutoDeclaredVariable(const QString& str);
     
+    void reloadHighlighter();
+    
 public Q_SLOTS:
+    
+    void doAppendToScriptEditorOnMainThread(const QString& str);
     
     void onUserScrollChanged(bool atBottom);
 
@@ -94,13 +98,20 @@ public Q_SLOTS:
     void onInputScriptTextChanged();
     
     void onAutoSaveTimerTimedOut();
+    
+    void onShowAutoDeclVarsClicked(bool clicked);
 
+Q_SIGNALS:
+    
+    void appendToScriptEditorOnMainThread(QString);
+    
 private:
     
     virtual void mousePressEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual void enterEvent(QEvent *e) OVERRIDE FINAL;
     virtual void leaveEvent(QEvent *e) OVERRIDE FINAL;
     virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
+    virtual void keyReleaseEvent(QKeyEvent* e) OVERRIDE FINAL;
     
     boost::scoped_ptr<ScriptEditorPrivate> _imp;
 };

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -81,7 +81,7 @@ void moveGroupNode(DopeSheetEditor* model, const NodePtr& node, double dt)
     NodeGroup *group = dynamic_cast<NodeGroup *>(node->getLiveInstance());
     assert(group);
     NodeList nodes;
-    group->getNodes_recursive(nodes);
+    group->getNodes_recursive(nodes,true);
     
     for (NodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
         boost::shared_ptr<NodeGui> nodeGui = boost::dynamic_pointer_cast<NodeGui>((*it)->getNodeGui());
@@ -163,7 +163,7 @@ _model(model)
         NodeGroup* isGroup = dynamic_cast<NodeGroup*>((*it)->getInternalNode()->getLiveInstance());
         if (isGroup) {
             NodeList recurseNodes;
-            isGroup->getNodes_recursive(recurseNodes);
+            isGroup->getNodes_recursive(recurseNodes, true);
             for (NodeList::iterator it = recurseNodes.begin(); it!=recurseNodes.end(); ++it) {
                 nodesSet.insert(*it);
             }

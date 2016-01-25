@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,7 +87,7 @@ AnimationButton::mouseMoveEvent(QMouseEvent* e)
         } else {
             expr << effect->getApp()->getAppIDString() << ".";
         }
-        expr << effect->getNode()->getFullyQualifiedName() << "." << _knob->getKnob()->getName()
+        expr << effect->getNode()->getScriptName_mt_safe() << "." << _knob->getKnob()->getName()
         << ".get()";
         if (_knob->getKnob()->getDimension() > 1) {
             expr << "[dimension]";
@@ -104,7 +104,7 @@ AnimationButton::mouseMoveEvent(QMouseEvent* e)
 
         QFontMetrics fmetrics = fontMetrics();
         QString textFirstLine( tr("Linking value from:") );
-        QString textSecondLine( _knob->getKnob()->getDescription().c_str() );
+        QString textSecondLine( _knob->getKnob()->getLabel().c_str() );
         QString textThirdLine( tr("Drag it to another animation button.") );
         int textWidth = std::max( std::max( fmetrics.width(textFirstLine), fmetrics.width(textSecondLine) ),fmetrics.width(textThirdLine) );
         QImage dragImg(textWidth,(fmetrics.height() + 5) * 3,QImage::Format_ARGB32);

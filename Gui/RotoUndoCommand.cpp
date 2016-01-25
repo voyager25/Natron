@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -193,14 +193,14 @@ MoveControlPointsUndoCommand::mergeWith(const QUndoCommand *other)
         return false;
     }
 
-    if ( ( mvCmd->_selectedPoints.size() != _selectedPoints.size() ) || (mvCmd->_time != _time) || (mvCmd->_selectedTool != _selectedTool)
+    if ( ( mvCmd->_pointsToDrag.size() != _pointsToDrag.size() ) || (mvCmd->_time != _time) || (mvCmd->_selectedTool != _selectedTool)
          || ( mvCmd->_rippleEditEnabled != _rippleEditEnabled) || ( mvCmd->_featherLinkEnabled != _featherLinkEnabled) ) {
         return false;
     }
 
-    SelectedCpList::const_iterator it = _selectedPoints.begin();
-    SelectedCpList::const_iterator oIt = mvCmd->_selectedPoints.begin();
-    for (; it != _selectedPoints.end(); ++it, ++oIt) {
+    std::list< std::pair<boost::shared_ptr<BezierCP>,boost::shared_ptr<BezierCP> > >::const_iterator it = _pointsToDrag.begin();
+    std::list< std::pair<boost::shared_ptr<BezierCP>,boost::shared_ptr<BezierCP> > >::const_iterator oIt = mvCmd->_pointsToDrag.begin();
+    for (; it != _pointsToDrag.end(); ++it, ++oIt) {
         if ( (it->first != oIt->first) || (it->second != oIt->second) ) {
             return false;
         }
@@ -624,11 +624,7 @@ AddStrokeUndoCommand::AddStrokeUndoCommand(RotoGui* roto,const boost::shared_ptr
 
 AddStrokeUndoCommand::~AddStrokeUndoCommand()
 {
-    /*
-     * At this point, the stroke might get deleted, deleting the attached nodes in the meantime, hence we must ensure that all threads
-     * are deleted so that the ThreadLocalStorage used is correctly cleared.
-     */
-    _item->getContext()->getNode()->getApp()->getProject()->ensureAllProcessingThreadsFinished();
+
 }
 
 void
@@ -667,11 +663,7 @@ AddMultiStrokeUndoCommand::AddMultiStrokeUndoCommand(RotoGui* roto,const boost::
 
 AddMultiStrokeUndoCommand::~AddMultiStrokeUndoCommand()
 {
-    /*
-     * At this point, the stroke might get deleted, deleting the attached nodes in the meantime, hence we must ensure that all threads
-     * are deleted so that the ThreadLocalStorage used is correctly cleared.
-     */
-    _item->getContext()->getNode()->getApp()->getProject()->ensureAllProcessingThreadsFinished();
+
 }
 
 void
@@ -772,8 +764,6 @@ dragTangent(double time,
         rtan.y += dy;
     }
     double alpha = left ? std::atan2(pos.y - ltan.y,pos.x - ltan.x) : std::atan2(pos.y - rtan.y,pos.x - rtan.x);
-    std::set<int> times;
-    p.getKeyframeTimes(true,&times);
 
     if (left) {
         double rightDiffX = breakTangents ? 0 : pos.x + std::cos(alpha) * dist - rtan.x;
@@ -1185,6 +1175,7 @@ SmoothCuspUndoCommand::undo()
              itNew != it->newPoints.end(); ++itNew, ++itOld) {
             itNew->first->clone(*itOld->first);
             itNew->second->clone(*itOld->second);
+            it->curve->incrementNodesAge();
         }
     }
 
@@ -1467,21 +1458,29 @@ MakeEllipseUndoCommand::redo()
         _roto->evaluate(true);
     } else {
         double ytop, xright, ybottom, xleft;
-        double tox = _tox;
+        xright = _tox;
         if (_constrained) {
-            tox =  _fromx + (_tox > _fromx ? 1 : -1) * std::abs(_toy - _fromy);
+            xright =  _fromx + (_tox > _fromx ? 1 : -1) * std::abs(_toy - _fromy);
         }
         if (_fromCenter) {
             ytop = _fromy - (_toy - _fromy);
-            xleft = _fromx - (tox - _fromx);
+            xleft = _fromx - (xright - _fromx);
+            if (xleft == xright) {
+                xleft -= 1.;
+            }
         } else {
             ytop = _fromy;
             xleft = _fromx;
+            if (xleft == xright) {
+                xleft -= 1.;
+            }
         }
         ybottom = _toy;
-        xright = tox;
-        double xmid = (xleft + xright) / 2;
-        double ymid = (ytop + ybottom) / 2;
+        if (ybottom == ytop) {
+            ybottom -= 1.;
+        }
+        double xmid = (xleft + xright) / 2.;
+        double ymid = (ytop + ybottom) / 2.;
         if (_create) {
             _curve = _roto->getContext()->makeBezier(xmid, ytop, kRotoEllipseBaseName, _time, false); //top
             assert(_curve);
@@ -1612,19 +1611,27 @@ MakeRectangleUndoCommand::redo()
         _roto->evaluate(true);
     } else {
         double ytop, xright, ybottom, xleft;
-        double tox = _tox;
+        xright = _tox;
         if (_constrained) {
-            tox =  _fromx + (_tox > _fromx ? 1 : -1) * std::abs(_toy - _fromy);
+            xright =  _fromx + (_tox > _fromx ? 1 : -1) * std::abs(_toy - _fromy);
         }
         if (_fromCenter) {
             ytop = _fromy - (_toy - _fromy);
-            xleft = _fromx - (tox - _fromx);
+            xleft = _fromx - (xright - _fromx);
+            if (xleft == xright) {
+                xleft -= 1.;
+            }
         } else {
             ytop = _fromy;
             xleft = _fromx;
+            if (xleft == xright) {
+                xleft -= 1.;
+            }
         }
         ybottom = _toy;
-        xright = tox;
+        if (ybottom == ytop) {
+            ybottom -= 1.;
+        }
         if (_create) {
             _curve = _roto->getContext()->makeBezier(xleft, ytop, kRotoRectangleBaseName, _time, false); //topleft
             assert(_curve);

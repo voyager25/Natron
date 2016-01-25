@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,34 +35,60 @@
 #include <boost/shared_ptr.hpp>
 #endif
 
+#include "Engine/ImageComponents.h"
 #include "Engine/Knob.h" // KnobI
 #include "Engine/NodeGroupWrapper.h" // Goup
 #include "Engine/RectD.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Node;
-}
 
-class Roto;
-class Param;
-class IntParam;
-class Int2DParam;
-class Int3DParam;
-class BooleanParam;
-class DoubleParam;
-class Double2DParam;
-class Double3DParam;
-class ChoiceParam;
-class ColorParam;
-class StringParam;
-class FileParam;
-class OutputFileParam;
-class PathParam;
-class ButtonParam;
-class GroupParam;
-class PageParam;
-class ParametricParam;
-class KnobHolder;
+class ImageLayer
+{
+    Natron::ImageComponents _comps;
+public:
+    
+    ImageLayer(const std::string& layerName,
+               const std::string& componentsPrettyName,
+               const std::vector<std::string>& componentsName);
+    
+    ImageLayer(const Natron::ImageComponents& internalComps);
+    
+    
+    ~ImageLayer() {}
+    
+    static int getHash(const ImageLayer& layer);
+    
+    bool isColorPlane() const;
+    
+    int getNumComponents() const;
+    
+    const std::string& getLayerName() const;
+    
+    const std::vector<std::string>& getComponentsNames() const;
+    
+    const std::string& getComponentsPrettyName() const;
+
+    bool operator==(const ImageLayer& other) const;
+    
+    bool operator!=(const ImageLayer& other) const {
+        return !(*this == other);
+    }
+    
+    //For std::map
+    bool operator<(const ImageLayer& other) const;
+    
+    /*
+     * These are default presets image components
+     */
+    static ImageLayer getNoneComponents();
+    static ImageLayer getRGBAComponents();
+    static ImageLayer getRGBComponents();
+    static ImageLayer getAlphaComponents();
+    static ImageLayer getBackwardMotionComponents();
+    static ImageLayer getForwardMotionComponents();
+    static ImageLayer getDisparityLeftComponents();
+    static ImageLayer getDisparityRightComponents();
+};
 
 class UserParamHolder
 {
@@ -159,6 +185,8 @@ public:
     PathParam* createPathParam(const std::string& name, const std::string& label);
     
     ButtonParam* createButtonParam(const std::string& name, const std::string& label);
+    
+    SeparatorParam* createSeparatorParam(const std::string& name, const std::string& label);
     
     GroupParam* createGroupParam(const std::string& name, const std::string& label);
     
@@ -328,6 +356,10 @@ public:
     void setSubGraphEditable(bool editable);
     
     bool addUserPlane(const std::string& planeName, const std::vector<std::string>& channels);
+    
+    std::map<ImageLayer,Effect*> getAvailableLayers() const;
+    
+    void setPagesOrder(const std::list<std::string>& pages);
 };
 
 #endif // NODEWRAPPER_H

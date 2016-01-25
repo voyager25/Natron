@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -100,39 +100,40 @@ ViewerTab::onCreateNewRoIPressed()
 }
 
 void
-ViewerTab::updateViewsMenu(int count)
+ViewerTab::updateViewsMenu(const std::vector<std::string>& viewNames)
 {
     int currentIndex = _imp->viewsComboBox->activeIndex();
 
     _imp->viewsComboBox->clear();
-    if (count == 1) {
-        _imp->viewsComboBox->hide();
-        _imp->viewsComboBox->addItem(tr("Main"));
-    } else if (count >= 2) {
-        _imp->viewsComboBox->show();
-        ActionWithShortcut* leftAct = new ActionWithShortcut(kShortcutGroupViewer,
-                                                             kShortcutIDShowLeftView,
-                                                             kShortcutDescShowLeftView,
-                                                             _imp->viewsComboBox);
-        _imp->viewsComboBox->addAction(leftAct);
-        ActionWithShortcut* rightAct = new ActionWithShortcut(kShortcutGroupViewer,
-                                                             kShortcutIDShowRightView,
-                                                             kShortcutDescShowRightView,
-                                                             _imp->viewsComboBox);
-        _imp->viewsComboBox->addAction(rightAct);
-        for (int i = 2; i < count; ++i) {
-            _imp->viewsComboBox->addItem( QString( tr("View ") ) + QString::number(i + 1));
+    for (std::size_t i = 0;  i < viewNames.size(); ++i) {
+        if (viewNames[i] == "Left") {
+            ActionWithShortcut* leftAct = new ActionWithShortcut(kShortcutGroupViewer,
+                                                                 kShortcutIDShowLeftView,
+                                                                 kShortcutDescShowLeftView,
+                                                                 _imp->viewsComboBox);
+            _imp->viewsComboBox->addAction(leftAct);
+
+        } else if (viewNames[i] == "Right") {
+            ActionWithShortcut* rightAct = new ActionWithShortcut(kShortcutGroupViewer,
+                                                                  kShortcutIDShowRightView,
+                                                                  kShortcutDescShowRightView,
+                                                                  _imp->viewsComboBox);
+            _imp->viewsComboBox->addAction(rightAct);
+        } else {
+            _imp->viewsComboBox->addItem(viewNames[i].c_str());
         }
+    }
+    if (viewNames.size() == 1) {
+        _imp->viewsComboBox->hide();
     } else {
         _imp->viewsComboBox->show();
-        
     }
     if ( ( currentIndex < _imp->viewsComboBox->count() ) && (currentIndex != -1) ) {
         _imp->viewsComboBox->setCurrentIndex(currentIndex);
     } else {
         _imp->viewsComboBox->setCurrentIndex(0);
     }
-    getGui()->updateViewsActions(count);
+    getGui()->updateViewsActions(viewNames.size());
 }
 
 void
@@ -248,7 +249,12 @@ ViewerTab::startPause(bool b)
     abortRendering();
     if (b) {
         getGui()->getApp()->setLastViewerUsingTimeline(_imp->viewerNode->getNode());
-        _imp->viewerNode->getRenderEngine()->renderFromCurrentFrame(getGui()->getApp()->isRenderStatsActionChecked(), OutputSchedulerThread::eRenderDirectionForward);
+        std::vector<int> viewsToRender;
+        {
+            QMutexLocker k(&_imp->currentViewMutex);
+            viewsToRender.push_back(_imp->currentViewIndex);
+        }
+        _imp->viewerNode->getRenderEngine()->renderFromCurrentFrame(getGui()->getApp()->isRenderStatsActionChecked(), viewsToRender, OutputSchedulerThread::eRenderDirectionForward);
     }
 }
 
@@ -328,7 +334,12 @@ ViewerTab::startBackward(bool b)
     abortRendering();
     if (b) {
         getGui()->getApp()->setLastViewerUsingTimeline(_imp->viewerNode->getNode());
-        _imp->viewerNode->getRenderEngine()->renderFromCurrentFrame(getGui()->getApp()->isRenderStatsActionChecked(), OutputSchedulerThread::eRenderDirectionBackward);
+        std::vector<int> viewsToRender;
+        {
+            QMutexLocker k(&_imp->currentViewMutex);
+            viewsToRender.push_back(_imp->currentViewIndex);
+        }
+        _imp->viewerNode->getRenderEngine()->renderFromCurrentFrame(getGui()->getApp()->isRenderStatsActionChecked(), viewsToRender, OutputSchedulerThread::eRenderDirectionBackward);
 
     }
 }
@@ -476,6 +487,9 @@ ViewerTab::nextLayer()
     int currentIndex = _imp->layerChoice->activeIndex();
     int nChoices = _imp->layerChoice->count();
     currentIndex = (currentIndex + 1) % nChoices;
+    if (currentIndex == 0 && nChoices > 1) {
+        currentIndex = 1;
+    }
     _imp->layerChoice->setCurrentIndex(currentIndex);
 }
 
@@ -484,8 +498,14 @@ ViewerTab::previousLayer()
 {
     int currentIndex = _imp->layerChoice->activeIndex();
     int nChoices = _imp->layerChoice->count();
-    currentIndex = (currentIndex - 1) % nChoices;
-    _imp->layerChoice->setCurrentIndex(currentIndex);
+    if (currentIndex <= 1) {
+        currentIndex = nChoices - 1;
+    } else {
+        --currentIndex;
+    }
+    if (currentIndex >= 0) {
+        _imp->layerChoice->setCurrentIndex(currentIndex);
+    }
 }
 
 void
@@ -602,6 +622,15 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
             _imp->viewerChannels->setCurrentIndex_no_emit(5);
             setDisplayChannels(5, false);
         }
+    } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionMatteOverlay, modifiers, key) ) {
+        int currentIndex = _imp->viewerChannels->activeIndex();
+        if (currentIndex == 6) {
+            _imp->viewerChannels->setCurrentIndex_no_emit(1);
+            setDisplayChannels(1, false);
+        } else {
+            _imp->viewerChannels->setCurrentIndex_no_emit(6);
+            setDisplayChannels(6, false);
+        }
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevious, modifiers, key) ) {
         previousFrame();
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerBackward, modifiers, key) ) {
@@ -626,10 +655,10 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
         lastFrame();
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerPrevKF, modifiers, key) ) {
         //prev key
-        getGui()->getApp()->getTimeLine()->goToPreviousKeyframe();
+        getGui()->getApp()->goToPreviousKeyframe();
     } else if ( isKeybind(kShortcutGroupPlayer, kShortcutIDActionPlayerNextKF, modifiers, key) ) {
         //next key
-        getGui()->getApp()->getTimeLine()->goToNextKeyframe();
+        getGui()->getApp()->goToNextKeyframe();
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionFitViewer, modifiers, key) ) {
         centerViewer();
     } else if ( isKeybind(kShortcutGroupViewer, kShortcutIDActionClipEnabled, modifiers, key) ) {
@@ -656,7 +685,7 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
         _imp->renderScaleCombo->setCurrentIndex(4);
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDActionZoomLevel100, modifiers, key) ) {
         _imp->viewer->zoomSlot(100);
-        _imp->zoomCombobox->setCurrentIndex_no_emit(4);
+        _imp->zoomCombobox->setCurrentIndex_no_emit(7);
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDActionZoomIn, modifiers, key) ) {
         zoomIn();
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDActionZoomOut, modifiers, key) ) {
@@ -713,26 +742,28 @@ ViewerTab::keyPressEvent(QKeyEvent* e)
     } else if ( isKeybind(kShortcutGroupGlobal, kShortcutIDActionZoomOut, Qt::NoModifier, key) ) { // zoom in/out doesn't care about modifiers
         QWheelEvent e(mapFromGlobal(QCursor::pos()), -120, Qt::NoButton, Qt::NoModifier); // one wheel click = +-120 delta
         wheelEvent(&e);
-    } else if ( e->isAutoRepeat() && notifyOverlaysKeyRepeat(scale, scale, e) ) {
+    } else if ( e->isAutoRepeat() && notifyOverlaysKeyRepeat(RenderScale(scale), e) ) {
         update();
-    } else if ( notifyOverlaysKeyDown(scale, scale, e) ) {
+    } else if ( notifyOverlaysKeyDown(RenderScale(scale), e) ) {
         update();
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDSwitchInputAAndB, modifiers, key) ) {
         ///Put it after notifyOverlaysKeyDown() because Roto may intercept Enter
-        switchInputAAndB();
+        if (getViewer()->hasFocus()) {
+            switchInputAAndB();
+        }
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDShowLeftView, modifiers, key) ) {
         showView(0);
     } else if (isKeybind(kShortcutGroupViewer, kShortcutIDShowRightView, modifiers, key) ) {
         showView(1);
     } else {
         accept = false;
-        QWidget::keyPressEvent(e);
     }
     if (accept) {
         takeClickFocus();
         e->accept();
     } else {
-        handleUnCaughtKeyPressEvent();
+        handleUnCaughtKeyPressEvent(e);
+        QWidget::keyPressEvent(e);
     }
 } // keyPressEvent
 
@@ -747,9 +778,10 @@ ViewerTab::keyReleaseEvent(QKeyEvent* e)
         return QWidget::keyPressEvent(e);
     }
     double scale = 1. / (1 << _imp->viewer->getCurrentRenderScale());
-    if ( notifyOverlaysKeyUp(scale, scale, e) ) {
+    if ( notifyOverlaysKeyUp(RenderScale(scale), e) ) {
         _imp->viewer->redraw();
     } else {
+        handleUnCaughtKeyUpEvent(e);
         QWidget::keyReleaseEvent(e);
     }
 }
@@ -777,6 +809,9 @@ ViewerTab::setDisplayChannels(int i, bool setBothInputs)
             break;
         case 5:
             channels = Natron::eDisplayChannelsA;
+            break;
+        case 6:
+            channels = Natron::eDisplayChannelsMatte;
             break;
         default:
             channels = Natron::eDisplayChannelsRGB;

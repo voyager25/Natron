@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,6 +75,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/SpinBox.h"
 #include "Gui/TabGroup.h"
 #include "Gui/Utils.h"
+#include "Gui/PropertiesBinWrapper.h"
 
 #include "ofxNatron.h"
 
@@ -194,7 +195,7 @@ KnobGuiGroup::setCheckedInternal(bool checked, bool userRequested)
     ///the children back with an offset relative to the group.
     int realIndexInLayout = getActualIndexInLayout();
     int startChildIndex = realIndexInLayout + 1;
-    
+    //getGui()->getPropertiesBin()->setUpdatesEnabled(false);
     for (std::list<KnobGui*>::iterator it = _children.begin(); it != _children.end(); ++it) {
         if (!checked) {
             (*it)->hide();
@@ -205,6 +206,7 @@ KnobGuiGroup::setCheckedInternal(bool checked, bool userRequested)
             }
         }
     }
+    //getGui()->getPropertiesBin()->setUpdatesEnabled(true);
 }
 
 void

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef TABLEMODELVIEW_H
 #define TABLEMODELVIEW_H
 
@@ -26,10 +25,14 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
+#include <vector>
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #endif
-#include "Global/Macros.h"
+
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -39,8 +42,9 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-class TableView;
-class TableModel;
+#include "Gui/GuiFwd.h"
+
+
 class TableItem
 {
     friend class TableModel;
@@ -294,18 +298,25 @@ public:
 
 Q_SIGNALS:
 
+    void aboutToDrop();
+    void itemDropped();
     void deleteKeyPressed();
     void itemRightClicked(TableItem* item);
     void itemDoubleClicked(TableItem* item);
 
 private:
 
+    virtual void startDrag(Qt::DropActions supportedActions) OVERRIDE FINAL;
+    virtual void dragLeaveEvent(QDragLeaveEvent *e) OVERRIDE FINAL;
+    virtual void dragEnterEvent(QDragEnterEvent *e) OVERRIDE FINAL;
+    virtual void dropEvent(QDropEvent* e) OVERRIDE FINAL;
     virtual void mousePressEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual void mouseReleaseEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
     virtual void mouseDoubleClickEvent(QMouseEvent* e) OVERRIDE FINAL;
     virtual bool edit(const QModelIndex & index, QAbstractItemView::EditTrigger trigger, QEvent * event) OVERRIDE FINAL;
 
+    void rebuildDraggedItemsFromSelection();
     
     boost::scoped_ptr<TableViewPrivate> _imp;
 };
@@ -337,7 +348,7 @@ public:
     virtual bool removeRows( int row, int count = 1, const QModelIndex &parent = QModelIndex() ) OVERRIDE FINAL;
     virtual bool removeColumns( int column, int count = 1, const QModelIndex &parent = QModelIndex() ) OVERRIDE FINAL;
 
-    void setTable(const QVector<TableItem*>& items);
+    void setTable(const std::vector<TableItem*>& items);
     void setItem(int row, int column, TableItem *item);
     TableItem * takeItem(int row, int column);
     TableItem * item(int row, int column) const;

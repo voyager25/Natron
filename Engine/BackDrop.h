@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 // ***** END PYTHON BLOCK *****
 
 #include "Engine/NoOpBase.h"
+#include "Engine/EngineFwd.h"
 
 struct BackDropPrivate;
 class BackDrop : public NoOpBase
@@ -55,7 +56,7 @@ public:
         return "BackDrop";
     }
     
-    virtual std::string getDescription() const OVERRIDE FINAL WARN_UNUSED_RETURN;
+    virtual std::string getPluginDescription() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     
     virtual std::string getInputLabel(int /*inputNb*/) const OVERRIDE FINAL WARN_UNUSED_RETURN
     {
@@ -76,7 +77,7 @@ private:
     virtual void knobChanged(KnobI* k,
                              Natron::ValueChangedReasonEnum /*reason*/,
                              int /*view*/,
-                             SequenceTime /*time*/,
+                             double /*time*/,
                              bool /*originatedFromMainThread*/) OVERRIDE FINAL;
 
     virtual void initializeKnobs() OVERRIDE FINAL;

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,8 @@
 #include <QUndoStack>
 #include <QUndoCommand>
 #include <QFile>
-#include <QTextStream>
+#include <QtCore/QTextStream>
+#include <QTextCursor>
 #include <QThread>
 #include <QApplication>
 #include <QSplitter>
@@ -67,9 +68,10 @@ struct ScriptEditorPrivate
     Button* execScriptB;
     Button* showHideOutputB;
     Button* clearOutputB;
+    Button* showAutoDeclVarsB;
     
-    ScriptTextEdit* outputEdit;
-    ScriptTextEdit* inputEdit;
+    OutputScriptTextEdit* outputEdit;
+    InputScriptTextEdit* inputEdit;
     
     QUndoStack history;
     
@@ -93,6 +95,7 @@ struct ScriptEditorPrivate
     , execScriptB(0)
     , showHideOutputB(0)
     , clearOutputB(0)
+    , showAutoDeclVarsB(0)
     , outputEdit(0)
     , inputEdit(0)
     , autoSaveTimer()
@@ -211,6 +214,18 @@ ScriptEditor::ScriptEditor(Gui* gui)
                            "<p><b>" + tr("Keyboard shortcut") + ": %1</b></p>", _imp->clearOutputB);
     QObject::connect(_imp->clearOutputB, SIGNAL(clicked(bool)), this, SLOT(onClearOutputClicked()));
     
+    _imp->showAutoDeclVarsB = new Button(QIcon(),"...",_imp->buttonsContainer);
+    _imp->showAutoDeclVarsB->setFocusPolicy(Qt::NoFocus);
+    _imp->showAutoDeclVarsB->setFixedSize(NATRON_MEDIUM_BUTTON_SIZE, NATRON_MEDIUM_BUTTON_SIZE);
+    _imp->showAutoDeclVarsB->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+    _imp->showAutoDeclVarsB->setCheckable(true);
+    bool isAutoDeclEnabled = appPTR->getCurrentSettings()->isAutoDeclaredVariablePrintActivated();
+    _imp->showAutoDeclVarsB->setChecked(isAutoDeclEnabled);
+    _imp->showAutoDeclVarsB->setDown(isAutoDeclEnabled);
+    _imp->showAutoDeclVarsB->setToolTip(Natron::convertFromPlainText(tr("When checked, auto-declared Python variable will be printed "
+                                                                        "in gray in the output window."), Qt::WhiteSpaceNormal));
+    QObject::connect(_imp->showAutoDeclVarsB, SIGNAL(clicked(bool)), this, SLOT(onShowAutoDeclVarsClicked(bool)));
+    
     _imp->buttonsContainerLayout->addWidget(_imp->undoB);
     _imp->buttonsContainerLayout->addWidget(_imp->redoB);
     _imp->buttonsContainerLayout->addWidget(_imp->clearHistoB);
@@ -224,6 +239,9 @@ ScriptEditor::ScriptEditor(Gui* gui)
     
     _imp->buttonsContainerLayout->addWidget(_imp->showHideOutputB);
     _imp->buttonsContainerLayout->addWidget(_imp->clearOutputB);
+    _imp->buttonsContainerLayout->addSpacing(10);
+    
+    _imp->buttonsContainerLayout->addWidget(_imp->showAutoDeclVarsB);
     _imp->buttonsContainerLayout->addStretch();
     
     QSplitter* splitter = new QSplitter(Qt::Vertical,this);
@@ -233,18 +251,17 @@ ScriptEditor::ScriptEditor(Gui* gui)
         scriptFont = font();
     }
     
-    _imp->outputEdit = new ScriptTextEdit(this);
+    _imp->outputEdit = new OutputScriptTextEdit(this);
     QObject::connect(_imp->outputEdit, SIGNAL(userScrollChanged(bool)), this, SLOT(onUserScrollChanged(bool)));
-    _imp->outputEdit->setOutput(true);
     _imp->outputEdit->setFocusPolicy(Qt::ClickFocus);
     _imp->outputEdit->setReadOnly(true);
     _imp->outputEdit->setFont(scriptFont);
     
-    _imp->inputEdit = new ScriptTextEdit(this);
+    _imp->inputEdit = new InputScriptTextEdit(this);
     QObject::connect(_imp->inputEdit, SIGNAL(textChanged()), this, SLOT(onInputScriptTextChanged()));
+    _imp->inputEdit->setFont(scriptFont);
     QFontMetrics fm = _imp->inputEdit->fontMetrics();
     _imp->inputEdit->setTabStopWidth(fm.width(' ') * 4);
-    _imp->inputEdit->setFont(scriptFont);
     _imp->outputEdit->setTabStopWidth(fm.width(' ') * 4);
     
     _imp->mainLayout->addWidget(_imp->buttonsContainer);
@@ -261,6 +278,14 @@ ScriptEditor::ScriptEditor(Gui* gui)
 ScriptEditor::~ScriptEditor()
 {
     
+}
+
+void
+ScriptEditor::reloadHighlighter()
+{
+    if (_imp->inputEdit) {
+        _imp->inputEdit->reloadHighlighter();
+    }
 }
 
 void
@@ -432,7 +457,24 @@ InputScriptCommand::undo()
 void
 ScriptEditor::onExecScriptClicked()
 {
-    QString script = _imp->inputEdit->toPlainText();
+    QString allText = _imp->inputEdit->toPlainText();
+    QTextCursor curs = _imp->inputEdit->textCursor();
+    QString selectedText;
+    if (curs.hasSelection()) {
+        int selStart = curs.selectionStart();
+        int selEnd = curs.selectionEnd();
+        assert(selStart >= 0 && selStart < allText.size() &&
+               selEnd >= 0 && selEnd <= allText.size());
+        for (int i = selStart; i < selEnd; ++i) {
+            selectedText.push_back(allText[i]);
+        }
+    }
+    QString script;
+    if (!selectedText.isEmpty()) {
+        script = selectedText;
+    } else {
+        script = allText;
+    }
     std::string error,output;
     
     if (!Natron::interpretPythonScript(script.toStdString(), &error, &output)) {
@@ -448,7 +490,7 @@ ScriptEditor::onExecScriptClicked()
             _imp->outputEdit->verticalScrollBar()->setValue(_imp->outputEdit->verticalScrollBar()->maximum());
         }
         _imp->history.push(new InputScriptCommand(this,script));
-        _imp->inputEdit->clear();
+        //_imp->inputEdit->clear();
     }
     
 }
@@ -497,14 +539,21 @@ ScriptEditor::keyPressEvent(QKeyEvent* e)
         onShowHideOutputClicked(!_imp->showHideOutputB->isChecked());
     } else {
         accept = false;
-        QWidget::keyPressEvent(e);
     }
     if (accept) {
         takeClickFocus();
         e->accept();
     } else {
-        handleUnCaughtKeyPressEvent();
+        handleUnCaughtKeyPressEvent(e);
+        QWidget::keyPressEvent(e);
     }
+}
+
+void
+ScriptEditor::keyReleaseEvent(QKeyEvent* e)
+{
+    handleUnCaughtKeyPressEvent(e);
+    QWidget::keyReleaseEvent(e);
 }
 
 void
@@ -530,8 +579,20 @@ ScriptEditor::getAutoSavedScript() const
 }
 
 void
+ScriptEditor::doAppendToScriptEditorOnMainThread(const QString& str)
+{
+    assert(QThread::currentThread() == qApp->thread());
+    appendToScriptEditor(str);
+}
+
+void
 ScriptEditor::appendToScriptEditor(const QString& str)
 {
+    if (QThread::currentThread() != qApp->thread()) {
+        appendToScriptEditorOnMainThread(str);
+        return;
+    }
+    
     _imp->outputEdit->append(str + "\n");
     if (_imp->outputAtBottom) {
         _imp->outputEdit->verticalScrollBar()->setValue(_imp->outputEdit->verticalScrollBar()->maximum());
@@ -570,4 +631,12 @@ void
 ScriptEditor::onUserScrollChanged(bool atBottom)
 {
     _imp->outputAtBottom = atBottom;
+}
+
+void
+ScriptEditor::onShowAutoDeclVarsClicked(bool clicked)
+{
+    _imp->showAutoDeclVarsB->setDown(clicked);
+    _imp->showAutoDeclVarsB->setChecked(clicked);
+    appPTR->getCurrentSettings()->setAutoDeclaredVariablePrintEnabled(clicked);
 }

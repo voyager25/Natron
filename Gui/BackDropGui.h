@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef Gui_BackDropGui_h
 #define Gui_BackDropGui_h
 
@@ -26,15 +25,12 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include "Gui/NodeGui.h"
+#include "Gui/GuiFwd.h"
 
-class QVBoxLayout;
 
-class KnobString;
-
-class NodeGraph;
-class DockablePanel;
-class NodeBackDropSerialization;
 struct BackDropGuiPrivate;
 class BackDropGui : public NodeGui
 {

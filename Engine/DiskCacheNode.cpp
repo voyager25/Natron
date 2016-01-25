@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -124,7 +124,7 @@ DiskCacheNode::initializeKnobs()
 }
 
 void
-DiskCacheNode::knobChanged(KnobI* k, Natron::ValueChangedReasonEnum /*reason*/, int /*view*/, SequenceTime /*time*/,
+DiskCacheNode::knobChanged(KnobI* k, Natron::ValueChangedReasonEnum /*reason*/, int /*view*/, double /*time*/,
                            bool /*originatedFromMainThread*/)
 {
     if (_imp->frameRange.lock().get() == k) {
@@ -147,9 +147,10 @@ DiskCacheNode::knobChanged(KnobI* k, Natron::ValueChangedReasonEnum /*reason*/, 
         w.writer = this;
         w.firstFrame = INT_MIN;
         w.lastFrame = INT_MAX;
+        w.frameStep = 1;
         std::list<AppInstance::RenderWork> works;
         works.push_back(w);
-        getApp()->startWritersRendering(getApp()->isRenderStatsActionChecked(),works);
+        getApp()->startWritersRendering(getApp()->isRenderStatsActionChecked(), false, works);
     }
 }
 
@@ -234,7 +235,7 @@ DiskCacheNode::render(const RenderActionArgs& args)
     for (std::list<ImageComponents> ::const_iterator it =components.begin(); it != components.end(); ++it) {
         RectI roiPixel;
         
-        ImagePtr srcImg = getImage(0, args.time, args.originalScale, args.view, NULL, *it, bitdepth, par, false, &roiPixel);
+        ImagePtr srcImg = getImage(0, args.time, args.originalScale, args.view, NULL, *it, bitdepth, par, false, true, &roiPixel);
         if (!srcImg) {
             return eStatusFailed;
         }

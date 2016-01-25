@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,6 +47,7 @@
 #include "Engine/MemoryFile.h"
 #include "Engine/NonKeyParams.h"
 #include <SequenceParsing.h> // for removePath
+#include "Engine/EngineFwd.h"
 
 namespace Natron {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,6 +98,9 @@ public:
         if (data) {
             free(data);
             data = 0;
+        }
+        if (count == 0) {
+            return;
         }
         data = (T*)malloc(size * sizeof(T));
         if (!data) {
@@ -366,12 +370,12 @@ public:
     /**
      * @brief To be called by a CacheEntry on allocation.
      **/
-    virtual void notifyEntryAllocated(int time, size_t size, Natron::StorageModeEnum storage) const = 0;
+    virtual void notifyEntryAllocated(double time, size_t size, Natron::StorageModeEnum storage) const = 0;
 
     /**
      * @brief To be called by a CacheEntry on destruction.
      **/
-    virtual void notifyEntryDestroyed(int time, size_t size, Natron::StorageModeEnum storage) const = 0;
+    virtual void notifyEntryDestroyed(double time, size_t size, Natron::StorageModeEnum storage) const = 0;
     
     /**
      * @brief Called by the Cache deleter thread to wake up sleeping threads that were attempting to create a new iamge
@@ -388,7 +392,7 @@ public:
      * it is reallocated in the RAM.
      **/
     virtual void notifyEntryStorageChanged(Natron::StorageModeEnum oldStorage,Natron::StorageModeEnum newStorage,
-                                           int time,size_t size) const = 0;
+                                           double time,size_t size) const = 0;
     
     /**
      * @brief Remove from the cache all entries that matches the holderID and have a different nodeHash than the given one.
@@ -504,9 +508,10 @@ public:
     , _params()
     , _data()
     , _cache()
-    , _removeBackingFileBeforeDestruction(false)
-    , _requestedStorage(eStorageModeNone)
+    , _requestedPath()
     , _entryLock(QReadWriteLock::Recursive)
+    , _requestedStorage(eStorageModeNone)
+    , _removeBackingFileBeforeDestruction(false)
     {
     }
 
@@ -525,10 +530,10 @@ public:
     , _params(params)
     , _data()
     , _cache(cache)
-    , _removeBackingFileBeforeDestruction(false)
     , _requestedPath(path)
-    , _requestedStorage(storage)
     , _entryLock(QReadWriteLock::Recursive)
+    , _requestedStorage(storage)
+    , _removeBackingFileBeforeDestruction(false)
     {
     }
 
@@ -691,7 +696,7 @@ public:
     {
         std::size_t sz = size();
         bool dataAllocated = _data.isAllocated();
-        int time = getTime();
+        double time = getTime();
         {
             QWriteLocker k(&_entryLock);
             
@@ -887,10 +892,10 @@ protected:
     boost::shared_ptr<ParamsType> _params;
     Buffer<DataType> _data;
     const CacheAPI* _cache;
-    bool _removeBackingFileBeforeDestruction;
     std::string _requestedPath;
-    Natron::StorageModeEnum _requestedStorage;
     mutable QReadWriteLock _entryLock;
+    Natron::StorageModeEnum _requestedStorage;
+    bool _removeBackingFileBeforeDestruction;
 };
 }
 

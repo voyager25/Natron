@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,13 +47,17 @@ KnobGui::updateCurveEditorKeyframes()
 }
 
 void
-KnobGui::onMultipleKeySet(const std::list<SequenceTime>& keys,int /*dimension*/, int reason)
+KnobGui::onMultipleKeySet(const std::list<double>& keys,int /*dimension*/, int reason)
 {
     
     if ((Natron::ValueChangedReasonEnum)reason != Natron::eValueChangedReasonUserEdited) {
         boost::shared_ptr<KnobI> knob = getKnob();
         if ( !knob->getIsSecret() && knob->isDeclaredByPlugin()) {
-            knob->getHolder()->getApp()->getTimeLine()->addMultipleKeyframeIndicatorsAdded(keys, true);
+            std::list<SequenceTime> intKeys;
+            for (std::list<double>::const_iterator it = keys.begin() ; it != keys.end(); ++it) {
+                intKeys.push_back(*it);
+            }
+            knob->getHolder()->getApp()->addMultipleKeyframeIndicatorsAdded(intKeys, true);
         }
     }
     
@@ -62,7 +66,7 @@ KnobGui::onMultipleKeySet(const std::list<SequenceTime>& keys,int /*dimension*/,
 }
 
 void
-KnobGui::onInternalKeySet(SequenceTime time,
+KnobGui::onInternalKeySet(double time,
                           int /*dimension*/,
                           int reason,
                           bool added )
@@ -71,7 +75,7 @@ KnobGui::onInternalKeySet(SequenceTime time,
         if (added) {
             boost::shared_ptr<KnobI> knob = getKnob();
             if ( !knob->getIsSecret() && knob->isDeclaredByPlugin()) {
-                knob->getHolder()->getApp()->getTimeLine()->addKeyframeIndicator(time);
+                knob->getHolder()->getApp()->addKeyframeIndicator(time);
             }
         }
 
@@ -81,13 +85,13 @@ KnobGui::onInternalKeySet(SequenceTime time,
 }
 
 void
-KnobGui::onInternalKeyRemoved(SequenceTime time,
+KnobGui::onInternalKeyRemoved(double time,
                               int /*dimension*/,
                               int /*reason*/)
 {
     boost::shared_ptr<KnobI> knob = getKnob();
     if ( !knob->getIsSecret() && knob->isDeclaredByPlugin()) {
-        knob->getHolder()->getApp()->getTimeLine()->removeKeyFrameIndicator(time);
+        knob->getHolder()->getApp()->removeKeyFrameIndicator(time);
     }
     Q_EMIT keyFrameRemoved();
 }
@@ -312,9 +316,9 @@ KnobGui::linkTo(int dimension)
                 std::pair<int,boost::shared_ptr<KnobI> > existingLink = thisKnob->getMaster(i);
                 if (existingLink.second) {
                     std::string err( tr("Cannot link ").toStdString() );
-                    err.append( thisKnob->getDescription() );
+                    err.append( thisKnob->getLabel() );
                     err.append( " \n " + tr("because the knob is already linked to ").toStdString() );
-                    err.append( existingLink.second->getDescription() );
+                    err.append( existingLink.second->getLabel() );
                     errorDialog(tr("Param Link").toStdString(), err);
 
                     return;
@@ -554,7 +558,8 @@ KnobGui::removeAllKeyframeMarkersOnTimeline(int dimension)
 {
     boost::shared_ptr<KnobI> knob = getKnob();
     if ( knob->getHolder() && knob->getHolder()->getApp() && !knob->getIsSecret() && knob->isDeclaredByPlugin()) {
-        boost::shared_ptr<TimeLine> timeline = knob->getHolder()->getApp()->getTimeLine();
+        AppInstance* app = knob->getHolder()->getApp();
+        assert(app);
         std::list<SequenceTime> times;
         std::set<SequenceTime> tmpTimes;
         if (dimension == -1) {
@@ -581,7 +586,7 @@ KnobGui::removeAllKeyframeMarkersOnTimeline(int dimension)
             }
         }
         if (!times.empty()) {
-            timeline->removeMultipleKeyframeIndicator(times,true);
+            app->removeMultipleKeyframeIndicator(times,true);
         }
     }
 }
@@ -590,7 +595,8 @@ void
 KnobGui::setAllKeyframeMarkersOnTimeline(int dimension)
 {
     boost::shared_ptr<KnobI> knob = getKnob();
-    boost::shared_ptr<TimeLine> timeline = knob->getHolder()->getApp()->getTimeLine();
+    AppInstance* app = knob->getHolder()->getApp();
+    assert(app);
     std::list<SequenceTime> times;
 
     if (dimension == -1) {
@@ -607,22 +613,22 @@ KnobGui::setAllKeyframeMarkersOnTimeline(int dimension)
             times.push_back( it->getTime() );
         }
     }
-    timeline->addMultipleKeyframeIndicatorsAdded(times,true);
+    app->addMultipleKeyframeIndicatorsAdded(times,true);
 }
 
 void
-KnobGui::setKeyframeMarkerOnTimeline(int time)
+KnobGui::setKeyframeMarkerOnTimeline(double time)
 {
     boost::shared_ptr<KnobI> knob = getKnob();
     if (knob->isDeclaredByPlugin()) {
-        knob->getHolder()->getApp()->getTimeLine()->addKeyframeIndicator(time);
+        knob->getHolder()->getApp()->addKeyframeIndicator(time);
     }
 }
 
 void
 KnobGui::onKeyFrameMoved(int /*dimension*/,
-                         int oldTime,
-                         int newTime)
+                         double oldTime,
+                         double newTime)
 {
     boost::shared_ptr<KnobI> knob = getKnob();
 
@@ -630,9 +636,10 @@ KnobGui::onKeyFrameMoved(int /*dimension*/,
         return;
     }
     if (knob->isDeclaredByPlugin()) {
-        boost::shared_ptr<TimeLine> timeline = knob->getHolder()->getApp()->getTimeLine();
-        timeline->removeKeyFrameIndicator(oldTime);
-        timeline->addKeyframeIndicator(newTime);
+        AppInstance* app = knob->getHolder()->getApp();
+        assert(app);
+        app->removeKeyFrameIndicator(oldTime);
+        app->addKeyframeIndicator(newTime);
     }
 }
 
@@ -653,7 +660,7 @@ void
 KnobGui::onAppendParamEditChanged(int reason,
                                   const Variant & v,
                                   int dim,
-                                  int time,
+                                  double time,
                                   bool createNewCommand,
                                   bool setKeyFrame)
 {
@@ -743,12 +750,6 @@ KnobGui::onHelpChanged()
     updateToolTip();
 }
 
-void
-KnobGui::onKnobDeletion()
-{
-    _imp->container->deleteKnobGui(getKnob());
-}
-
 
 void
 KnobGui::onHasModificationsChanged()
@@ -761,10 +762,19 @@ KnobGui::onHasModificationsChanged()
 }
 
 void
-KnobGui::onDescriptionChanged()
+KnobGui::onLabelChanged()
 {
     if (_imp->descriptionLabel) {
-        _imp->descriptionLabel->setText(getKnob()->getDescription().c_str());
-        onLabelChanged();
+        boost::shared_ptr<KnobI> knob = getKnob();
+        std::string descriptionLabel;
+        KnobString* isStringKnob = dynamic_cast<KnobString*>(knob.get());
+        bool isLabelKnob = isStringKnob && isStringKnob->isLabel();
+        if (isLabelKnob) {
+            descriptionLabel = isStringKnob->getValue();
+        } else {
+            descriptionLabel = knob->getLabel();
+        }
+        _imp->descriptionLabel->setText_overload(QString(QString(descriptionLabel.c_str()) + ":"));
+        onLabelChangedInternal();
     }
 }

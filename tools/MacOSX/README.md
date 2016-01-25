@@ -150,10 +150,21 @@ env MKJOBS=4 ./snapshot.sh
 * To do a single build, modify TAGS in the begining of common.sh and then call the following:
 ```
 cd Natron/tools/MacOSX
-env CONFIG=relwithdebinfo BRANCH=tag  MKJOBS=4 UPLOAD=1 ./build.sh
+env BUILD_CONFIG=STABLE BUILD_NUMBER=1 CONFIG=relwithdebinfo BRANCH=tag  MKJOBS=4 UPLOAD=1 ./build.sh
 ```
 
 The server will now auto build from the workshop branch on changes.
+
+## Google-breakpad
+
+In order to have the automatic crash report system working, the build script will dump symbols from the binaries
+and upload them to the server so that the Socorro server can process them upon receiving a crash.
+The binary to dump symbols is located in Natron/google-breakpad/src/tools/mac/dump_syms and can be built as so:
+
+cd Natron/google-breakpad/src/tools/mac/dump_syms
+xcodebuild GCC_VERSION=com.apple.compilers.llvmgcc42 GCC_TREAT_WARNINGS_AS_ERRORS=NO
+mkdir -p /usr/local/bin
+cp build/Release/dump_syms /usr/local/bin
 
 ## Online repository
 

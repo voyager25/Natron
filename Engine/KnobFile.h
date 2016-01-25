@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,6 +38,7 @@ CLANG_DIAG_ON(deprecated)
 #include "Engine/KnobTypes.h"
 
 #include "Global/Macros.h"
+#include "Engine/EngineFwd.h"
 
 namespace SequenceParsing {
 class SequenceFromFiles;
@@ -109,7 +110,11 @@ Q_SIGNALS:
 
 private:
 
-
+    /**
+     * @brief a KnobFile is never animated but it's value may change, indicate this to the plug-in
+     **/
+    virtual bool evaluateValueChangeOnTimeChange() const OVERRIDE FINAL { return true; }
+    
     virtual bool canAnimate() const OVERRIDE FINAL;
     virtual const std::string & typeName() const OVERRIDE FINAL;
 
@@ -176,6 +181,8 @@ Q_SIGNALS:
     void openFile(bool);
 
 private:
+    
+    virtual bool evaluateValueChangeOnTimeChange() const OVERRIDE FINAL { return false; }
 
     virtual bool canAnimate() const OVERRIDE FINAL;
     virtual const std::string & typeName() const OVERRIDE FINAL;
@@ -193,7 +200,7 @@ private:
 /**
  * @brief A Path knob could also be called Environment_variable_Knob. 
  * The string is encoded the following way:
- * [VariableName1]:[Value1];[VariableName2]:[Value2] etc...
+ * <Name>Lala</Name><Value>MyValue</Value>
  * Split all the ';' characters to get all different variables
  * then for each variable split the ':' to get the name and the value of the variable.
  **/
@@ -217,7 +224,6 @@ public:
               bool declaredByPlugin);
     static const std::string & typeNameStatic();
 
-
     void setMultiPath(bool b);
 
     bool isMultiPath() const;
@@ -227,11 +233,19 @@ public:
     ///Doesn't work if isMultiPath() == false
     void getVariables(std::list<std::pair<std::string,std::string> >* paths) const;
     
+    static std::string encodeToMultiPathFormat(const std::list<std::pair<std::string,std::string> >& paths);
+    
     void setPaths(const std::list<std::pair<std::string,std::string> >& paths);
     
     void prependPath(const std::string& path) ;
     void appendPath(const std::string& path) ;
 
+    /*
+     @brief same as setMultiPath except that there will be only variable names, no values
+     */
+    void setAsStringList(bool b);
+    bool getIsStringList() const;
+    
 private:
     
     static std::string generateUniquePathID(const std::list<std::pair<std::string,std::string> >& paths);
@@ -242,6 +256,7 @@ private:
 private:
     static const std::string _typeNameStr;
     bool _isMultiPath;
+    bool _isStringList;
 };
 
 #endif // NATRON_ENGINE_KNOBFILE_H

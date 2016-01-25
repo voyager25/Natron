@@ -1,9 +1,6 @@
-#ifndef ACTIONSHORTCUTS_H
-#define ACTIONSHORTCUTS_H
-
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +16,9 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
+#ifndef ACTIONSHORTCUTS_H
+#define ACTIONSHORTCUTS_H
+
 /**
  * @brief In this file all Natron's actions that can have their shortcut edited should be listed.
  **/
@@ -29,11 +29,12 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <map>
 #include <list>
 #include <vector>
 
-#include "Global/Macros.h"
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QKeyEvent>
@@ -42,6 +43,8 @@ CLANG_DIAG_OFF(uninitialized)
 #include <QAction>
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
+
+#include "Gui/GuiFwd.h"
 
 #define kShortcutGroupGlobal "Global"
 #define kShortcutGroupNodegraph "NodeGraph"
@@ -64,6 +67,9 @@ CLANG_DIAG_ON(uninitialized)
 #define kShortcutIDActionCloseProject "closeProject"
 #define kShortcutDescActionCloseProject "Close Project"
 
+#define kShortcutIDActionReloadProject "reloadProject"
+#define kShortcutDescActionReloadProject "Reload Project"
+
 #define kShortcutIDActionSaveProject "saveProject"
 #define kShortcutDescActionSaveProject "Save Project"
 
@@ -83,19 +89,22 @@ CLANG_DIAG_ON(uninitialized)
 #define kShortcutDescActionQuit "Quit"
 
 #define kShortcutIDActionProjectSettings "projectSettings"
-#define kShortcutDescActionProjectSettings "Project Settings..."
+#define kShortcutDescActionProjectSettings "Show Project Settings..."
 
 #define kShortcutIDActionShowOFXLog "showOFXLog"
-#define kShortcutDescActionShowOFXLog "Error Log..."
+#define kShortcutDescActionShowOFXLog "Show Project Errors Log..."
 
 #define kShortcutIDActionShowShortcutEditor "showShortcutEditor"
-#define kShortcutDescActionShowShortcutEditor "Shortcuts Editor..."
+#define kShortcutDescActionShowShortcutEditor "Show Shortcuts Editor..."
 
 #define kShortcutIDActionNewViewer "newViewer"
 #define kShortcutDescActionNewViewer "New Viewer"
 
 #define kShortcutIDActionFullscreen "fullScreen"
 #define kShortcutDescActionFullscreen "Enter Full Screen"
+
+#define kShortcutIDActionShowWindowsConsole "showApplicationConsole"
+#define kShortcutDescActionShowWindowsConsole "Show/Hide Application Console"
 
 #define kShortcutIDActionClearDiskCache "clearDiskCache"
 #define kShortcutDescActionClearDiskCache "Clear Disk Cache"
@@ -113,7 +122,7 @@ CLANG_DIAG_ON(uninitialized)
 #define kShortcutDescActionClearAllCaches "Clear All Caches"
 
 #define kShortcutIDActionShowAbout "showAbout"
-#define kShortcutDescActionShowAbout "About..."
+#define kShortcutDescActionShowAbout "About Natron"
 
 #define kShortcutIDActionRenderSelected "renderSelect"
 #define kShortcutDescActionRenderSelected "Render Selected Writers"
@@ -194,6 +203,9 @@ CLANG_DIAG_ON(uninitialized)
 
 #define kShortcutIDActionLuminanceA "luminanceA"
 #define kShortcutDescActionLuminanceA "Display Luminance on input A only"
+
+#define kShortcutIDActionMatteOverlay "matteOverlay"
+#define kShortcutDescActionMatteOverlay "Overlay the channel alpha channel"
 
 #define kShortcutIDActionRedA "channelRA"
 #define kShortcutDescActionRedA "Display Red Channel on input A only"
@@ -464,7 +476,10 @@ CLANG_DIAG_ON(uninitialized)
 #define kShortcutDescActionGraphEnableHints "Enable Connection Hints"
 
 #define kShortcutIDActionGraphAutoHideInputs "autoHideInputs"
-#define kShortcutDescActionGraphAutoHideInputs "Auto-Hide Masks Inputs"
+#define kShortcutDescActionGraphAutoHideInputs "Auto-Hide Optional Inputs"
+
+#define kShortcutIDActionGraphHideInputs "hideInputs"
+#define kShortcutDescActionGraphHideInputs "Hide inputs"
 
 #define kShortcutIDActionGraphSwitchInputs "switchInputs"
 #define kShortcutDescActionGraphSwitchInputs "Switch Inputs 1 and 2"
@@ -547,7 +562,7 @@ CLANG_DIAG_ON(uninitialized)
 #define kShortcutDescActionCurveEditorHorizontal "Horizontal Interpolation"
 
 #define kShortcutIDActionCurveEditorBreak "break"
-#define kShortcutDescActionCurveEditorBreak "Break Curvature"
+#define kShortcutDescActionCurveEditorBreak "Break"
 
 #define kShortcutIDActionCurveEditorSelectAll "selectAll"
 #define kShortcutDescActionCurveEditorSelectAll "Select All Keyframes"
@@ -599,7 +614,6 @@ CLANG_DIAG_ON(uninitialized)
 #define kShortcutIDActionScriptShowOutput "showHideOutput"
 #define kShortcutDescActionScriptShowOutput "Show/Hide Output Window"
 
-class QWidget;
 
 inline
 QKeySequence

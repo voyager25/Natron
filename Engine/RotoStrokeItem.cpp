@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -186,10 +186,11 @@ evaluateStrokeInternal(const KeyFrameSet& xCurve,
             bbox->y1 = p.y;
             bbox->y2 = p.y;
             double pressure = pressureAffectsSize ? pIt->getValue() : 1.;
-            bbox->x1 -= halfBrushSize * pressure;
-            bbox->x2 += halfBrushSize * pressure;
-            bbox->y1 -= halfBrushSize * pressure;
-            bbox->y2 += halfBrushSize * pressure;
+            double padding = std::max(0.5,halfBrushSize) * pressure;
+            bbox->x1 -= padding;
+            bbox->x2 += padding;
+            bbox->y1 -= padding;
+            bbox->y2 += padding;
         }
         return;
     }
@@ -284,10 +285,6 @@ RotoStrokeItem::isEmpty() const
 void
 RotoStrokeItem::setStrokeFinished()
 {
-    double time = getContext()->getTimelineCurrentTime();
-    bool autoKeying = getContext()->isAutoKeyingEnabled();
-    Point center;
-    bool centerSet = false;
     {
         QMutexLocker k(&itemMutex);
         _imp->finished = true;
@@ -299,46 +296,9 @@ RotoStrokeItem::setStrokeFinished()
             }
         }
         _imp->strokeDotPatterns.clear();
-        
-        ///Compute the value of the center knob
-        center.x = center.y = 0;
-        
-        int nbPoints = 0;
-        for (std::list<RotoStrokeItemPrivate::StrokeCurves>::const_iterator it = _imp->strokes.begin();
-             it!=_imp->strokes.end(); ++it) {
-            KeyFrameSet xCurve = it->xCurve->getKeyFrames_mt_safe();
-            KeyFrameSet yCurve = it->yCurve->getKeyFrames_mt_safe();
-            assert(xCurve.size() == yCurve.size());
-            
-            KeyFrameSet::iterator xIt = xCurve.begin();
-            KeyFrameSet::iterator yIt = yCurve.begin();
-            for (; xIt != xCurve.end(); ++xIt, ++yIt) {
-                center.x += xIt->getValue();
-                center.y += yIt->getValue();
-            }
-            nbPoints += xCurve.size();
-        }
-        
-        centerSet = nbPoints > 0;
-        if (centerSet) {
-            center.x /= (double)nbPoints;
-            center.y /= (double)nbPoints;
-        }
     }
-    if (centerSet) {
-        
-
-        boost::shared_ptr<KnobDouble> centerKnob = getCenterKnob();
-        if (autoKeying) {
-            centerKnob->setValueAtTime(time, center.x, 0);
-            centerKnob->setValueAtTime(time, center.y, 1);
-            setKeyframeOnAllTransformParameters(time);
-        } else  {
-            centerKnob->setValue(center.x, 0);
-            centerKnob->setValue(center.y, 1);
-        }
-        
-    }
+    
+    getContext()->resetTransformCenter();
     
     boost::shared_ptr<Node> effectNode = getEffectNode();
     boost::shared_ptr<Node> mergeNode = getMergeNode();
@@ -360,8 +320,7 @@ RotoStrokeItem::setStrokeFinished()
         frameHoldNode->incrementKnobsAge();
     }
     
-    getContext()->setStrokeBeingPainted(boost::shared_ptr<RotoStrokeItem>());
-    getContext()->getNode()->setWhileCreatingPaintStroke(false);
+    getContext()->setWhileCreatingPaintStrokeOnMergeNodes(false);
     getContext()->clearViewersLastRenderedStrokes();
     //Might have to do this somewhere else if several viewers are active on the rotopaint node
     resetNodesThreadSafety();
@@ -408,7 +367,10 @@ RotoStrokeItem::appendPoint(bool newStroke, const RotoPoint& p)
         }
         stroke = &_imp->strokes.back();
         assert(stroke);
-        
+        if (!stroke) {
+            throw std::logic_error("");
+        }
+
         assert(stroke->xCurve->getKeyFramesCount() == stroke->yCurve->getKeyFramesCount() &&
                stroke->xCurve->getKeyFramesCount() == stroke->pressureCurve->getKeyFramesCount());
         int nk = stroke->xCurve->getKeyFramesCount();
@@ -418,11 +380,11 @@ RotoStrokeItem::appendPoint(bool newStroke, const RotoPoint& p)
             qDebug() << "start stroke!";
             t = 0.;
             // set time origin for this curve
-            _imp->curveT0 = p.timestamp;
-        } else if (p.timestamp == 0.) {
+            _imp->curveT0 = p.timestamp();
+        } else if (p.timestamp() == 0.) {
             t = nk; // some systems may not have a proper timestamp use a dummy one
         } else {
-            t = p.timestamp - _imp->curveT0;
+            t = p.timestamp() - _imp->curveT0;
         }
         if (nk > 0) {
             //Clamp timestamps difference to 1e-3 in case Qt delivers its events all at once
@@ -489,14 +451,14 @@ RotoStrokeItem::appendPoint(bool newStroke, const RotoPoint& p)
         {
             KeyFrame k;
             k.setTime(t);
-            k.setValue(p.pos.x);
+            k.setValue(p.pos().x);
             addKeyFrameOk = stroke->xCurve->addKeyFrame(k);
             ki = (addKeyFrameOk ? nk : (nk - 1));
         }
         {
             KeyFrame k;
             k.setTime(t);
-            k.setValue(p.pos.y);
+            k.setValue(p.pos().y);
             bool aok = stroke->yCurve->addKeyFrame(k);
             assert(aok == addKeyFrameOk);
             if (aok != addKeyFrameOk) {
@@ -507,7 +469,7 @@ RotoStrokeItem::appendPoint(bool newStroke, const RotoPoint& p)
         {
             KeyFrame k;
             k.setTime(t);
-            k.setValue(p.pressure);
+            k.setValue(p.pressure());
             bool aok = stroke->pressureCurve->addKeyFrame(k);
             assert(aok == addKeyFrameOk);
             if (aok != addKeyFrameOk) {
@@ -605,7 +567,7 @@ RotoStrokeItem::getWholeStrokeRoDWhilePainting() const
 }
 
 bool
-RotoStrokeItem::getMostRecentStrokeChangesSinceAge(int time,int lastAge,
+RotoStrokeItem::getMostRecentStrokeChangesSinceAge(double time,int lastAge,
                                                    std::list<std::pair<Natron::Point,double> >* points,
                                                    RectD* pointsBbox,
                                                    RectD* wholeStrokeBbox,

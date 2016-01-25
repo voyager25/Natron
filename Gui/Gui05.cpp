@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,6 +52,7 @@
 #include "Gui/NodeGraph.h"
 #include "Gui/ProjectGui.h"
 #include "Gui/ShortCutEditor.h"
+#include "Gui/GuiApplicationManager.h"
 #include "Gui/Splitter.h"
 #include "Gui/TabWidget.h"
 #include "Gui/ViewerTab.h"
@@ -63,7 +64,8 @@ using namespace Natron;
 void
 Gui::setupUi()
 {
-    setWindowTitle( QCoreApplication::applicationName() );
+    onProjectNameChanged(QString(), false);
+
     setMouseTracking(true);
     installEventFilter(this);
     assert( !isFullScreen() );
@@ -98,7 +100,7 @@ Gui::setupUi()
     _imp->_toolBox = new AutoHideToolBar(this, _imp->_leftRightSplitter);
     _imp->_toolBox->setToolButtonStyle(Qt::ToolButtonIconOnly);
     _imp->_toolBox->setOrientation(Qt::Vertical);
-    _imp->_toolBox->setMaximumWidth(NATRON_TOOL_BUTTON_SIZE);
+    _imp->_toolBox->setMaximumWidth(TO_DPIX(NATRON_TOOL_BUTTON_SIZE));
 
     if (_imp->leftToolBarDisplayedOnHoverOnly) {
         _imp->refreshLeftToolBarVisibility( mapFromGlobal( QCursor::pos() ) );
@@ -137,7 +139,7 @@ Gui::setupUi()
     //the same action also clears the ofx plugins caches, they are not the same cache but are used to the same end
     
     boost::shared_ptr<Project> project = _imp->_appInstance->getProject();
-    QObject::connect( project.get(), SIGNAL( projectNameChanged(QString) ), this, SLOT( onProjectNameChanged(QString) ) );
+    QObject::connect( project.get(), SIGNAL( projectNameChanged(QString, bool) ), this, SLOT( onProjectNameChanged(QString, bool) ) );
     
     boost::shared_ptr<TimeLine> timeline = project->getTimeLine();
     QObject::connect( timeline.get(),SIGNAL( frameChanged(SequenceTime,int) ), this,SLOT( onTimeChanged(SequenceTime,int) ) );
@@ -156,6 +158,9 @@ Gui::setupUi()
        If object itself has a properly set object name, its own signals are also connected to its respective slots.
      */
     QMetaObject::connectSlotsByName(this);
+    
+    appPTR->setOFXHostHandle(_imp->_appInstance->getOfxHostOSHandle());
+    
 } // setupUi
 
 

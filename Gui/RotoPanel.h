@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef ROTOPANEL_H
 #define ROTOPANEL_H
 
@@ -26,12 +25,14 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 #endif
-#include "Global/Macros.h"
+
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
 #include <QWidget>
@@ -40,15 +41,11 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Global/GlobalDefines.h"
 
-class QTreeWidgetItem;
-class QWidget;
-class NodeGui;
-class QUndoCommand;
-class RotoItem;
-class RotoContext;
-class RotoLayer;
-class RotoDrawableItem;
+#include "Gui/GuiFwd.h"
+
+
 struct RotoPanelPrivate;
+
 class RotoPanel
     : public QWidget
 {
@@ -116,7 +113,7 @@ public Q_SLOTS:
     void onTimeChanged(SequenceTime time,int reason);
 
     ///A new item has been created internally
-    void onItemInserted(int reason);
+    void onItemInserted(int index,int reason);
 
     ///An item was removed by the user
     void onItemRemoved(const boost::shared_ptr<RotoItem>& item,int reason);
@@ -188,8 +185,9 @@ private:
 };
 
 
-struct DroppedTreeItem
+class DroppedTreeItem
 {
+public:
     boost::shared_ptr<RotoLayer> newParentLayer;
     int insertIndex;
     QTreeWidgetItem* newParentItem;

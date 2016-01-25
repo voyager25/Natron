@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +25,20 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
+GCC_DIAG_OFF(unused-parameter)
+#include <boost/serialization/version.hpp>
+GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
+GCC_DIAG_ON(unused-parameter)
+#endif
+
 #include "Engine/FrameEntry.h"
 #include "Engine/ImageParamsSerialization.h"
 #include "Engine/TextureRectSerialization.h"
-#if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
-#include <boost/serialization/version.hpp>
-#endif
+#include "Engine/EngineFwd.h"
+
+
 #define FRAME_KEY_INTRODUCES_INPUT_NAME 2
 #define FRAME_KEY_INTRODUCES_LAYERS 3
 #define FRAME_KEY_INTRODUCES_GAMMA 4

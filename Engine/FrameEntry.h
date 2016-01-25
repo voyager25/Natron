@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,15 +38,11 @@
 #include "Engine/FrameKey.h"
 #include "Engine/FrameParams.h"
 #include "Engine/CacheEntry.h"
+#include "Engine/EngineFwd.h"
 
-
-class Hash64;
 
 namespace Natron {
 
-
-
-class Image;
 class FrameEntry
     : public CacheEntryHelper<U8,Natron::FrameKey,Natron::FrameParams>
 {
@@ -57,8 +53,8 @@ public:
                Natron::StorageModeEnum storage,
                const std::string & path)
         : CacheEntryHelper<U8,FrameKey,FrameParams>(key,params,cache,storage,path)
-        , _aborted(false)
         , _abortedMutex()
+        , _aborted(false)
     {
     }
 
@@ -113,8 +109,8 @@ private:
     ///The thread rendering the frame entry might have been aborted and the entry removed from the cache
     ///but another thread might successfully have found it in the cache. This flag is to notify it the frame
     ///is invalid.
-    bool _aborted;
     mutable QMutex _abortedMutex;
+    bool _aborted;
 };
 }
 

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,8 +37,11 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/KnobTypes.h"
 #include "Engine/Node.h"
 #include "Engine/BackDrop.h"
+#include "Engine/Settings.h"
 
+#include "Gui/GuiApplicationManager.h"
 #include "Gui/KnobGuiString.h"
+#include "Gui/NodeGraphTextItem.h"
 
 #define RESIZE_HANDLE_SIZE 20
 
@@ -49,7 +52,7 @@ struct BackDropGuiPrivate
 {
     BackDropGui* _publicInterface;
     
-    QGraphicsTextItem* label;
+    NodeGraphTextItem* label;
 
     BackDropGuiPrivate(BackDropGui* publicInterface)
     : _publicInterface(publicInterface)
@@ -99,7 +102,7 @@ BackDropGui::createGui()
 {
     NodeGui::createGui();
     
-    _imp->label = new QGraphicsTextItem("",this);
+    _imp->label = new NodeGraphTextItem(getDagGui(), this, false);
     _imp->label->setDefaultTextColor( QColor(0,0,0,255) );
     _imp->label->setZValue(getBaseDepth() + 1);
     
@@ -165,6 +168,11 @@ BackDropGuiPrivate::refreshLabelText(int nameHeight,const QString &text)
     QColor color;
     if (!text.isEmpty()) {
         KnobGuiString::parseFont(textLabel, &f, &color);
+        
+        bool antialias = appPTR->getCurrentSettings()->isNodeGraphAntiAliasingEnabled();
+        if (!antialias) {
+            f.setStyleStrategy(QFont::NoAntialias);
+        }
         label->setFont(f);
     }
     

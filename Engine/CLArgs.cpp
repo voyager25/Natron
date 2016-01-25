@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
 #include <QFile>
 
 #include "Global/GitVersion.h"
-
+#include "Global/QtCompat.h"
 #include "Engine/AppManager.h"
 
 
@@ -56,12 +56,23 @@ struct CLArgsPrivate
     
     bool isInterpreterMode;
     
-    std::pair<int,int> range;
+    std::list<std::pair<int, std::pair<int,int> > > frameRanges;
     bool rangeSet;
     
     bool enableRenderStats;
     
     bool isEmpty;
+    
+    mutable QString imageFilename;
+    
+    QString breakpadPipeFilePath;
+    QString breakpadComPipeFilePath;
+    
+    int breakpadPipeClientID;
+    
+    QString breakpadProcessFilePath;
+    
+    qint64 breakpadProcessPID;
     
     CLArgsPrivate()
     : args()
@@ -73,10 +84,16 @@ struct CLArgsPrivate
     , ipcPipe()
     , error(0)
     , isInterpreterMode(false)
-    , range()
+    , frameRanges()
     , rangeSet(false)
     , enableRenderStats(false)
     , isEmpty(true)
+    , imageFilename()
+    , breakpadPipeFilePath()
+    , breakpadComPipeFilePath()
+    , breakpadPipeClientID(-1)
+    , breakpadProcessFilePath()
+    , breakpadProcessPID(-1)
     {
         
     }
@@ -162,10 +179,11 @@ CLArgs::operator=(const CLArgs& other)
     _imp->ipcPipe = other._imp->ipcPipe;
     _imp->error = other._imp->error;
     _imp->isInterpreterMode = other._imp->isInterpreterMode;
-    _imp->range = other._imp->range;
+    _imp->frameRanges = other._imp->frameRanges;
     _imp->rangeSet = other._imp->rangeSet;
     _imp->enableRenderStats = other._imp->enableRenderStats;
     _imp->isEmpty = other._imp->isEmpty;
+    _imp->imageFilename = other._imp->imageFilename;
 }
 
 bool
@@ -178,7 +196,7 @@ void
 CLArgs::printBackGroundWelcomeMessage()
 {
     QString msg = QObject::tr("%1 Version %2\n"
-                             "Copyright (C) 2015 the %1 developers\n"
+                             "Copyright (C) 2016 the %1 developers\n"
                               ">>>Use the --help or -h option to print usage.<<<").arg(NATRON_APPLICATION_NAME).arg(NATRON_VERSION_STRING);
     std::cout << msg.toStdString() << std::endl;
 }
@@ -228,6 +246,13 @@ CLArgs::printUsage(const std::string& programName)
                               "    After the writer node script name you can pass an optional output\n"
                               "    filename and pass an optional frame range in the format:\n"
                               "      <firstFrame>-<lastFrame> (e.g: 10-40).\n"
+                              "      The frame-range can also contain a frame-step indicating how many steps\n"
+                              "      the timeline should do before rendering a frame:\n"
+                              "       <firstFrame>-<lastFrame>:<frameStep> (e.g:1-10:2 Would render 1,3,5,7,9)\n"
+                              "      You can also specify multiple frame-ranges to render by separating them with commas:\n"
+                              "      1-10:1,20-30:2,40-50\n"
+                              "      Individual frames can also be specified:\n"
+                              "      1329,2450,123,1-10:2\n"
                               "    Note that several -w options can be set to specify multiple Write nodes\n"
                               "    to render.\n"
                               "    Note that if specified, the frame range is the same for all Write nodes\n"
@@ -325,10 +350,10 @@ CLArgs::hasFrameRange() const
     return _imp->rangeSet;
 }
 
-const std::pair<int,int>&
-CLArgs::getFrameRange() const
+const std::list<std::pair<int,std::pair<int,int> > >&
+CLArgs::getFrameRanges() const
 {
-    return _imp->range;
+    return _imp->frameRanges;
 }
 
 bool
@@ -344,9 +369,35 @@ CLArgs::isInterpreterMode() const
 }
 
 const QString&
-CLArgs::getFilename() const
+CLArgs::getScriptFilename() const
 {
     return _imp->filename;
+}
+
+const QString&
+CLArgs::getImageFilename() const
+{
+    if (_imp->imageFilename.isEmpty() && !_imp->args.empty()) {
+        ///Check for image file passed to command line
+        QStringList::iterator it = _imp->args.begin();
+        // first argument is the program name, skip it
+        ++it;
+        for (; it!=_imp->args.end(); ++it) {
+            if (!it->startsWith("-")) {
+                QString fileCopy = *it;
+                QString ext = Natron::removeFileExtension(fileCopy);
+                if (!ext.isEmpty()) {
+                    std::string readerId = appPTR->isImageFileSupportedByNatron(ext.toStdString());
+                    if (!readerId.empty()) {
+                        _imp->imageFilename = *it;
+                        _imp->args.erase(it);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return _imp->imageFilename;
 }
 
 const QString&
@@ -371,6 +422,36 @@ bool
 CLArgs::isPythonScript() const
 {
     return _imp->isPythonScript;
+}
+
+const QString&
+CLArgs::getBreakpadProcessExecutableFilePath() const
+{
+    return _imp->breakpadProcessFilePath;
+}
+
+qint64
+CLArgs::getBreakpadProcessPID() const
+{
+    return _imp->breakpadProcessPID;
+}
+
+int
+CLArgs::getBreakpadClientFD() const
+{
+    return _imp->breakpadPipeClientID;
+}
+
+const QString&
+CLArgs::getBreakpadPipeFilePath() const
+{
+    return _imp->breakpadPipeFilePath;
+}
+
+const QString&
+CLArgs::getBreakpadComPipeFilePath() const
+{
+    return _imp->breakpadComPipeFilePath;
 }
 
 QStringList::iterator
@@ -460,33 +541,68 @@ CLArgsPrivate::hasOutputToken(QString& indexStr)
     return args.end();
 }
 
-static bool tryParseFrameRange(const QString& arg,std::pair<int,int>& range)
+static bool tryParseFrameRange(const QString& arg,std::pair<int,int>& range, int& frameStep)
 {
-    bool frameRangeFound = true;
-
+    bool ok;
+    int singleNumber = arg.toInt(&ok);
+    if (ok) {
+        //this is a single frame
+        range.first = range.second = singleNumber;
+        frameStep = INT_MIN;
+        return true;
+    }
     QStringList strRange = arg.split('-');
     if (strRange.size() != 2) {
-        frameRangeFound = false;
+        return false;
     }
     for (int i = 0; i < strRange.size(); ++i) {
+        //whitespace removed from the start and the end.
         strRange[i] = strRange[i].trimmed();
     }
-    if (frameRangeFound) {
-        bool ok;
-        range.first = strRange[0].toInt(&ok);
+    range.first = strRange[0].toInt(&ok);
+    if (!ok) {
+        return false;
+    }
+    
+    int foundColon = strRange[1].indexOf(':');
+    if (foundColon != -1) {
+        ///A frame-step has been specified
+        QString lastFrameStr = strRange[1].mid(0,foundColon);
+        QString frameStepStr = strRange[1].mid(foundColon + 1);
+        range.second = lastFrameStr.toInt(&ok);
         if (!ok) {
-            frameRangeFound = false;
+            return false;
         }
-
-        if (frameRangeFound) {
-            range.second = strRange[1].toInt(&ok);
-            if (!ok) {
-                frameRangeFound = false;
-            }
+        frameStep = frameStepStr.toInt(&ok);
+        if (!ok) {
+            return false;
+        }
+    } else {
+        frameStep = INT_MIN;
+        ///Frame range without frame-step specified
+        range.second = strRange[1].toInt(&ok);
+        if (!ok) {
+            return false;
         }
     }
+  
+    return true;
+    
+}
 
-    return frameRangeFound;
+static bool tryParseMultipleFrameRanges(const QString& args,std::list<std::pair<int,std::pair<int,int> > >& frameRanges)
+{
+    QStringList splits = args.split(',');
+    bool added = false;
+    for (int i = 0; i < splits.size(); ++i) {
+        std::pair<int,int> frameRange;
+        int frameStep;
+        if (tryParseFrameRange(splits[i], frameRange, frameStep)) {
+            added = true;
+            frameRanges.push_back(std::make_pair(frameStep, frameRange));
+        }
+    }
+    return added;
 }
 
 void
@@ -537,6 +653,82 @@ CLArgsPrivate::parse()
             args.erase(it);
         }
     }
+    
+    {
+        QStringList::iterator it = hasToken(NATRON_BREAKPAD_PROCESS_PID, "");
+        if (it != args.end()) {
+            ++it;
+            if (it != args.end()) {
+                breakpadProcessPID = it->toLongLong();
+                args.erase(it);
+            } else {
+                std::cout << QObject::tr("You must specify the breakpad process executable file path").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
+        }
+    }
+    
+    {
+        QStringList::iterator it = hasToken(NATRON_BREAKPAD_PROCESS_EXEC, "");
+        if (it != args.end()) {
+            ++it;
+            if (it != args.end()) {
+                breakpadProcessFilePath = *it;
+                args.erase(it);
+            } else {
+                std::cout << QObject::tr("You must specify the breakpad process executable file path").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
+        }
+    }
+    
+    {
+        QStringList::iterator it = hasToken(NATRON_BREAKPAD_CLIENT_FD_ARG, "");
+        if (it != args.end()) {
+            ++it;
+            if (it != args.end()) {
+                breakpadPipeClientID = it->toInt();
+                args.erase(it);
+            } else {
+                std::cout << QObject::tr("You must specify the breakpad pipe client FD").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
+        }
+    }
+    
+    {
+        QStringList::iterator it = hasToken(NATRON_BREAKPAD_PIPE_ARG, "");
+        if (it != args.end()) {
+            ++it;
+            if (it != args.end()) {
+                breakpadPipeFilePath = *it;
+                args.erase(it);
+            } else {
+                std::cout << QObject::tr("You must specify the breakpad pipe path").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
+        }
+    }
+    
+    {
+        QStringList::iterator it = hasToken(NATRON_BREAKPAD_COM_PIPE_ARG, "");
+        if (it != args.end()) {
+            ++it;
+            if (it != args.end()) {
+                breakpadComPipeFilePath = *it;
+                args.erase(it);
+            } else {
+                std::cout << QObject::tr("You must specify the breakpad communication pipe path").toStdString() << std::endl;
+                error = 1;
+                return;
+            }
+        }
+    }
+
     
     {
         QStringList::iterator it = hasToken("IPCpipe", "");
@@ -602,9 +794,9 @@ CLArgsPrivate::parse()
     
     //Parse frame range
     for (int i = 0; i < args.size(); ++i) {
-        if (tryParseFrameRange(args[i], range)) {
+        if (tryParseMultipleFrameRanges(args[i], frameRanges)) {
             if (rangeSet) {
-                std::cout << QObject::tr("Only a single frame range can be specified").toStdString() << std::endl;
+                std::cout << QObject::tr("Only a single frame range can be specified from the command-line for all Write nodes").toStdString() << std::endl;
                 error = 1;
                 return;
             }
@@ -721,4 +913,5 @@ CLArgsPrivate::parse()
         error = 1;
         return;
     }
+  
 }

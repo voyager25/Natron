@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_ON(deprecated)
 #include <QtCore/QStringList>
 #include <QtCore/QString>
+#include <QtCore/QProcess>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
@@ -43,36 +44,11 @@ CLANG_DIAG_ON(deprecated)
 
 #include "Engine/Plugin.h"
 #include "Engine/KnobFactory.h"
+#include "Engine/EngineFwd.h"
 
 /*macro to get the unique pointer to the controler*/
 #define appPTR AppManager::instance()
 
-class QMutex;
-class QChar;
-
-class CacheEntryHolder;
-class AppInstance;
-class Format;
-class Settings;
-class KnobHolder;
-class NodeSerialization;
-class KnobSerialization;
-class RectI;
-class CLArgs;
-namespace Natron {
-class OfxImageEffectInstance;
-class Node;
-class EffectInstance;
-class LibraryBinary;
-class ImageKey;
-class FrameKey;
-class Image;
-class ImageParams;
-class FrameParams;
-class FrameEntry;
-class Plugin;
-class CacheSignalEmitter;
-}
 
 namespace Natron {
 enum AppInstanceStatusEnum
@@ -81,6 +57,7 @@ enum AppInstanceStatusEnum
     eAppInstanceStatusActive     //< the app is active and can be used
 };
 }
+
 
 struct AppInstanceRef
 {
@@ -157,7 +134,16 @@ public:
 
     bool isLoaded() const;
 
-    AppInstance* newAppInstance(const CLArgs& cl);
+    AppInstance* newAppInstance(const CLArgs& cl, bool makeEmptyInstance);
+    AppInstance* newBackgroundInstance(const CLArgs& cl, bool makeEmptyInstance);
+    
+private:
+    
+    AppInstance* newAppInstanceInternal(const CLArgs& cl, bool alwaysBackground, bool makeEmptyInstance);
+    
+public:
+    
+    
     virtual void hideSplashScreen()
     {
     }
@@ -241,7 +227,7 @@ public:
     void  removeAllImagesFromDiskCacheWithMatchingIDAndDifferentKey(const CacheEntryHolder* holder, U64 treeVersion);
     void  removeAllTexturesFromCacheWithMatchingIDAndDifferentKey(const CacheEntryHolder* holder, U64 treeVersion);
     
-    void removeAllCacheEntriesForHolder(const CacheEntryHolder* holder);
+    void removeAllCacheEntriesForHolder(const CacheEntryHolder* holder, bool blocking);
 
     boost::shared_ptr<Settings> getCurrentSettings() const WARN_UNUSED_RETURN;
     const KnobFactory & getKnobFactory() const WARN_UNUSED_RETURN;
@@ -252,6 +238,11 @@ public:
      **/
     bool writeToOutputPipe(const QString & longMessage,const QString & shortMessage);
 
+    /**
+     * @brief Abort any processing on all AppInstance. It is called in some very rare cases
+     * such as when changing the number of threads used by the application or when a background render
+     * receives a message from the GUI application.
+     **/
     void abortAnyProcessing();
 
     virtual void setLoadingStatus(const QString & str);
@@ -270,6 +261,11 @@ public:
      * @brief Called when the instance is exited
      **/
     void quit(AppInstance* instance);
+    
+    /*
+     @brief Calls quit() on all AppInstance's
+     */
+    void quitApplication();
 
     /**
      * @brief Starts the event loop and doesn't return until
@@ -299,7 +295,7 @@ public:
                                    const QString & pluginID,
                                    const QString & pluginLabel,
                                    const QString & pluginIconPath,
-                                   const QString & groupIconPath,
+                                   const QStringList & groupIconPath,
                                    bool isReader,
                                    bool isWriter,
                                    Natron::LibraryBinary* binary,
@@ -394,9 +390,7 @@ public:
     void saveCaches() const;
 
     PyObject* getMainModule();
-    
-    QString getSystemNonOFXPluginsPath() const;
-    
+        
     QStringList getAllNonOFXPluginsPaths() const;
     
     void launchPythonInterpreter();
@@ -422,16 +416,54 @@ public:
                                            std::size_t* ramOccupied,
                                            std::size_t* diskOccupied) const;
     
+    static std::string isImageFileSupportedByNatron(const std::string& ext);
+    
+    void setOFXHostHandle(void* handle);
+    
+    OFX::Host::ImageEffect::Descriptor* getPluginContextAndDescribe(OFX::Host::ImageEffect::ImageEffectPlugin* plugin,
+                                                                    Natron::ContextEnum* ctx);
+    
+    AppTLS* getAppTLS() const;
+    
+    const Natron::OfxHost* getOFXHost() const;
+    
+    bool hasThreadsRendering() const;
+    
+    /**
+     * @brief Return the concatenation of all search paths of Natron, i.e:
+     - The bundled plug-ins path: ../Plugin relative to the binary
+     - The system wide data for Natron (architecture dependent), this is the same location as autosaves
+     - The content of the NATRON_PLUGIN_PATH environment variable
+     - The content of the search paths defined in the Preferences-->Plugins--> Group plugins search path
+     *
+     * This does not apply for OpenFX plug-ins which have their own search path.
+     **/
+    std::list<std::string> getNatronPath();
+    
+    /**
+     * @brief Add a new path to the Natron search path
+     **/
+    void appendToNatronPath(const std::string& path);
+    
+    virtual void addCommand(const QString& /*grouping*/,const std::string& /*pythonFunction*/, Qt::Key /*key*/,const Qt::KeyboardModifiers& /*modifiers*/) {}
+    
+    void setOnProjectLoadedCallback(const std::string& pythonFunc);
+    void setOnProjectCreatedCallback(const std::string& pythonFunc);
+    
+    void requestOFXDIalogOnMainThread(Natron::OfxImageEffectInstance* instance, void* instanceData);
+    
+    
+    ///Closes the application not saving any projects.
+    virtual void exitApp(bool warnUserForSave);
+    
 public Q_SLOTS:
     
-    void onNewCrashReporterConnectionPending();
+    void exitAppWithSaveWarning()
+    {
+        exitApp(true);
+    }
     
-    void onCrashReporterOutputWritten();
-
     void toggleAutoHideGraphInputs();
-
-    ///Closes the application not saving any projects.
-    virtual void exitApp();
 
     void clearPlaybackCache();
 
@@ -453,35 +485,14 @@ public Q_SLOTS:
 
     void onMaxPanelsOpenedChanged(int maxPanels);
 
+    void onBreakpadPipeConnectionMade();
     
-    /**
-     * @brief Return the concatenation of all search paths of Natron, i.e:
-     - The bundled plug-ins path: ../Plugin relative to the binary
-     - The system wide data for Natron (architecture dependent), this is the same location as autosaves
-     - The content of the NATRON_PLUGIN_PATH environment variable
-     - The content of the search paths defined in the Preferences-->Plugins--> Group plugins search path
-     *
-     * This does not apply for OpenFX plug-ins which have their own search path.
-     **/
-    std::list<std::string> getNatronPath();
-    
-    /**
-     * @brief Add a new path to the Natron search path
-     **/
-    void appendToNatronPath(const std::string& path);
+    void onBreakpadComPipeConnectionMade();
 
-    virtual void addCommand(const QString& /*grouping*/,const std::string& /*pythonFunction*/, Qt::Key /*key*/,const Qt::KeyboardModifiers& /*modifiers*/) {}
-    
-    void setOnProjectLoadedCallback(const std::string& pythonFunc);
-    void setOnProjectCreatedCallback(const std::string& pythonFunc);
-    
-    GlobalOFXTLS& getCurrentThreadTLS();
-    
-    void requestOFXDIalogOnMainThread(Natron::OfxImageEffectInstance* instance, void* instanceData);
-    
-public Q_SLOTS:
+    void onCrashReporterNoLongerResponding();
     
     void onOFXDialogOnMainThreadReceived(Natron::OfxImageEffectInstance* instance, void* instanceData);
+
     
 Q_SIGNALS:
 
@@ -496,6 +507,10 @@ protected:
 
     virtual void loadBuiltinNodePlugins(std::map<std::string,std::vector< std::pair<std::string,double> > >* readersMap,
                                         std::map<std::string,std::vector< std::pair<std::string,double> > >* writersMap);
+    
+    template <typename PLUGIN>
+    void registerBuiltInPlugin(const QString& iconPath, bool isDeprecated, bool internalUseOnly);
+    
     virtual AppInstance* makeNewInstance(int appID) const;
     virtual void registerGuiMetaTypes() const
     {
@@ -538,7 +553,8 @@ private:
 
     static AppManager *_instance;
     boost::scoped_ptr<AppManagerPrivate> _imp;
-};
+}; // AppManager
+
 
 namespace Natron {
     
@@ -573,11 +589,11 @@ Natron::StandardButtonEnum questionDialog(const std::string & title,const std::s
 
 template <class K>
 boost::shared_ptr<K> createKnob(KnobHolder*  holder,
-                                const std::string &description,
+                                const std::string &label,
                                 int dimension = 1,
                                 bool declaredByPlugin = true)
 {
-    return appPTR->getKnobFactory().createKnob<K>(holder,description,dimension,declaredByPlugin);
+    return appPTR->getKnobFactory().createKnob<K>(holder, label, dimension, declaredByPlugin);
 }
 
 inline bool
@@ -671,9 +687,25 @@ bool getGroupInfos(const std::string& modulePath,
                    std::string* grouping,
                    std::string* description,
                    unsigned int* version);
-
+bool getGroupInfosFromQtResourceFile(const std::string& resourceFileName,
+                                     const std::string& modulePath,
+                                     const std::string& pythonModule,
+                                     std::string* pluginID,
+                                     std::string* pluginLabel,
+                                     std::string* iconFilePath,
+                                     std::string* grouping,
+                                     std::string* description,
+                                     unsigned int* version);
+    
 // Does not work for functions with var args
 void getFunctionArguments(const std::string& pyFunc,std::string* error,std::vector<std::string>* args);
+    
+/**
+* @brief Given a fullyQualifiedName, e.g: app1.Group1.Blur1
+* this function returns the PyObject attribute of Blur1 if it is defined, or Group1 otherwise
+* If app1 or Group1 does not exist at this point, this is a failure.
+**/
+PyObject* getAttrRecursive(const std::string& fullyQualifiedName,PyObject* parentObj,bool* isDefined);
     
 /**
  * @brief Small helper class to use as RAII to hold the GIL (Global Interpreter Lock) before calling ANY Python code.
@@ -686,6 +718,7 @@ public:
     
     ~PythonGILLocker();
 };
+    
 } // namespace Natron
 
 

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,11 +36,8 @@ CLANG_DIAG_OFF(deprecated)
 #include <QString>
 CLANG_DIAG_ON(deprecated)
 
-class AppInstance;
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Node;
-}
 
 class BaseTest
     : public testing::Test

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,19 +25,13 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
+#ifdef NATRON_ENABLE_QT_IO_NODES
+
 #include "Engine/OutputEffectInstance.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-namespace Color {
-class Lut;
-}
-}
-
-class KnobOutputFile;
-class KnobChoice;
-class KnobButton;
-class KnobInt;
-class KnobBool;
 
 class QtWriter
     : public Natron::OutputEffectInstance
@@ -77,14 +71,14 @@ public:
     virtual std::string getPluginID() const OVERRIDE;
     virtual std::string getPluginLabel() const OVERRIDE;
     virtual void getPluginGrouping(std::list<std::string>* grouping) const OVERRIDE FINAL;
-    virtual std::string getDescription() const OVERRIDE;
+    virtual std::string getPluginDescription() const OVERRIDE;
     virtual void getFrameRange(double *first,double *last) OVERRIDE;
     virtual int getMaxInputCount() const OVERRIDE
     {
         return 1;
     }
 
-    void knobChanged(KnobI* k, Natron::ValueChangedReasonEnum reason, int view, SequenceTime time,
+    void knobChanged(KnobI* k, Natron::ValueChangedReasonEnum reason, int view, double time,
                      bool originatedFromMainThread) OVERRIDE FINAL;
     virtual Natron::StatusEnum render(const RenderActionArgs& args) OVERRIDE;
     virtual void addAcceptedComponents(int inputNb,std::list<Natron::ImageComponents>* comps) OVERRIDE FINAL;
@@ -109,5 +103,7 @@ private:
     boost::shared_ptr<KnobInt> _lastFrameKnob;
     boost::shared_ptr<KnobButton> _renderKnob;
 };
+
+#endif // NATRON_ENABLE_QT_IO_NODES
 
 #endif /* defined(NATRON_WRITERS_WRITEQT_H_) */

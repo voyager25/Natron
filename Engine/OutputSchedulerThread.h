@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,21 +32,10 @@
 #include <QThread>
 
 #include "Global/GlobalDefines.h"
+#include "Engine/EngineFwd.h"
 
-///Natron
-class ViewerInstance;
-class RenderStats;
 
 typedef boost::shared_ptr<RenderStats> RenderStatsPtr;
-
-namespace Natron {
-    class Node;
-    class EffectInstance;
-    class OutputEffectInstance;
-}
-
-class RenderStats;
-class RenderEngine;
 
 /**
  * @brief Stub class used by internal implementation of OutputSchedulerThread to pass objects through signal/slots
@@ -127,7 +116,7 @@ protected:
     /**
      * @brief Must render the frame
      **/
-    virtual void renderFrame(int time, bool enableRenderStats) = 0;
+    virtual void renderFrame(int time, const std::vector<int>& viewsToRender, bool enableRenderStats) = 0;
         
     boost::scoped_ptr<RenderThreadTaskPrivate> _imp;
 };
@@ -203,14 +192,22 @@ public:
     /**
      * @brief Call this to render from firstFrame to lastFrame included.
      **/
-    void renderFrameRange(bool enableRenderStats, int firstFrame,int lastFrame,RenderDirectionEnum forward);
+    void renderFrameRange(bool isBlocking,
+                          bool enableRenderStats,
+                          int firstFrame,
+                          int lastFrame,
+                          int frameStep,
+                          const std::vector<int>& viewsToRender,
+                          RenderDirectionEnum forward);
 
     /**
      * @brief Same as renderFrameRange except that the frame range will be computed automatically and it will
      * start from the current frame.
      * This is not appropriate to call this function from a writer.
      **/
-    void renderFromCurrentFrame(bool enableRenderStats, RenderDirectionEnum forward);
+    void renderFromCurrentFrame(bool enableRenderStats,
+                                const std::vector<int>& viewsToRender,
+                                RenderDirectionEnum forward);
     
     /**
      * @brief Whether the playback can be automatically restarted by a single render request
@@ -226,7 +223,7 @@ public:
      **/
     void notifyFrameRendered(int frame,
                              int viewIndex,
-                             int viewsCount,
+                             const std::vector<int>& viewsToRender,
                              const RenderStatsPtr& stats,
                              Natron::SchedulingPolicyEnum policy);
 
@@ -255,6 +252,12 @@ public:
     RenderDirectionEnum getDirectionRequestedToRender() const;
     
     /**
+     * @brief Returns the views as set in the livingRunArgs, @see startRender()
+     * This can only be called on the scheduler thread (this)
+     **/
+    std::vector<int> getViewsRequestedToRender() const;
+    
+    /**
      * @brief Returns the current number of render threads
      **/
     int getNRenderThreads() const;
@@ -267,7 +270,7 @@ public:
     /**
      * @brief Called by render-threads to pick some work to do or to get asleep if theres nothing to do
      **/
-    int pickFrameToRender(RenderThreadTask* thread, bool* enableRenderStats);
+    int pickFrameToRender(RenderThreadTask* thread, bool* enableRenderStats, std::vector<int>* viewsToRender);
     
 
     /**
@@ -313,7 +316,6 @@ public Q_SLOTS:
      **/
     void abortRendering(bool autoRestart, bool blocking);
     
-    void onExecuteCallbackOnMainThread(QString callback);
     
 Q_SIGNALS:
     
@@ -408,7 +410,6 @@ protected:
     
     RenderEngine* getEngine() const;
     
-    void runCallback(const QString& callback);
     
 
 private:
@@ -538,7 +539,7 @@ private:
  * Instead of re-using the OutputSchedulerClass and adding extra handling for special cases we separated it in a different class, specialized for this kind
  * of "current frame re-rendering" which needs much less code to run than all the code in OutputSchedulerThread
  **/
-struct RequestedFrame;
+
 struct ViewerCurrentFrameRequestSchedulerPrivate;
 class ViewerCurrentFrameRequestScheduler : public QThread
 {
@@ -579,20 +580,7 @@ private:
 };
 
 struct ViewerArgs;
-struct CurrentFrameFunctorArgs
-{
-    int view;
-    int time;
-    RenderStatsPtr stats;
-    ViewerInstance* viewer;
-    U64 viewerHash;
-    boost::shared_ptr<RequestedFrame> request;
-    ViewerCurrentFrameRequestSchedulerPrivate* scheduler;
-    bool canAbort;
-    boost::shared_ptr<Natron::Node> isRotoPaintRequest;
-    boost::shared_ptr<ViewerArgs> args[2];
-};
-
+struct CurrentFrameFunctorArgs;
 
 /**
  * @brief Single thread used by the ViewerCurrentFrameRequestScheduler when the global thread pool has reached its maximum
@@ -607,7 +595,7 @@ public:
     
     virtual ~ViewerCurrentFrameRequestRendererBackup();
     
-    void renderCurrentFrame(const CurrentFrameFunctorArgs& args);
+    void renderCurrentFrame(const boost::shared_ptr<CurrentFrameFunctorArgs>& args);
     
     void quitThread();
     
@@ -642,16 +630,23 @@ public:
     /**
      * @brief Call this to render from firstFrame to lastFrame included.
      **/
-    void renderFrameRange(bool enableRenderStats, int firstFrame,int lastFrame,OutputSchedulerThread::RenderDirectionEnum forward);
+    void renderFrameRange(bool isBlocking,
+                          bool enableRenderStats,
+                          int firstFrame,
+                          int lastFrame,
+                          int frameStep,
+                          const std::vector<int>& viewsToRender,
+                          OutputSchedulerThread::RenderDirectionEnum forward);
     
     /**
      * @brief Same as renderFrameRange except that the frame range will be computed automatically and it will
      * start from the current frame.
      * This is not appropriate to call this function from a writer.
      **/
-    void renderFromCurrentFrame(bool enableRenderStats, OutputSchedulerThread::RenderDirectionEnum forward);
+    void renderFromCurrentFrame(bool enableRenderStats,
+                                const std::vector<int>& viewsToRender,
+                                OutputSchedulerThread::RenderDirectionEnum forward);
     
-    void renderFromCurrentFrameUsingCurrentDirection(bool enableRenderStats);
     
     /**
      * @brief Basically it just renders with the current frame on the timeline.
@@ -719,6 +714,8 @@ public Q_SLOTS:
     void abortRendering_Blocking() { abortRendering(true,true); }
 
     
+    void onCurrentFrameRenderRequestPosted();
+    
 Q_SIGNALS:
     
     /**
@@ -752,6 +749,8 @@ Q_SIGNALS:
     * @brief Emitted when gui is frozen and rendering is finished to update all knobs
      **/
     void refreshAllKnobs();
+    
+    void currentFrameRenderRequestPosted();
 
 protected:
     
@@ -762,6 +761,9 @@ protected:
     virtual OutputSchedulerThread* createScheduler(Natron::OutputEffectInstance* effect) ;
     
 private:
+    
+    void renderCurrentFrameInternal(bool enableRenderStats,bool canAbort);
+
     
     /**
      * The following functions are called by the OutputThreadScheduler to Q_EMIT the corresponding signals

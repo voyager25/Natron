@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,6 +38,8 @@ GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_OFF
 GCC_DIAG_ON(unused-parameter)
 GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 #endif
+
+#include "Engine/EngineFwd.h"
 
 #define IMAGE_KEY_SERIALIZATION_INTRODUCES_CACHE_HOLDER_ID 2
 #define IMAGE_KEY_SERIALIZATION_VERSION IMAGE_KEY_SERIALIZATION_INTRODUCES_CACHE_HOLDER_ID

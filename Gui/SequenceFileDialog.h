@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <vector>
 #include <string>
 #include <map>
@@ -36,8 +38,6 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
 #endif
-
-#include "Global/Macros.h"
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -57,35 +57,12 @@ CLANG_DIAG_OFF(uninitialized)
 CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
-#include "Global/Macros.h"
 #include "Global/QtCompat.h"
+
 #include "Engine/FileSystemModel.h"
+#include "Gui/LineEdit.h"
 
-
-class LineEdit;
-class Button;
-class QCheckBox;
-class ComboBox;
-class QWidget;
-namespace Natron {
-class Label;
-}
-class QFileInfo;
-class QHBoxLayout;
-class QVBoxLayout;
-class QSplitter;
-class QAction;
-class SequenceFileDialog;
-class QFileSystemModel;
-class SequenceItemDelegate;
-class Gui;
-class NodeGui;
-namespace SequenceParsing {
-class SequenceFromFiles;
-}
-struct FileDialogPreviewProvider;
-
-
+#include "Gui/GuiFwd.h"
 
 
 /**
@@ -255,6 +232,7 @@ public:
     virtual void dragLeaveEvent(QDragLeaveEvent* e) OVERRIDE FINAL;
     virtual void resizeEvent(QResizeEvent* e) OVERRIDE FINAL;
     virtual void paintEvent(QPaintEvent* e) OVERRIDE FINAL;
+    virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
 };
 
 
@@ -291,6 +269,25 @@ private:
     SequenceFileDialog *dialog;
     QStringList m_history;
     bool doResize;
+};
+
+//Same as LineEdit but we do not process keyPresses for Key_Up and Key_Down
+class FileDialogLineEdit : public LineEdit
+{
+public:
+    
+    FileDialogLineEdit(QWidget* parent)
+    : LineEdit(parent)
+    {
+        
+    }
+    
+    virtual ~FileDialogLineEdit()
+    {
+        
+    }
+    
+    virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
 };
 
 /**
@@ -583,12 +580,12 @@ private:
     Button* _cancelButton;
     Button* _addFavoriteButton;
     Button* _removeFavoriteButton;
-    LineEdit* _selectionLineEdit;
+    FileDialogLineEdit* _selectionLineEdit;
     Natron::Label* _relativeLabel;
     ComboBox* _relativeChoice;
     ComboBox* _sequenceButton;
     Natron::Label* _filterLabel;
-    LineEdit* _filterLineEdit;
+    FileDialogLineEdit* _filterLineEdit;
     Button* _filterDropDown;
     ComboBox* _fileExtensionCombo;
     QHBoxLayout* _buttonsLayout;

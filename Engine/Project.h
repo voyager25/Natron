@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,21 +41,16 @@ CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 #include "Global/GlobalDefines.h"
+
 #include "Engine/Knob.h"
 #include "Engine/Format.h"
 #include "Engine/TimeLine.h"
 #include "Engine/NodeGroup.h"
+#include "Engine/EngineFwd.h"
 
-class QString;
-class QDateTime;
-class AppInstance;
-class ProjectSerialization;
-class KnobSerialization;
-class ProjectGui;
-class AddFormatDialog;
+
 namespace Natron {
-class Node;
-class OutputEffectInstance;
+
 struct ProjectPrivate;
 
 class Project
@@ -70,11 +65,17 @@ public:
     Project(AppInstance* appInstance);
 
     virtual ~Project();
+    
+    //these are per project thread-local data
+    struct ProjectTLSData {
+        std::vector<std::string> viewNames;
+    };
+    typedef boost::shared_ptr<ProjectTLSData> ProjectDataTLSPtr;
 
     /**
      * @brief Loads the project with the given path and name corresponding to a file on disk.
      **/
-    bool loadProject(const QString & path,const QString & name, bool isUntitledAutosave = false);
+    bool loadProject(const QString & path,const QString & name, bool isUntitledAutosave = false, bool attemptToLoadAutosave = true);
 
     
     
@@ -116,7 +117,7 @@ public:
     
     bool isLoadingProjectInternal() const;
 
-    QString getProjectName() const WARN_UNUSED_RETURN;
+    QString getProjectFilename() const WARN_UNUSED_RETURN;
 
     QString getLastAutoSaveFilePath() const;
 
@@ -136,9 +137,13 @@ public:
 
     void getAdditionalFormats(std::list<Format> *formats) const;
 
+    void setupProjectForStereo();
+    
+    void createProjectViews(const std::vector<std::string>& views);
+    
+    const std::vector<std::string>& getProjectViewNames() const;
+    
     int getProjectViewsCount() const;
-
-    int getProjectMainView() const;
 
     void setOrAddProjectFormat(const Format & frmt,bool skipAdd = false);
     
@@ -154,7 +159,6 @@ public:
 
     int currentFrame() const WARN_UNUSED_RETURN;
 
-    void ensureAllProcessingThreadsFinished();
 
     /**
      * @brief Returns true if the project is considered as irrelevant and shouldn't be autosaved anyway.
@@ -185,7 +189,7 @@ public:
     QString getLockAbsoluteFilePath() const;
     void createLockFile();
     void removeLockFile();
-    bool getLockFileInfos(const QString& projectPath,const QString& projectName,QString* authorName,QString* lastSaveDate,qint64* appPID) const;
+    bool getLockFileInfos(const QString& projectPath, const QString& projectName, QString* authorName, QString* lastSaveDate, QString* host, qint64* appPID) const;
     
     virtual bool isProject() const OVERRIDE
     {
@@ -200,6 +204,7 @@ public:
      * @brief Decode the project variables from the encoded version;
      **/
     static void makeEnvMap(const std::string& encoded,std::map<std::string,std::string>& variables);
+    static void makeEnvMapUnordered(const std::string& encoded,std::vector<std::pair<std::string,std::string> >& variables);
     
     /**
      * @brief Expands the environment variables in the given string that are found in env
@@ -303,6 +308,8 @@ public:
     
     bool addFormat(const std::string& formatSpec);
     
+    void setTimeLine(const boost::shared_ptr<TimeLine>& timeline);
+    
 public Q_SLOTS:
 
     void onAutoSaveTimerTriggered();
@@ -325,7 +332,7 @@ Q_SIGNALS:
 
     void autoPreviewChanged(bool);
 
-    void projectNameChanged(QString);
+    void projectNameChanged(QString name, bool modified);
 
     void knobsInitialized();
     
@@ -383,7 +390,7 @@ private:
      * portion paramChangedByUser(...) and brackets the call by a begin/end if it was
      * not done already.
      **/
-    virtual void onKnobValueChanged(KnobI* k,Natron::ValueChangedReasonEnum reason,SequenceTime time,
+    virtual void onKnobValueChanged(KnobI* k,Natron::ValueChangedReasonEnum reason,double time,
                                     bool originatedFromMainThread)  OVERRIDE FINAL;
 
     void save(ProjectSerialization* serializationObject) const;

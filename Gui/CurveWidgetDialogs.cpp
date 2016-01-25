@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -403,11 +403,11 @@ EditKeyFrameDialog::EditKeyFrameDialog(EditModeEnum mode,CurveWidget* curveWidge
     
     SpinBox::SpinBoxTypeEnum xType;
     
-    if (mode == eEditModeKeyframePosition) {
-        xType = key->curve->areKeyFramesTimeClampedToIntegers() ? SpinBox::eSpinBoxTypeInt : SpinBox::eSpinBoxTypeDouble;
-    } else {
+//    if (mode == eEditModeKeyframePosition) {
+//        xType = key->curve->areKeyFramesTimeClampedToIntegers() ? SpinBox::eSpinBoxTypeInt : SpinBox::eSpinBoxTypeDouble;
+//    } else {
         xType = SpinBox::eSpinBoxTypeDouble;
-    }
+//    }
     
     _imp->xSpinbox = new SpinBox(_imp->boxContainer,xType);
     _imp->xSpinbox->setValue(_imp->originalX);

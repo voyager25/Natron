@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -156,10 +156,10 @@ PasteUndoCommand::undo()
 
     if (!_copyAnimation) {
         setText( QObject::tr("Paste value of %1")
-                 .arg( _knob->getKnob()->getDescription().c_str() ) );
+                 .arg( _knob->getKnob()->getLabel().c_str() ) );
     } else {
         setText( QObject::tr("Paste animation of %1")
-                 .arg( _knob->getKnob()->getDescription().c_str() ) );
+                 .arg( _knob->getKnob()->getLabel().c_str() ) );
     }
 } // undo
 
@@ -229,10 +229,10 @@ PasteUndoCommand::redo()
 
     if (!_copyAnimation) {
         setText( QObject::tr("Paste value of %1")
-                 .arg( _knob->getKnob()->getDescription().c_str() ) );
+                 .arg( _knob->getKnob()->getLabel().c_str() ) );
     } else {
         setText( QObject::tr("Paste animation of %1")
-                 .arg( _knob->getKnob()->getDescription().c_str() ) );
+                 .arg( _knob->getKnob()->getLabel().c_str() ) );
     }
 } // redo
 
@@ -242,7 +242,7 @@ MultipleKnobEditsUndoCommand::MultipleKnobEditsUndoCommand(KnobGui* knob,
                                                            bool setKeyFrame,
                                                            const Variant & value,
                                                            int dimension,
-                                                           int time)
+                                                           double time)
     : QUndoCommand()
       , knobs()
       , createNew(createNew)
@@ -334,7 +334,7 @@ MultipleKnobEditsUndoCommand::undo()
 
     if (holder) {
         holder->beginChanges();
-        int time = holder->getCurrentTime();
+        double time = holder->getCurrentTime();
         for (std::set <KnobI*>::iterator it = knobsUnique.begin(); it != knobsUnique.end(); ++it) {
             (*it)->evaluateValueChange(0,time,  _reason);
         }
@@ -358,7 +358,7 @@ MultipleKnobEditsUndoCommand::redo()
     if (firstRedoCalled) {
         ///just clone
         std::set <KnobI*> knobsUnique;
-        int time;
+        double time = -1;
         if (holder) {
             time = holder->getCurrentTime();
         }
@@ -376,7 +376,9 @@ MultipleKnobEditsUndoCommand::redo()
 
             
             for (std::set <KnobI*>::iterator it = knobsUnique.begin(); it != knobsUnique.end(); ++it) {
-                (*it)->evaluateValueChange(0, time, _reason);
+                if (holder) {
+                    (*it)->evaluateValueChange(0, time, _reason);
+                }
             }
         }
     } else {
@@ -497,7 +499,8 @@ RestoreDefaultsCommand::undo()
 
     std::list<SequenceTime> times;
     const boost::shared_ptr<KnobI> & first = _knobs.front();
-    boost::shared_ptr<TimeLine> timeline = first->getHolder()->getApp()->getTimeLine();
+    AppInstance* app = first->getHolder()->getApp();
+    assert(app);
     std::list<boost::shared_ptr<KnobI> >::const_iterator itClone = _clones.begin();
     for (std::list<boost::shared_ptr<KnobI> >::const_iterator it = _knobs.begin(); it != _knobs.end(); ++it, ++itClone) {
         (*it)->cloneAndUpdateGui( itClone->get() );
@@ -509,13 +512,13 @@ RestoreDefaultsCommand::undo()
                 if (c) {
                     KeyFrameSet kfs = c->getKeyFrames_mt_safe();
                     for (KeyFrameSet::iterator it = kfs.begin(); it != kfs.end(); ++it) {
-                        times.push_back( it->getTime() );
+                        times.push_back( std::floor(it->getTime()+0.5) );
                     }
                 }
             }
         }
     }
-    timeline->addMultipleKeyframeIndicatorsAdded(times,true);
+    app->addMultipleKeyframeIndicatorsAdded(times,true);
 
     _knobs.front()->getHolder()->evaluate_public(NULL, true, Natron::eValueChangedReasonUserEdited);
     first->getHolder()->evaluate_public(NULL, true, Natron::eValueChangedReasonUserEdited);
@@ -532,11 +535,11 @@ RestoreDefaultsCommand::redo()
     std::list<SequenceTime> times;
     const boost::shared_ptr<KnobI> & first = _knobs.front();
     
-    boost::shared_ptr<TimeLine> timeline;
+    AppInstance* app = 0;
     
     KnobHolder* holder = first->getHolder();
-    if (holder && holder->getApp()) {
-        timeline = holder->getApp()->getTimeLine();
+    if (holder) {
+        app = holder->getApp();
         holder->beginChanges();
     }
     
@@ -548,7 +551,7 @@ RestoreDefaultsCommand::redo()
                 if (c) {
                     KeyFrameSet kfs = c->getKeyFrames_mt_safe();
                     for (KeyFrameSet::iterator it = kfs.begin(); it != kfs.end(); ++it) {
-                        times.push_back( it->getTime() );
+                        times.push_back( std::floor(it->getTime()+0.5) );
                     }
                 }
             }
@@ -575,9 +578,9 @@ RestoreDefaultsCommand::redo()
      Block value changes and call instanceChange on all knobs  afterwards to put back the plug-in
      in a correct state
      */
-    int time = 0;
-    if (timeline) {
-        time = timeline->currentFrame();
+    double time = 0;
+    if (app) {
+        time = app->getTimeLine()->currentFrame();
     }
    for (std::list<boost::shared_ptr<KnobI> >::iterator it = _knobs.begin(); it != _knobs.end(); ++it) {
        if ((*it)->getHolder()) {
@@ -590,8 +593,8 @@ RestoreDefaultsCommand::redo()
     }
     
     
-    if (timeline) {
-        timeline->removeMultipleKeyframeIndicator(times,true);
+    if (app) {
+        app->removeMultipleKeyframeIndicator(times,true);
     }
     
     if (first->getHolder()) {

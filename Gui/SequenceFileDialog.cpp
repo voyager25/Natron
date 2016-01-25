@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -303,29 +303,15 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
         _filters.push_back(filters[i].c_str());
     }
     
+    std::string directoryArgs = currentDirectory;
+    if (!directoryArgs.empty()) {
+        gui->getApp()->getProject()->canonicalizePath(directoryArgs);
+    }
+    
     setWindowFlags(Qt::Window);
     _mainLayout = new QVBoxLayout(this);
     setLayout(_mainLayout);
-    /*Creating view and setting directory*/
-    _view =  new SequenceDialogView(this);
 
-    _model.reset(new FileSystemModel(this));
-    
-    _view->setSortingEnabled( isCaseSensitiveFileSystem( rootPath() ) );
-#ifdef FILE_DIALOG_DISABLE_ICONS
-    //EmptyIconProvider* iconProvider = new EmptyIconProvider;
-    //_model->setIconProvider(iconProvider);
-#endif
-
-    _model->setSequenceModeEnabled(isSequenceDialog ? true : false);
-    
-    _view->setModel( _model.get() );
-    _view->setItemDelegate( _itemDelegate.get() );
-
-    QObject::connect( _model.get(),SIGNAL( directoryLoaded(QString) ),this,SLOT( updateView(QString) ) );
-    QObject::connect( _view, SIGNAL( doubleClicked(QModelIndex) ), this, SLOT( doubleClickOpen(QModelIndex) ) );
-
-    /*creating GUI*/
     _buttonsWidget = new QWidget(this);
     _buttonsLayout = new QHBoxLayout(_buttonsWidget);
     _buttonsWidget->setLayout(_buttonsLayout);
@@ -337,12 +323,11 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
     _buttonsLayout->addWidget(_lookInLabel);
 
     _lookInCombobox = new FileDialogComboBox(this,_buttonsWidget);
+    _lookInCombobox->setMinimumWidth(200);
     _buttonsLayout->addWidget(_lookInCombobox);
     QObject::connect( _lookInCombobox, SIGNAL( activated(QString) ), this, SLOT( onLookingComboboxChanged(QString) ) );
     _lookInCombobox->setInsertPolicy(QComboBox::NoInsert);
     _lookInCombobox->setDuplicatesEnabled(false);
-
-   // _lookInCombobox->setSizePolicy(QSizePolicy::Maximum,QSizePolicy::Fixed);
 
     _buttonsLayout->addStretch();
 
@@ -369,7 +354,6 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
 
     _mainLayout->addWidget(_buttonsWidget);
 
-    /*creating center*/
     _centerArea = new QWidget(this);
     _centerAreaLayout = new QHBoxLayout(_centerArea);
     _centerAreaLayout->setContentsMargins(0, 0, 0, 0);
@@ -381,6 +365,7 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
     _favoriteLayout = new QVBoxLayout(_favoriteWidget);
     _favoriteWidget->setLayout(_favoriteLayout);
     _favoriteView = new FavoriteView(_gui,this);
+    _favoriteView->setFocusPolicy(Qt::NoFocus);
     QObject::connect( _favoriteView,SIGNAL( urlRequested(QUrl) ),this,SLOT( seekUrl(QUrl) ) );
     _favoriteLayout->setSpacing(0);
     _favoriteLayout->setContentsMargins(0, 0, 0, 0);
@@ -388,7 +373,6 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
 
     _favoriteButtonsWidget = new QWidget(_favoriteView);
     _favoriteButtonsLayout = new QHBoxLayout(_favoriteButtonsWidget);
-    // _favoriteButtonsLayout->setSpacing(0);
     _favoriteButtonsLayout->setContentsMargins(0,0,0,0);
     _favoriteButtonsWidget->setLayout(_favoriteButtonsLayout);
 
@@ -408,37 +392,13 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
 
 
     _centerSplitter->addWidget(_favoriteWidget);
-    _centerSplitter->addWidget(_view);
     
-    _centerAreaLayout->addWidget(_centerSplitter);
     
-    if (mode == eFileDialogModeOpen && isSequenceDialog) {
-        QPixmap pixPreviewButtonEnabled,pixPreviewButtonDisabled;
-        appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_ENABLED, &pixPreviewButtonEnabled);
-        appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_DISABLED, &pixPreviewButtonDisabled);
-        QIcon icPreview;
-        icPreview.addPixmap(pixPreviewButtonEnabled,QIcon::Normal,QIcon::On);
-        icPreview.addPixmap(pixPreviewButtonDisabled,QIcon::Normal,QIcon::Off);
-        _togglePreviewButton = new Button(icPreview,"",_centerArea);
-        _togglePreviewButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
-        QObject::connect(_togglePreviewButton, SIGNAL(clicked(bool)), this, SLOT(onTogglePreviewButtonClicked(bool) ) );
-        _togglePreviewButton->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Expanding);
-        _togglePreviewButton->setCheckable(true);
-        _togglePreviewButton->setChecked(false);
-        _centerAreaLayout->addWidget(_togglePreviewButton);
-        assert(gui);
-        _preview = gui->getApp()->getPreviewProvider();
-        _wasAutosetProjectFormatEnabled = gui->getApp()->getProject()->isAutoSetProjectFormatEnabled();
-    }
-    
-    _mainLayout->addWidget(_centerArea);
-    
-    /*creating selection widget*/
     _selectionWidget = new QWidget(this);
     _selectionLayout = new QHBoxLayout(_selectionWidget);
     _selectionLayout->setContentsMargins(0, 0, 0, 0);
     _selectionWidget->setLayout(_selectionLayout);
-
+    
     _relativeLabel = new Natron::Label(tr("Relative to:"),_selectionWidget);
     _selectionLayout->addWidget(_relativeLabel);
     
@@ -464,7 +424,7 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
     _sequenceButton = new ComboBox(_selectionWidget);
     _sequenceButton->addItem( tr("Sequence:") );
     _sequenceButton->addItem( tr("File:") );
-   
+    
     
     if (isSequenceDialog) {
         _sequenceButton->setCurrentIndex(0);
@@ -473,11 +433,56 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
     }
     QObject::connect( _sequenceButton,SIGNAL( currentIndexChanged(int) ),this,SLOT( sequenceComboBoxSlot(int) ) );
     _selectionLayout->addWidget(_sequenceButton);
-
+    
     if ( !isSequenceDialog || (_dialogMode == eFileDialogModeDir) ) {
         _sequenceButton->setVisible(false);
     }
-    _selectionLineEdit = new LineEdit(_selectionWidget);
+    
+    _view =  new SequenceDialogView(this);
+    
+    _model.reset(new FileSystemModel(this));
+    
+    _view->setSortingEnabled( isCaseSensitiveFileSystem( rootPath() ) );
+#ifdef FILE_DIALOG_DISABLE_ICONS
+    //EmptyIconProvider* iconProvider = new EmptyIconProvider;
+    //_model->setIconProvider(iconProvider);
+#endif
+    
+    _model->setSequenceModeEnabled(isSequenceDialog ? true : false);
+    
+    _view->setModel( _model.get() );
+    _view->setItemDelegate( _itemDelegate.get() );
+    
+    QObject::connect( _model.get(),SIGNAL( directoryLoaded(QString) ),this,SLOT( updateView(QString) ) );
+    QObject::connect( _view, SIGNAL( doubleClicked(QModelIndex) ), this, SLOT( doubleClickOpen(QModelIndex) ) );
+    
+    _centerSplitter->addWidget(_view);
+    
+    _centerAreaLayout->addWidget(_centerSplitter);
+    
+    if (mode == eFileDialogModeOpen && isSequenceDialog) {
+        QPixmap pixPreviewButtonEnabled,pixPreviewButtonDisabled;
+        appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_ENABLED, &pixPreviewButtonEnabled);
+        appPTR->getIcon(Natron::NATRON_PIXMAP_PLAYER_PLAY_DISABLED, &pixPreviewButtonDisabled);
+        QIcon icPreview;
+        icPreview.addPixmap(pixPreviewButtonEnabled,QIcon::Normal,QIcon::On);
+        icPreview.addPixmap(pixPreviewButtonDisabled,QIcon::Normal,QIcon::Off);
+        _togglePreviewButton = new Button(icPreview,"",_centerArea);
+        _togglePreviewButton->setIconSize(QSize(NATRON_MEDIUM_BUTTON_ICON_SIZE, NATRON_MEDIUM_BUTTON_ICON_SIZE));
+        QObject::connect(_togglePreviewButton, SIGNAL(clicked(bool)), this, SLOT(onTogglePreviewButtonClicked(bool) ) );
+        _togglePreviewButton->setSizePolicy(QSizePolicy::Preferred,QSizePolicy::Expanding);
+        _togglePreviewButton->setCheckable(true);
+        _togglePreviewButton->setChecked(false);
+        _centerAreaLayout->addWidget(_togglePreviewButton);
+        assert(gui);
+        _preview = gui->getApp()->getPreviewProvider();
+        _wasAutosetProjectFormatEnabled = gui->getApp()->getProject()->isAutoSetProjectFormatEnabled();
+    }
+    
+    _mainLayout->addWidget(_centerArea);
+    
+    
+    _selectionLineEdit = new FileDialogLineEdit(_selectionWidget);
     _selectionLayout->addWidget(_selectionLineEdit);
 
     if ( (mode == SequenceFileDialog::eFileDialogModeOpen) || (mode == SequenceFileDialog::eFileDialogModeDir) ) {
@@ -533,7 +538,7 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
     }
 
     if (_dialogMode != eFileDialogModeDir) {
-        _filterLineEdit = new LineEdit(_filterWidget);
+        _filterLineEdit = new FileDialogLineEdit(_filterWidget);
         _filterLayout->addWidget(_filterLineEdit);
         _filterLineEdit->setText(filter);
         QSize buttonSize( 15,_filterLineEdit->sizeHint().height() );
@@ -558,7 +563,7 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
 
     _mainLayout->addWidget(_filterLineWidget);
 
-    resize(900, 400);
+    resize(TO_DPIX(900), TO_DPIY(400));
 
     std::vector<QUrl> initialBookmarks;
     initialBookmarks.push_back( QUrl::fromLocalFile( QDir::homePath() ) );
@@ -603,12 +608,12 @@ SequenceFileDialog::SequenceFileDialog( QWidget* parent, // necessary to transmi
     } else {
         setWindowTitle( tr("Select Directory") );
     }
-
+    
     QSettings settings(NATRON_ORGANIZATION_NAME,NATRON_APPLICATION_NAME);
-    restoreState( settings.value( QLatin1String("FileDialog") ).toByteArray(),currentDirectory.empty() );
+    restoreState( settings.value( QLatin1String("FileDialog") ).toByteArray(),directoryArgs.empty() );
 
-    if ( !currentDirectory.empty() ) {
-        setDirectory( currentDirectory.c_str() );
+    if ( !directoryArgs.empty() ) {
+        setDirectory( directoryArgs.c_str() );
     }
 
 
@@ -623,6 +628,17 @@ SequenceFileDialog::~SequenceFileDialog()
     QSettings settings(NATRON_ORGANIZATION_NAME,NATRON_APPLICATION_NAME);
 
     settings.setValue( QLatin1String("FileDialog"), saveState() );
+}
+
+void
+FileDialogLineEdit::keyPressEvent(QKeyEvent* e)
+{
+    ///Ignore these keypress so that the view gets the key_up/down
+    if (e->key() == Qt::Key_Down || e->key() == Qt::Key_Up) {
+        e->ignore();
+    } else {
+        LineEdit::keyPressEvent(e);
+    }
 }
 
 void
@@ -867,7 +883,7 @@ SequenceFileDialog::createMenuActions()
 
     _showHiddenAction = new QAction(this);
     _showHiddenAction->setCheckable(true);
-    _showHiddenAction->setText( tr("Show hidden fildes") );
+    _showHiddenAction->setText( tr("Show hidden files") );
     QObject::connect( _showHiddenAction, SIGNAL( triggered() ), this, SLOT( showHidden() ) );
 
     _newFolderAction = new QAction(this);
@@ -990,6 +1006,8 @@ SequenceFileDialog::enterDirectory(const QModelIndex & index)
 void
 SequenceFileDialog::setDirectory(const QString &directory)
 {
+
+    
     QDir dir(directory);
     if (!dir.exists()) {
         return;
@@ -1013,6 +1031,10 @@ SequenceFileDialog::setDirectory(const QString &directory)
 	newDirectory = appPTR->mapUNCPathToPathWithDriveLetter(newDirectory);
 #endif
 	
+    if (!FileSystemModel::startsWithDriveName(newDirectory)) {
+        return;
+    }
+    
     _requestedDir = newDirectory;
     _model->setRootPath(newDirectory);
     _createDirButton->setEnabled(_dialogMode != eFileDialogModeOpen);
@@ -1107,6 +1129,16 @@ SequenceDialogView::paintEvent(QPaintEvent* e)
     QTreeView::paintEvent(e);
 }
 
+void
+SequenceDialogView::keyPressEvent(QKeyEvent* e)
+{
+    //Since the SequenceFileDialog will send us the events, make sure we do not send it back if it does not gets processed
+    QTreeView::keyPressEvent(e);
+    if (e->key() == Qt::Key_Up || e->key() == Qt::Key_Down) {
+        e->accept();
+        return;
+    }
+}
 
 void
 SequenceDialogView::dropEvent(QDropEvent* e)
@@ -1201,7 +1233,7 @@ SequenceItemDelegate::paint(QPainter * painter,
         return QStyledItemDelegate::paint(painter,option,index);
     }
     
-    QString filename = item->fileName();
+    QString filename = item->getUserFriendlyFilename();
     //QFont f(appFont,appFontSize);
     //painter->setFont(f);
     if (option.state & QStyle::State_Selected) {
@@ -1615,11 +1647,22 @@ SequenceFileDialog::keyPressEvent(QKeyEvent* e)
     if ( (e->key() == Qt::Key_Return) || (e->key() == Qt::Key_Enter) ) {
         QString str = _selectionLineEdit->text();
         if ( !isDirectory(str) ) {
-            QDialog::accept();
+            if (_dialogMode != eFileDialogModeDir) {
+                openSelectedFiles();
+            } else {
+                QDialog::accept();
+            }
+
+            
         } else {
             setDirectory(str);
         }
 
+        return;
+    } else if (e->key() == Qt::Key_Up || e->key() == Qt::Key_Down) {
+        QKeyEvent* ev = new QKeyEvent(QEvent::KeyPress, e->key(), e->modifiers());
+        qApp->notify(_view,ev);
+        e->accept();
         return;
     }
     QDialog::keyPressEvent(e);

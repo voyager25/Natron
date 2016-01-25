@@ -14,6 +14,8 @@ sed*
 *latex*
 DerivedData
 Natron.xcodeproj
+Natron-bin.xcodeproj
+NatronRenderer-bin.xcodeproj
 NatronRenderer.xcodeproj
 NatronCrashReporter.xcodeproj
 BreakpadClient.xcodeproj
@@ -228,3 +230,5 @@ PortIndex
 PortIndex.quick
 *.7z*
 *.exe*
+tools/Windows/src/*
+tools/linux/src/*

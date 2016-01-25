@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,6 +73,8 @@ GCC_DIAG_OFF(unused-parameter)
 #include <boost/archive/xml_oarchive.hpp>
 GCC_DIAG_UNUSED_LOCAL_TYPEDEFS_ON
 GCC_DIAG_ON(unused-parameter)
+
+#include "Global/ProcInfo.h"
 
 #include "Engine/Image.h"
 #include "Engine/KnobFile.h"
@@ -156,6 +158,7 @@ GuiPrivate::GuiPrivate(GuiAppInstance* app,
 , actionNew_project(0)
 , actionOpen_project(0)
 , actionClose_project(0)
+, actionReload_project(0)
 , actionSave_project(0)
 , actionSaveAs_project(0)
 , actionExportAsGroup(0)
@@ -167,6 +170,9 @@ GuiPrivate::GuiPrivate(GuiAppInstance* app,
 , actionShortcutEditor(0)
 , actionNewViewer(0)
 , actionFullScreen(0)
+#ifdef __NATRON_WIN32__
+, actionShowWindowsConsole(0)
+#endif
 , actionClearDiskCache(0)
 , actionClearPlayBackCache(0)
 , actionClearNodeCache(0)
@@ -184,6 +190,11 @@ GuiPrivate::GuiPrivate(GuiAppInstance* app,
 , actionNextTab(0)
 , actionPrevTab(0)
 , actionCloseTab(0)
+, actionHelpWebsite(0)
+, actionHelpForum(0)
+, actionHelpIssues(0)
+, actionHelpPython(0)
+, actionHelpWiki(0)
 , _centralWidget(0)
 , _mainLayout(0)
 , _lastLoadSequenceOpenedDir()
@@ -220,12 +231,12 @@ GuiPrivate::GuiPrivate(GuiAppInstance* app,
 , menuEdit(0)
 , menuLayout(0)
 , menuDisplay(0)
-, menuOptions(0)
 , menuRender(0)
 , viewersMenu(0)
 , viewerInputsMenu(0)
 , viewersViewMenu(0)
 , cacheMenu(0)
+, menuHelp(0)
 , _panesMutex()
 , _panes()
 , _floatingWindowMutex()
@@ -236,6 +247,7 @@ GuiPrivate::GuiPrivate(GuiAppInstance* app,
 , _currentlyDraggedPanelInitialSize()
 , _aboutWindow(0)
 , _progressBars()
+, openedPanelsMutex()
 , openedPanels()
 , _openGLVersion()
 , _glewVersion()
@@ -251,7 +263,9 @@ GuiPrivate::GuiPrivate(GuiAppInstance* app,
 , currentPanelFocus(0)
 , currentPanelFocusEventRecursion(0)
 , keyPressEventHasVisitedFocusWidget(false)
+, keyUpEventHasVisitedFocusWidget(false)
 , wasLaskUserSeekDuringPlayback(false)
+, applicationConsoleVisible(true)
 {
 }
 
@@ -330,31 +344,37 @@ GuiPrivate::createPropertiesBinGui()
     propertiesAreaButtonsLayout->setContentsMargins(0, 0, 0, 0);
     propertiesAreaButtonsLayout->setSpacing(5);
     QPixmap closePanelPix;
-    appPTR->getIcon(NATRON_PIXMAP_CLOSE_PANEL, NATRON_SMALL_BUTTON_ICON_SIZE, &closePanelPix);
+
+    int smallSizeIcon = TO_DPIX(NATRON_SMALL_BUTTON_ICON_SIZE);
+    appPTR->getIcon(NATRON_PIXMAP_CLOSE_PANEL, smallSizeIcon, &closePanelPix);
     _clearAllPanelsButton = new Button(QIcon(closePanelPix), "", propertiesAreaButtonsContainer);
-    _clearAllPanelsButton->setFixedSize(NATRON_SMALL_BUTTON_SIZE, NATRON_SMALL_BUTTON_SIZE);
-    _clearAllPanelsButton->setIconSize(QSize(NATRON_SMALL_BUTTON_ICON_SIZE, NATRON_SMALL_BUTTON_ICON_SIZE));
+
+    const QSize smallButtonSize(TO_DPIX(NATRON_SMALL_BUTTON_SIZE),TO_DPIY(NATRON_SMALL_BUTTON_SIZE));
+    const QSize smallButtonIconSize(TO_DPIX(NATRON_SMALL_BUTTON_ICON_SIZE),TO_DPIY(NATRON_SMALL_BUTTON_ICON_SIZE));
+
+    _clearAllPanelsButton->setFixedSize(smallButtonSize);
+    _clearAllPanelsButton->setIconSize(smallButtonIconSize);
     _clearAllPanelsButton->setToolTip( Natron::convertFromPlainText(_gui->tr("Clears all the panels in the properties bin pane."),
                                                                 Qt::WhiteSpaceNormal) );
     _clearAllPanelsButton->setFocusPolicy(Qt::NoFocus);
     QObject::connect( _clearAllPanelsButton, SIGNAL( clicked(bool) ), _gui, SLOT( clearAllVisiblePanels() ) );
     QPixmap minimizePix, maximizePix;
-    appPTR->getIcon(NATRON_PIXMAP_MINIMIZE_WIDGET, NATRON_SMALL_BUTTON_ICON_SIZE, &minimizePix);
-    appPTR->getIcon(NATRON_PIXMAP_MAXIMIZE_WIDGET, NATRON_SMALL_BUTTON_ICON_SIZE, &maximizePix);
+    appPTR->getIcon(NATRON_PIXMAP_MINIMIZE_WIDGET, smallSizeIcon, &minimizePix);
+    appPTR->getIcon(NATRON_PIXMAP_MAXIMIZE_WIDGET, smallSizeIcon, &maximizePix);
     QIcon mIc;
     mIc.addPixmap(minimizePix, QIcon::Normal, QIcon::On);
     mIc.addPixmap(maximizePix, QIcon::Normal, QIcon::Off);
     _minimizeAllPanelsButtons = new Button(mIc, "", propertiesAreaButtonsContainer);
     _minimizeAllPanelsButtons->setCheckable(true);
     _minimizeAllPanelsButtons->setChecked(false);
-    _minimizeAllPanelsButtons->setFixedSize(NATRON_SMALL_BUTTON_SIZE, NATRON_SMALL_BUTTON_SIZE);
-    _minimizeAllPanelsButtons->setIconSize(QSize(NATRON_SMALL_BUTTON_ICON_SIZE, NATRON_SMALL_BUTTON_ICON_SIZE));
+    _minimizeAllPanelsButtons->setFixedSize(smallButtonSize);
+    _minimizeAllPanelsButtons->setIconSize(smallButtonIconSize);
     _minimizeAllPanelsButtons->setToolTip( Natron::convertFromPlainText(_gui->tr("Minimize / Maximize all panels."), Qt::WhiteSpaceNormal) );
     _minimizeAllPanelsButtons->setFocusPolicy(Qt::NoFocus);
     QObject::connect( _minimizeAllPanelsButtons, SIGNAL( clicked(bool) ), _gui, SLOT( minimizeMaximizeAllPanels(bool) ) );
 
     _maxPanelsOpenedSpinBox = new SpinBox(propertiesAreaButtonsContainer);
-    _maxPanelsOpenedSpinBox->setMaximumSize(NATRON_SMALL_BUTTON_SIZE, NATRON_SMALL_BUTTON_SIZE);
+    _maxPanelsOpenedSpinBox->setMaximumSize(smallButtonSize);
     _maxPanelsOpenedSpinBox->setMinimum(1);
     _maxPanelsOpenedSpinBox->setMaximum(100);
     _maxPanelsOpenedSpinBox->setToolTip( Natron::convertFromPlainText(_gui->tr("Set the maximum of panels that can be opened at the same time "
@@ -372,6 +392,7 @@ GuiPrivate::createPropertiesBinGui()
     mainPropertiesLayout->addWidget(propertiesAreaButtonsContainer);
     mainPropertiesLayout->addWidget(_propertiesScrollArea);
 
+    _propertiesBin->setVisible(false);
     _gui->registerTab(_propertiesBin, _propertiesBin);
 } // createPropertiesBinGui
 
@@ -384,6 +405,7 @@ GuiPrivate::createNodeGraphGui()
     _nodeGraphArea = new NodeGraph(_gui, _appInstance->getProject(), scene, _gui);
     _nodeGraphArea->setScriptName(kNodeGraphObjectName);
     _nodeGraphArea->setLabel( QObject::tr("Node Graph").toStdString() );
+    _nodeGraphArea->setVisible(false);
     _gui->registerTab(_nodeGraphArea, _nodeGraphArea);
 }
 
@@ -393,6 +415,7 @@ GuiPrivate::createCurveEditorGui()
     _curveEditor = new CurveEditor(_gui, _appInstance->getTimeLine(), _gui);
     _curveEditor->setScriptName(kCurveEditorObjectName);
     _curveEditor->setLabel( QObject::tr("Curve Editor").toStdString() );
+    _curveEditor->setVisible(false);
     _gui->registerTab(_curveEditor, _curveEditor);
 }
 
@@ -402,6 +425,7 @@ GuiPrivate::createDopeSheetGui()
     _dopeSheetEditor = new DopeSheetEditor(_gui,_appInstance->getTimeLine(), _gui);
     _dopeSheetEditor->setScriptName(kDopeSheetEditorObjectName);
     _dopeSheetEditor->setLabel(QObject::tr("Dope Sheet").toStdString());
+    _dopeSheetEditor->setVisible(false);
     _gui->registerTab(_dopeSheetEditor, _dopeSheetEditor);
 }
 
@@ -411,7 +435,7 @@ GuiPrivate::createScriptEditorGui()
     _scriptEditor = new ScriptEditor(_gui);
     _scriptEditor->setScriptName("scriptEditor");
     _scriptEditor->setLabel( QObject::tr("Script Editor").toStdString() );
-    _scriptEditor->hide();
+    _scriptEditor->setVisible(false);
     _gui->registerTab(_scriptEditor, _scriptEditor);
 }
 
@@ -526,7 +550,9 @@ GuiPrivate::addToolButton(ToolButton* tool)
     //button->setToolButtonStyle(Qt::ToolButtonIconOnly); // has no effect (arrow is still displayed)
     button->setIcon( tool->getToolButtonIcon() );
     button->setMenu( tool->getMenu() );
-    button->setFixedSize(QSize(NATRON_TOOL_BUTTON_SIZE,NATRON_TOOL_BUTTON_SIZE));
+
+    const QSize toolButtonSize(TO_DPIX(NATRON_TOOL_BUTTON_SIZE), TO_DPIY(NATRON_TOOL_BUTTON_SIZE));
+    button->setFixedSize(toolButtonSize);
     button->setPopupMode(QToolButton::InstantPopup);
     button->setToolTip( Natron::convertFromPlainText(tool->getLabel().trimmed(), Qt::WhiteSpaceNormal) );
     _toolBox->addWidget(button);
@@ -557,18 +583,29 @@ bool
 GuiPrivate::checkProjectLockAndWarn(const QString& projectPath,const QString& projectName)
 {
     boost::shared_ptr<Natron::Project> project= _appInstance->getProject();
-    QString author,lockCreationDate;
+    QString author;
+    QString lockCreationDate;
+    QString lockHost;
     qint64 lockPID;
-    if (project->getLockFileInfos(projectPath,projectName,&author, &lockCreationDate, &lockPID)) {
-        if (lockPID != QCoreApplication::applicationPid()) {
-            Natron::StandardButtonEnum rep = Natron::questionDialog(QObject::tr("Project").toStdString(),
-                                                                    QObject::tr("This project is already opened in another instance of Natron by ").toStdString() +
-                                                                    author.toStdString() + QObject::tr(" and was opened on ").toStdString() + lockCreationDate.toStdString()
-                                                                    + QObject::tr(" by a Natron process ID of ").toStdString() + QString::number(lockPID).toStdString() + QObject::tr(".\nContinue anyway?").toStdString(), false, Natron::StandardButtons(Natron::eStandardButtonYes | Natron::eStandardButtonNo));
-            if (rep == Natron::eStandardButtonYes) {
-                return true;
-            } else {
-                return false;
+    if (project->getLockFileInfos(projectPath, projectName, &author, &lockCreationDate, &lockHost, &lockPID)) {
+        qint64 curPid = (qint64)QCoreApplication::applicationPid();
+        if (lockPID != curPid) {
+            QString appFilePath = QCoreApplication::applicationFilePath();
+            if (Natron::checkIfProcessIsRunning(appFilePath.toStdString().c_str(),(Q_PID)lockPID)) {
+                Natron::StandardButtonEnum rep = Natron::questionDialog(QObject::tr("Project").toStdString(),
+                                                                        QObject::tr("This project may be open in another instance of Natron "
+                                                                                    "running on %1 as process ID %2, "
+                                                                                    "and was opened by %3 on %4.\nContinue anyway?").arg(lockHost,
+                                                                                                                                         QString::number(lockPID),
+                                                                                                                                         author,
+                                                                                                                                         lockCreationDate).toStdString(),
+                                                                        false,
+                                                                        Natron::StandardButtons(Natron::eStandardButtonYes | Natron::eStandardButtonNo));
+                if (rep == Natron::eStandardButtonYes) {
+                    return true;
+                } else {
+                    return false;
+                }
             }
         }
     }
@@ -640,6 +677,15 @@ GuiPrivate::restoreGuiGeometry()
     if ( settings.contains("LastPluginDir") ) {
         _lastPluginDir = settings.value("LastPluginDir").toString();
     }
+    
+#ifdef __NATRON_WIN32__
+    if (settings.contains("ApplicationConsoleVisible")) {
+        bool visible = settings.value("ApplicationConsoleVisible").toBool();
+        _gui->setApplicationConsoleActionVisible(visible);
+    } else {
+        _gui->setApplicationConsoleActionVisible(false);
+    }
+#endif
 } // GuiPrivate::restoreGuiGeometry
 
 void
@@ -659,6 +705,9 @@ GuiPrivate::saveGuiGeometry()
     settings.setValue("LastLoadSequenceDialogPath", _lastLoadSequenceOpenedDir);
     settings.setValue("LastSaveSequenceDialogPath", _lastSaveSequenceOpenedDir);
     settings.setValue("LastPluginDir", _lastPluginDir);
+#ifdef __NATRON_WIN32__
+    settings.setValue("ApplicationConsoleVisible",applicationConsoleVisible);
+#endif
 }
 
 

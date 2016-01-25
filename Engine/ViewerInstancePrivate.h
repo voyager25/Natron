@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@
 
 #include <QtCore/QMutex>
 #include <QtCore/QWaitCondition>
+#include <QtCore/QReadWriteLock>
 #include <QtCore/QThread>
 #include <QtCore/QCoreApplication>
 
@@ -45,14 +46,9 @@
 #include "Engine/Settings.h"
 #include "Engine/Image.h"
 #include "Engine/TextureRect.h"
+#include "Engine/EngineFwd.h"
 
 #define GAMMA_LUT_NB_VALUES 1023
-
-namespace Natron {
-class FrameEntry;
-class FrameParams;
-}
-
 
 
 struct OnGoingRenderInfo
@@ -67,7 +63,8 @@ typedef std::map<U64,OnGoingRenderInfo> OnGoingRenders;
 
 struct RenderViewerArgs
 {
-    RenderViewerArgs(boost::shared_ptr<const Natron::Image> inputImage_,
+    RenderViewerArgs(const boost::shared_ptr<const Natron::Image> &inputImage_,
+                     const boost::shared_ptr<const Natron::Image> &matteImage_,
                      const TextureRect & texRect_,
                      Natron::DisplayChannelsEnum channels_,
                      Natron::ImagePremultiplicationEnum srcPremult_,
@@ -79,6 +76,7 @@ struct RenderViewerArgs
                      const Natron::Color::Lut* colorSpace_,
                      int alphaChannelIndex_)
     : inputImage(inputImage_)
+    , matteImage(matteImage_)
     , texRect(texRect_)
     , channels(channels_)
     , srcPremult(srcPremult_)
@@ -93,6 +91,7 @@ struct RenderViewerArgs
     }
 
     boost::shared_ptr<const Natron::Image> inputImage;
+    boost::shared_ptr<const Natron::Image> matteImage;
     TextureRect texRect;
     Natron::DisplayChannelsEnum channels;
     Natron::ImagePremultiplicationEnum srcPremult;
@@ -455,7 +454,7 @@ public:
     QWaitCondition textureBeingRenderedCond;
     std::list<boost::shared_ptr<Natron::FrameEntry> > textureBeingRendered; ///< a list of all the texture being rendered simultaneously
     
-    mutable QMutex gammaLookupMutex;
+    mutable QReadWriteLock gammaLookupMutex;
     std::vector<float> gammaLookup; // protected by gammaLookupMutex
     
     //When painting, this is the last texture we've drawn onto so that we can update only the specific portion needed

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <cfloat> // DBL_MAX
 #include <climits> // INT_MAX
 
@@ -32,8 +34,6 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 #endif
-
-#include "Global/Macros.h"
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -46,31 +46,10 @@ CLANG_DIAG_ON(uninitialized)
 #include "Engine/Knob.h"
 #include "Engine/Curve.h"
 #include "Engine/KnobGuiI.h"
+#include "Engine/EngineFwd.h"
 
-// Qt
-class QUndoCommand; //used by KnobGui
-class QVBoxLayout; //used by KnobGui
-class QHBoxLayout; //used by KnobGui
-class QGridLayout;
-class QMenu;
-namespace Natron {
-class ClickableLabel;
-class Label;
-class EffectInstance;
-}
-class QString;
+#include "Gui/GuiFwd.h"
 
-// Engine
-class Variant; //used by KnobGui
-class KeyFrame;
-
-// Gui
-class ComboBox;
-class Button;
-class AnimationButton; //used by KnobGui
-class DockablePanel; //used by KnobGui
-class Gui;
-class NodeGui;
 
 #define SLIDER_MAX_RANGE 100000
 
@@ -158,7 +137,7 @@ public:
 
     void enableRightClickMenu(QWidget* widget,int dimension);
 
-    virtual bool showDescriptionLabel() const;
+    virtual bool isLabelVisible() const;
 
     QWidget* getFieldContainer() const;
 
@@ -179,7 +158,7 @@ public:
 
     void removeAllKeyframeMarkersOnTimeline(int dim);
     void setAllKeyframeMarkersOnTimeline(int dim);
-    void setKeyframeMarkerOnTimeline(int time);
+    void setKeyframeMarkerOnTimeline(double time);
 
     /*This function is used by KnobUndoCommand. Calling this in a onInternalValueChanged/valueChanged
        signal/slot sequence can cause an infinite loop.*/
@@ -215,7 +194,7 @@ public:
     template<typename T>
     void setValueAtTime(int dimension,
                         const T & v,
-                        int time,
+                        double time,
                         KeyFrame* newKey,
                         bool refreshGui,
                         Natron::ValueChangedReasonEnum reason)
@@ -247,8 +226,6 @@ public:
     ///Should set to the underlying knob the gui ptr
     virtual void setKnobGuiPointer() OVERRIDE FINAL;
     
-    virtual void onKnobDeletion() OVERRIDE FINAL;
-
     virtual bool isGuiFrozenForPlayback() const OVERRIDE FINAL;
 
     virtual void copyAnimationToClipboard() const OVERRIDE FINAL;
@@ -264,7 +241,11 @@ public:
      **/
     bool isSecretRecursive() const;
     
-    void createDuplicateOnNode(Natron::EffectInstance* effect,bool linkExpression);
+    boost::shared_ptr<KnobI> createDuplicateOnNode(Natron::EffectInstance* effect,
+                                                   bool makeAlias,
+                                                   const boost::shared_ptr<KnobPage>& page,
+                                                   const boost::shared_ptr<KnobGroup>& group,
+                                                   int indexInParent);
 
 
     static bool shouldSliderBeVisible(int sliderMin, int sliderMax)
@@ -279,6 +260,8 @@ public:
 
 public Q_SLOTS:
     
+    void onRemoveAliasLinkActionTriggered();
+    
     void onUnlinkActionTriggered();
 
     void onRedrawGuiCurve(int reason, int dimension);
@@ -288,18 +271,18 @@ public Q_SLOTS:
      **/
     void onInternalValueChanged(int dimension,int reason);
 
-    void onInternalKeySet(SequenceTime time,int dimension,int reason,bool added);
+    void onInternalKeySet(double time,int dimension,int reason,bool added);
 
-    void onInternalKeyRemoved(SequenceTime time,int dimension,int reason);
+    void onInternalKeyRemoved(double time,int dimension,int reason);
     
-    void onMultipleKeySet(const std::list<SequenceTime>& keys,int dimension, int reason);
+    void onMultipleKeySet(const std::list<double>& keys,int dimension, int reason);
 
     void onInternalAnimationAboutToBeRemoved(int dimension);
     
     void onInternalAnimationRemoved();
     
     ///Handler when a keyframe is moved in the curve editor/dope sheet
-    void onKeyFrameMoved(int dimension,int oldTime,int newTime);
+    void onKeyFrameMoved(int dimension,double oldTime,double newTime);
 
     void setSecret();
 
@@ -361,7 +344,7 @@ public Q_SLOTS:
 
     void onAnimationLevelChanged(int dim,int level);
 
-    void onAppendParamEditChanged(int reason,const Variant & v,int dim,int time,bool createNewCommand,bool setKeyFrame);
+    void onAppendParamEditChanged(int reason,const Variant & v,int dim,double time,bool createNewCommand,bool setKeyFrame);
 
     void onFrozenChanged(bool frozen);
 
@@ -379,9 +362,9 @@ public Q_SLOTS:
     
     void onHasModificationsChanged();
     
-    void onDescriptionChanged();
+    void onLabelChanged();
     
-    void onCreateMasterOnGroupActionTriggered();
+    void onCreateAliasOnGroupActionTriggered();
     
 Q_SIGNALS:
 
@@ -419,6 +402,7 @@ protected:
      * @brief Called when the internal value held by the knob is changed, you must implement
      * it to update the interface to reflect the new value. You can query the new value
      * by calling knob->getValue()
+     * The dimension is either -1 indicating that all dimensions should be updated or the dimension index.
      **/
     virtual void updateGUI(int dimension) = 0;
 
@@ -440,7 +424,7 @@ private:
     virtual void setReadOnly(bool readOnly,int dimension) = 0;
     virtual void setDirty(bool dirty) = 0;
     
-    virtual void onLabelChanged() {}
+    virtual void onLabelChangedInternal() {}
 
     /**
      * @brief Must fill the horizontal layout with all the widgets composing the knob.

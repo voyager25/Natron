@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,30 +29,44 @@
 #include <QtCore/QString>
 #include <QtCore/QAtomicInt>
 
+
+#ifdef NATRON_USE_BREAKPAD
+#if defined(Q_OS_MAC)
+#include "client/mac/handler/exception_handler.h"
+#elif defined(Q_OS_LINUX)
+#include <fcntl.h>
+#include "client/linux/handler/exception_handler.h"
+#include "client/linux/crash_generation/crash_generation_server.h"
+#elif defined(Q_OS_WIN32)
+#include "client/windows/handler/exception_handler.h"
+#endif
+#endif
+
 #include "Engine/AppManager.h"
 #include "Engine/Cache.h"
 #include "Engine/FrameEntry.h"
 #include "Engine/Image.h"
+#include "Engine/EngineFwd.h"
+#include "Engine/TLSHolder.h"
+
+
+
+
 
 class QProcess;
 class QLocalServer;
 class QLocalSocket;
 
-#ifdef NATRON_USE_BREAKPAD
-namespace google_breakpad {
-    class ExceptionHandler;
-}
-#endif
-class ProcessInputChannel;
-namespace Natron {
-    class OfxHost;
-}
-
 
 
 struct AppManagerPrivate
 {
+  
+    AppTLS globalTLS;
+
     AppManager::AppTypeEnum _appType; //< the type of app
+    
+    mutable QMutex _appInstancesMutex;
     std::map<int,AppInstanceRef> _appInstances; //< the instances mapped against their ID
     int _availableID; //< the ID for the next instance
     int _topLevelInstanceID; //< the top level app ID
@@ -116,11 +130,15 @@ struct AppManagerPrivate
     PyThreadState* mainThreadState;
     
 #ifdef NATRON_USE_BREAKPAD
+    QString breakpadProcessExecutableFilePath;
+    Q_PID breakpadProcessPID;
     boost::shared_ptr<google_breakpad::ExceptionHandler> breakpadHandler;
-    boost::shared_ptr<QProcess> crashReporter;
-    QString crashReporterBreakpadPipe;
-    boost::shared_ptr<QLocalServer> crashClientServer;
-    QLocalSocket* crashServerConnection;
+#ifndef Q_OS_LINUX
+    //On Windows & OSX the breakpad pipe is handled ourselves
+    boost::shared_ptr<QLocalSocket> breakpadPipeConnection;
+#endif
+    boost::shared_ptr<QLocalSocket> crashReporterComPipeConnection;
+    boost::shared_ptr<ExistenceCheckerThread> breakpadAliveThread;
 #endif
     
     QMutex natronPythonGIL;
@@ -133,13 +151,7 @@ struct AppManagerPrivate
     
     AppManagerPrivate();
     
-    ~AppManagerPrivate()
-    {
-        for (U32 i = 0; i < args.size() ; ++i) {
-            free(args[i]);
-        }
-        args.clear();
-    }
+    ~AppManagerPrivate();
 
     void initProcessInputChannel(const QString & mainProcessServerName);
 
@@ -163,7 +175,9 @@ struct AppManagerPrivate
     void declareSettingsToPython();
     
 #ifdef NATRON_USE_BREAKPAD
-    void initBreakpad();
+    void initBreakpad(const QString& breakpadPipePath, const QString& breakpadComPipePath, int breakpad_client_fd);
+
+    void createBreakpadHandler(int breakpad_client_fd);
 #endif
 };
 

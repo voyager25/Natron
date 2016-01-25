@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,9 +28,11 @@
 #include "Engine/BezierCP.h"
 #include "Engine/EffectInstance.h"
 #include "Engine/KnobTypes.h"
+#include "Engine/NodeWrapper.h"
 #include "Engine/Node.h"
 #include "Engine/RotoContext.h"
 #include "Engine/RotoLayer.h"
+#include "Engine/RotoStrokeItem.h"
 
 ItemBase::ItemBase(const boost::shared_ptr<RotoItem>& item)
 : _item(item)
@@ -108,6 +110,21 @@ ItemBase::getParentLayer() const
     }
 }
 
+Param*
+ItemBase::getParam(const std::string& name) const
+{
+    RotoDrawableItem* drawable = dynamic_cast<RotoDrawableItem*>(_item.get());
+    if (!drawable) {
+        return 0;
+    }
+    boost::shared_ptr<KnobI> knob = drawable->getKnobByName(name);
+    if (!knob) {
+        return 0;
+    }
+    Param* ret = Effect::createParamWrapperForKnob(knob);
+    return ret;
+}
+
 
 Layer::Layer(const boost::shared_ptr<RotoItem>& item)
 : ItemBase(item)
@@ -181,7 +198,7 @@ void
 BezierCurve::addControlPoint(double x, double y)
 {
     const std::list<boost::shared_ptr<BezierCP> >& cps = _bezier->getControlPoints();
-    int keyframeTime;
+    double keyframeTime;
     if (!cps.empty()) {
         keyframeTime = cps.front()->getKeyframeTime(false,0);
     } else {
@@ -203,43 +220,43 @@ BezierCurve::removeControlPointByIndex(int index)
 }
 
 void
-BezierCurve::movePointByIndex(int index,int time,double dx,double dy)
+BezierCurve::movePointByIndex(int index,double time,double dx,double dy)
 {
     _bezier->movePointByIndex(index, time, dx, dy);
 }
 
 void
-BezierCurve::moveFeatherByIndex(int index,int time,double dx,double dy)
+BezierCurve::moveFeatherByIndex(int index,double time,double dx,double dy)
 {
     _bezier->moveFeatherByIndex(index, time, dx, dy);
 }
 
 void
-BezierCurve::moveLeftBezierPoint(int index,int time,double dx,double dy)
+BezierCurve::moveLeftBezierPoint(int index,double time,double dx,double dy)
 {
     _bezier->moveLeftBezierPoint(index, time, dx, dy);
 }
 
 void
-BezierCurve::moveRightBezierPoint(int index,int time,double dx,double dy)
+BezierCurve::moveRightBezierPoint(int index,double time,double dx,double dy)
 {
     _bezier->moveRightBezierPoint(index, time, dx, dy);
 }
 
 void
-BezierCurve::setPointAtIndex(int index,int time,double x,double y,double lx,double ly,double rx,double ry)
+BezierCurve::setPointAtIndex(int index,double time,double x,double y,double lx,double ly,double rx,double ry)
 {
     _bezier->setPointAtIndex(false, index, time, x, y, lx, ly, rx, ry);
 }
 
 void
-BezierCurve::setFeatherPointAtIndex(int index,int time,double x,double y,double lx,double ly,double rx,double ry)
+BezierCurve::setFeatherPointAtIndex(int index,double time,double x,double y,double lx,double ly,double rx,double ry)
 {
     _bezier->setPointAtIndex(true, index, time, x, y, lx, ly, rx, ry);
 }
 
 void
-BezierCurve::slavePointToTrack(int index, int trackTime, DoubleParam* trackCenter)
+BezierCurve::slavePointToTrack(int index, double trackTime, DoubleParam* trackCenter)
 {
     if (!trackCenter) {
         return;
@@ -304,25 +321,25 @@ BezierCurve::getNumControlPoints() const
 }
 
 void
-BezierCurve::setActivated(int time, bool activated)
+BezierCurve::setActivated(double time, bool activated)
 {
     _bezier->setActivated(activated, time);
 }
 
 bool
-BezierCurve::getIsActivated(int time)
+BezierCurve::getIsActivated(double time)
 {
     return _bezier->isActivated(time);
 }
 
 void
-BezierCurve::setOpacity(double opacity, int time)
+BezierCurve::setOpacity(double opacity, double time)
 {
     _bezier->setOpacity(opacity, time);
 }
 
 double
-BezierCurve::getOpacity(int time) const{
+BezierCurve::getOpacity(double time) const{
     return _bezier->getOpacity(time);
 }
 
@@ -351,31 +368,31 @@ BezierCurve::setOverlayColor(double r,double g,double b)
 }
 
 double
-BezierCurve::getFeatherDistance(int time) const
+BezierCurve::getFeatherDistance(double time) const
 {
     return _bezier->getFeatherDistance(time);
 }
 
 void
-BezierCurve::setFeatherDistance(double dist,int time)
+BezierCurve::setFeatherDistance(double dist,double time)
 {
     _bezier->setFeatherDistance(dist, time);
 }
 
 double
-BezierCurve::getFeatherFallOff(int time) const
+BezierCurve::getFeatherFallOff(double time) const
 {
     return _bezier->getFeatherFallOff(time);
 }
 
 void
-BezierCurve::setFeatherFallOff(double falloff,int time)
+BezierCurve::setFeatherFallOff(double falloff,double time)
 {
     _bezier->setFeatherFallOff(falloff, time);
 }
 
 ColorTuple
-BezierCurve::getColor(int time)
+BezierCurve::getColor(double time)
 {
     ColorTuple c;
     double color[3];
@@ -388,7 +405,7 @@ BezierCurve::getColor(int time)
 }
 
 void
-BezierCurve::setColor(int time,double r, double g, double b)
+BezierCurve::setColor(double time,double r, double g, double b)
 {
     _bezier->setColor(time, r, g, b);
 }
@@ -493,7 +510,19 @@ ItemBase*
 Roto::getItemByName(const std::string& name) const
 {
     boost::shared_ptr<RotoItem> item =  _ctx->getItemByName(name);
-    if (item) {
+    if (!item) {
+        return 0;
+    }
+    RotoLayer* isLayer = dynamic_cast<RotoLayer*>(item.get());
+    if (isLayer) {
+        return new Layer(item);
+    }
+    Bezier* isBezier = dynamic_cast<Bezier*>(item.get());
+    if (isBezier) {
+        return new BezierCurve(item);
+    }
+    RotoStrokeItem* isStroke = dynamic_cast<RotoStrokeItem*>(item.get());
+    if (isStroke) {
         return new ItemBase(item);
     }
     return 0;
@@ -510,7 +539,7 @@ Roto::createLayer()
 }
 
 BezierCurve*
-Roto::createBezier(double x,double y,int time)
+Roto::createBezier(double x,double y,double time)
 {
     boost::shared_ptr<Bezier>  ret = _ctx->makeBezier(x, y, kRotoBezierBaseName, time,false);
     if (ret) {
@@ -520,7 +549,7 @@ Roto::createBezier(double x,double y,int time)
 }
 
 BezierCurve*
-Roto::createEllipse(double x,double y,double diameter,bool fromCenter,int time)
+Roto::createEllipse(double x,double y,double diameter,bool fromCenter,double time)
 {
     boost::shared_ptr<Bezier>  ret = _ctx->makeEllipse(x, y, diameter, fromCenter, time);
     if (ret) {
@@ -530,7 +559,7 @@ Roto::createEllipse(double x,double y,double diameter,bool fromCenter,int time)
 }
 
 BezierCurve*
-Roto::createRectangle(double x,double y,double size,int time)
+Roto::createRectangle(double x,double y,double size,double time)
 {
     boost::shared_ptr<Bezier>  ret = _ctx->makeSquare(x, y, size, time);
     if (ret) {

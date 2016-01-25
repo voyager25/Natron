@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,6 +47,7 @@ GCC_DIAG_ON(unused-parameter)
 #include "Engine/ImageParamsSerialization.h"
 #include "Engine/FrameEntrySerialization.h"
 #include "Engine/FrameParamsSerialization.h"
+#include "Engine/EngineFwd.h"
 
 #define SERIALIZED_ENTRY_INTRODUCES_SIZE 2
 #define SERIALIZED_ENTRY_VERSION SERIALIZED_ENTRY_INTRODUCES_SIZE

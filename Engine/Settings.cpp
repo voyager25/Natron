@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,11 +63,13 @@
 
 #define NATRON_DEFAULT_APPEARANCE_VERSION 1
 
+#define NATRON_CUSTOM_HOST_NAME_ENTRY "Custom..."
+
 using namespace Natron;
 
 
-Settings::Settings(AppInstance* appInstance)
-    : KnobHolder(appInstance)
+Settings::Settings()
+    : KnobHolder(0)
     , _restoringSettings(false)
     , _ocioRestored(false)
     , _settingsExisted(false)
@@ -130,6 +132,17 @@ Settings::initializeKnobsGeneral()
     _checkForUpdates->setAnimationEnabled(false);
     _checkForUpdates->setHintToolTip("When checked, " NATRON_APPLICATION_NAME " will check for new updates on start-up of the application.");
     _generalTab->addKnob(_checkForUpdates);
+    
+    _enableCrashReports = Natron::createKnob<KnobBool>(this, "Enable crash reporting");
+    _enableCrashReports->setName("enableCrashReports");
+    _enableCrashReports->setAnimationEnabled(false);
+    _enableCrashReports->setHintToolTip("When checked, if " NATRON_APPLICATION_NAME "crashes a window will pop-up asking you "
+                                        "whether you want to upload the crash dump to the developers or not. "
+                                        "This can help them track down the bug.\n"
+                                        "If you need to turn the crash reporting system off, uncheck this.\n"
+                                        "Note that when using the application in command-line mode, if crash reports are "
+                                        "enabled, they will be automatically uploaded.\n"
+                                        "Changing this requires a restart of the application to take effect.");
     
     _notifyOnFileChange = Natron::createKnob<KnobBool>(this, "Warn when a file changes externally");
     _notifyOnFileChange->setName("warnOnExternalChange");
@@ -277,6 +290,13 @@ Settings::initializeKnobsGeneral()
                                                                             "from the Layout menu. If empty, the default application layout is used.");
     _defaultLayoutFile->setAnimationEnabled(false);
     _generalTab->addKnob(_defaultLayoutFile);
+    
+    _loadProjectsWorkspace = Natron::createKnob<KnobBool>(this, "Load workspace embedded within projects");
+    _loadProjectsWorkspace->setName("loadProjectWorkspace");
+    _loadProjectsWorkspace->setHintToolTip("When checked, when loading a project, the workspace (windows layout) will also be loaded, otherwise it "
+                                           "will use your current layout.");
+    _loadProjectsWorkspace->setAnimationEnabled(false);
+    _generalTab->addKnob(_loadProjectsWorkspace);
 
     _renderOnEditingFinished = Natron::createKnob<KnobBool>(this, "Refresh viewer only when editing is finished");
     _renderOnEditingFinished->setName("renderOnEditingFinished");
@@ -304,36 +324,105 @@ Settings::initializeKnobsGeneral()
     _activateTransformConcatenationSupport->setName("transformCatSupport");
     _generalTab->addKnob(_activateTransformConcatenationSupport);
     
+    _hostName = Natron::createKnob<KnobChoice>(this, "Appear to plug-ins as");
+    _hostName->setName("pluginHostName");
+    _hostName->setHintToolTip(NATRON_APPLICATION_NAME " will appear with the name of the selected application to the OpenFX plug-ins. "
+                              "Changing it to the name of another application can help loading plugins which "
+                              "restrict their usage to specific OpenFX host(s). "
+                              "If a Host is not listed here, use the \"Custom\" entry to enter a custom host name. Changing this requires "
+                              "a restart of the application and requires clearing "
+                              "the OpenFX plugins cache from the Cache menu.");
+    _knownHostNames.clear();
+    std::vector<std::string> visibleHostEntries,hostEntriesHelp;
+    assert(_knownHostNames.size() == (int)eKnownHostNameNatron);
+    _knownHostNames.push_back(NATRON_ORGANIZATION_DOMAIN_TOPLEVEL "." NATRON_ORGANIZATION_DOMAIN_SUB "." NATRON_APPLICATION_NAME);
+    visibleHostEntries.push_back(NATRON_APPLICATION_NAME);
+    assert(_knownHostNames.size() == (int)eKnownHostNameNuke);
+    _knownHostNames.push_back("uk.co.thefoundry.nuke");
+    visibleHostEntries.push_back("Nuke");
+    assert(_knownHostNames.size() == (int)eKnownHostNameFusion);
+    _knownHostNames.push_back("com.eyeonline.Fusion");
+    visibleHostEntries.push_back("Fusion");
+    assert(_knownHostNames.size() == (int)eKnownHostNameVegas);
+    _knownHostNames.push_back("com.sonycreativesoftware.vegas");
+    visibleHostEntries.push_back("Sony Vegas");
+    assert(_knownHostNames.size() == (int)eKnownHostNameToxik);
+    _knownHostNames.push_back("Autodesk Toxik");
+    visibleHostEntries.push_back("Toxik");
+    assert(_knownHostNames.size() == (int)eKnownHostNameScratch);
+    _knownHostNames.push_back("Assimilator");
+    visibleHostEntries.push_back("Scratch");
+    assert(_knownHostNames.size() == (int)eKnownHostNameDustBuster);
+    _knownHostNames.push_back("Dustbuster");
+    visibleHostEntries.push_back("DustBuster");
+    assert(_knownHostNames.size() == (int)eKnownHostNameResolve);
+    _knownHostNames.push_back("DaVinciResolve");
+    visibleHostEntries.push_back("Da Vinci Resolve");
+    assert(_knownHostNames.size() == (int)eKnownHostNameResolveLite);
+    _knownHostNames.push_back("DaVinciResolveLite");
+    visibleHostEntries.push_back("Da Vinci Resolve Lite");
+    assert(_knownHostNames.size() == (int)eKnownHostNameMistika);
+    _knownHostNames.push_back("Mistika");
+    visibleHostEntries.push_back("SGO Mistika");
+    assert(_knownHostNames.size() == (int)eKnownHostNamePablo);
+    _knownHostNames.push_back("com.quantel.genq");
+    visibleHostEntries.push_back("Quantel Pablo Rio");
+    assert(_knownHostNames.size() == (int)eKnownHostNameMotionStudio);
+    _knownHostNames.push_back("com.idtvision.MotionStudio");
+    visibleHostEntries.push_back("IDT Motion Studio");
+    assert(_knownHostNames.size() == (int)eKnownHostNameShake);
+    _knownHostNames.push_back("com.apple.shake");
+    visibleHostEntries.push_back("Shake");
+    assert(_knownHostNames.size() == (int)eKnownHostNameBaselight);
+    _knownHostNames.push_back("Baselight");
+    visibleHostEntries.push_back("Baselight");
+    assert(_knownHostNames.size() == (int)eKnownHostNameFrameCycler);
+    _knownHostNames.push_back("IRIDAS Framecycler");
+    visibleHostEntries.push_back("FrameCycler");
+    assert(_knownHostNames.size() == (int)eKnownHostNameNucoda);
+    _knownHostNames.push_back("Nucoda");
+    visibleHostEntries.push_back("Nucoda Film Master");
+    assert(_knownHostNames.size() == (int)eKnownHostNameAvidDS);
+    _knownHostNames.push_back("DS OFX HOST");
+    visibleHostEntries.push_back("Avid DS");
+    assert(_knownHostNames.size() == (int)eKnownHostNameDX);
+    _knownHostNames.push_back("com.chinadigitalvideo.dx");
+    visibleHostEntries.push_back("China Digital Video DX");
+    assert(_knownHostNames.size() == (int)eKnownHostNameTitlerPro);
+    _knownHostNames.push_back("com.newblue.titlerpro");
+    visibleHostEntries.push_back("NewBlueFX Titler Pro");
+    assert(_knownHostNames.size() == (int)eKnownHostNameRamen);
+    _knownHostNames.push_back("Ramen");
+    visibleHostEntries.push_back("Ramen");
+    assert(_knownHostNames.size() == (int)eKnownHostNameTuttleOfx);
+    _knownHostNames.push_back("TuttleOfx");
+    visibleHostEntries.push_back("TuttleOFX");
     
-    _hostName = Natron::createKnob<KnobString>(this, "Host name");
-    _hostName->setName("hostName");
-#pragma message WARN("TODO: make a choice menu out of these host names (with a 'custom host' entry), and tell the user to restart Natron when it is changed.")
-    _hostName->setHintToolTip("This is the name of the OpenFX host (application) as it appears to the OpenFX plugins. "
+    
+    assert(visibleHostEntries.size() == _knownHostNames.size());
+    hostEntriesHelp = _knownHostNames;
+    
+    visibleHostEntries.push_back(NATRON_CUSTOM_HOST_NAME_ENTRY);
+    hostEntriesHelp.push_back("Custom host name");
+    
+    _hostName->populateChoices(visibleHostEntries,hostEntriesHelp);
+    _hostName->setAnimationEnabled(false);
+    _hostName->setAddNewLine(false);
+    _generalTab->addKnob(_hostName);
+    
+    _customHostName = Natron::createKnob<KnobString>(this, "Custom Host name");
+    _customHostName->setName("customHostName");
+    _customHostName->setHintToolTip("This is the name of the OpenFX host (application) as it appears to the OpenFX plugins. "
                               "Changing it to the name of another application can help loading some plugins which "
                               "restrict their usage to specific OpenFX hosts. You shoud leave "
                               "this to its default value, unless a specific plugin refuses to load or run. "
                               "Changing this takes effect upon the next application launch, and requires clearing "
                               "the OpenFX plugins cache from the Cache menu. "
-                              "Here is a list of known OpenFX hosts: \n"
-                              "uk.co.thefoundry.nuke\n"
-                              "com.eyeonline.Fusion\n"
-                              "com.sonycreativesoftware.vegas\n"
-                              "Autodesk Toxik\n"
-                              "Assimilator\n"
-                              "Dustbuster\n"
-                              "DaVinciResolve\n"
-                              "DaVinciResolveLite\n"
-                              "Mistika\n"
-                              "com.apple.shake\n"
-                              "Baselight\n"
-                              "IRIDAS Framecycler\n"
-                              "Ramen\n"
-                              "TuttleOfx\n"
-                              "\n"
                               "The default host name is: \n"
                               NATRON_ORGANIZATION_DOMAIN_TOPLEVEL "." NATRON_ORGANIZATION_DOMAIN_SUB "." NATRON_APPLICATION_NAME);
-    _hostName->setAnimationEnabled(false);
-    _generalTab->addKnob(_hostName);
+    _customHostName->setAnimationEnabled(false);
+    _customHostName->setSecretByDefault(true);
+    _generalTab->addKnob(_customHostName);
 }
 
 void
@@ -378,6 +467,10 @@ Settings::initializeKnobsAppearance()
     _dopeSheetEditorColors = Natron::createKnob<KnobGroup>(this, "Dope Sheet");
     _dopeSheetEditorColors->setAsTab();
     _appearanceTab->addKnob(_dopeSheetEditorColors);
+    
+    _scriptEditorColors = Natron::createKnob<KnobGroup>(this, "Script Editor");
+    _scriptEditorColors->setAsTab();
+    _appearanceTab->addKnob(_scriptEditorColors);
     
     _sunkenColor =  Natron::createKnob<KnobColor>(this, "Sunken",3);
     _sunkenColor->setName("sunken");
@@ -530,6 +623,70 @@ Settings::initializeKnobsAppearance()
     _dopeSheetEditorGridColor->setAnimationEnabled(false);
     _dopeSheetEditorGridColor->setSimplified(true);
     _dopeSheetEditorColors->addKnob(_dopeSheetEditorGridColor);
+    
+    
+    _curLineColor = Natron::createKnob<KnobColor>(this, "Current Line Color", 3);
+    _curLineColor->setName("currentLineColor");
+    _curLineColor->setAnimationEnabled(false);
+    _curLineColor->setSimplified(true);
+    //_numbersColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_curLineColor);
+    
+    _keywordColor = Natron::createKnob<KnobColor>(this, "Keyword Color", 3);
+    _keywordColor->setName("keywordColor");
+    _keywordColor->setAnimationEnabled(false);
+    _keywordColor->setSimplified(true);
+    _keywordColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_keywordColor);
+    
+    _operatorColor = Natron::createKnob<KnobColor>(this, "Operator Color", 3);
+    _operatorColor->setName("operatorColor");
+    _operatorColor->setAnimationEnabled(false);
+    _operatorColor->setSimplified(true);
+    _operatorColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_operatorColor);
+    
+    _braceColor = Natron::createKnob<KnobColor>(this, "Brace Color", 3);
+    _braceColor->setName("braceColor");
+    _braceColor->setAnimationEnabled(false);
+    _braceColor->setSimplified(true);
+    _braceColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_braceColor);
+    
+    _defClassColor = Natron::createKnob<KnobColor>(this, "Class Def Color", 3);
+    _defClassColor->setName("classDefColor");
+    _defClassColor->setAnimationEnabled(false);
+    _defClassColor->setSimplified(true);
+    //_defClassColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_defClassColor);
+    
+    _stringsColor = Natron::createKnob<KnobColor>(this, "Strings Color", 3);
+    _stringsColor->setName("stringsColor");
+    _stringsColor->setAnimationEnabled(false);
+    _stringsColor->setSimplified(true);
+    _stringsColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_stringsColor);
+    
+    _commentsColor = Natron::createKnob<KnobColor>(this, "Comments Color", 3);
+    _commentsColor->setName("commentsColor");
+    _commentsColor->setAnimationEnabled(false);
+    _commentsColor->setSimplified(true);
+    _commentsColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_commentsColor);
+    
+    _selfColor = Natron::createKnob<KnobColor>(this, "Self Color", 3);
+    _selfColor->setName("selfColor");
+    _selfColor->setAnimationEnabled(false);
+    _selfColor->setSimplified(true);
+    _selfColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_selfColor);
+    
+    _numbersColor = Natron::createKnob<KnobColor>(this, "Numbers Color", 3);
+    _numbersColor->setName("numbersColor");
+    _numbersColor->setAnimationEnabled(false);
+    _numbersColor->setSimplified(true);
+    //_numbersColor->setAddNewLine(false);
+    _scriptEditorColors->addKnob(_numbersColor);
 
 
     boost::shared_ptr<KnobPage> ocioTab = Natron::createKnob<KnobPage>(this, "OpenColorIO");
@@ -756,10 +913,18 @@ Settings::initializeKnobsNodeGraph()
     _nodegraphTab->addKnob(_useInputAForMergeAutoConnect);
     
     _usePluginIconsInNodeGraph = Natron::createKnob<KnobBool>(this, "Display plug-in icon on node-graph");
+    _usePluginIconsInNodeGraph->setName("usePluginIcons");
     _usePluginIconsInNodeGraph->setHintToolTip("When checked, each node that has a plug-in icon will display it in the node-graph."
                                                "Changing this option will not affect already existing nodes, unless a restart of Natron is made.");
     _usePluginIconsInNodeGraph->setAnimationEnabled(false);
     _nodegraphTab->addKnob(_usePluginIconsInNodeGraph);
+    
+    _useAntiAliasing = Natron::createKnob<KnobBool>(this, "Anti-Aliasing");
+    _useAntiAliasing->setName("antiAliasing");
+    _useAntiAliasing->setHintToolTip("When checked, the node graph will be painted using anti-aliasing. Unchecking it may increase performances."
+                                     " Changing this requires a restart of Natron");
+    _useAntiAliasing->setAnimationEnabled(false);
+    _nodegraphTab->addKnob(_useAntiAliasing);
     
    
     _defaultNodeColor = Natron::createKnob<KnobColor>(this, "Default node color",3);
@@ -1147,6 +1312,7 @@ Settings::initializeKnobsPython()
     _pythonPage->addKnob(_loadPyPlugsFromPythonScript);
 
     _echoVariableDeclarationToPython = Natron::createKnob<KnobBool>(this, "Print auto-declared variables in the Script Editor");
+    _echoVariableDeclarationToPython->setName("printAutoDeclaredVars");
     _echoVariableDeclarationToPython->setHintToolTip("When checked, Natron will print in the Script Editor all variables that are "
                                                      "automatically declared, such as the app variable or node attributes.");
     _echoVariableDeclarationToPython->setAnimationEnabled(false);
@@ -1171,12 +1337,14 @@ Settings::setCachingLabels()
 void
 Settings::setDefaultValues()
 {
-    beginKnobsValuesChanged(Natron::eValueChangedReasonPluginEdited);
-    _hostName->setDefaultValue(NATRON_ORGANIZATION_DOMAIN_TOPLEVEL "." NATRON_ORGANIZATION_DOMAIN_SUB "." NATRON_APPLICATION_NAME);
+    beginChanges();
+    _hostName->setDefaultValue(0);
+    _customHostName->setDefaultValue(NATRON_ORGANIZATION_DOMAIN_TOPLEVEL "." NATRON_ORGANIZATION_DOMAIN_SUB "." NATRON_APPLICATION_NAME);
     _natronSettingsExist->setDefaultValue(false);
     _systemFontChoice->setDefaultValue(0);
     _fontSize->setDefaultValue(NATRON_FONT_SIZE_DEFAULT);
     _checkForUpdates->setDefaultValue(false);
+    _enableCrashReports->setDefaultValue(true);
     _notifyOnFileChange->setDefaultValue(true);
     _autoSaveDelay->setDefaultValue(5, 0);
     _maxUndoRedoNodeGraph->setDefaultValue(20, 0);
@@ -1184,6 +1352,7 @@ Settings::setDefaultValues()
     _convertNaNValues->setDefaultValue(true);
     _snapNodesToConnections->setDefaultValue(true);
     _useBWIcons->setDefaultValue(false);
+    _loadProjectsWorkspace->setDefaultValue(false);
     _useNodeGraphHints->setDefaultValue(true);
     _numberOfThreads->setDefaultValue(0,0);
     _numberOfParallelRenders->setDefaultValue(0,0);
@@ -1229,6 +1398,7 @@ Settings::setDefaultValues()
     setCachingLabels();
     _autoTurbo->setDefaultValue(false);
     _usePluginIconsInNodeGraph->setDefaultValue(true);
+    _useAntiAliasing->setDefaultValue(false);
     _defaultNodeColor->setDefaultValue(0.7,0);
     _defaultNodeColor->setDefaultValue(0.7,1);
     _defaultNodeColor->setDefaultValue(0.7,2);
@@ -1291,7 +1461,7 @@ Settings::setDefaultValues()
     _defaultDeepGroupColor->setDefaultValue(0.,1);
     _defaultDeepGroupColor->setDefaultValue(0.38,2);
     
-    _echoVariableDeclarationToPython->setDefaultValue(true);
+    _echoVariableDeclarationToPython->setDefaultValue(false);
 
     
     _sunkenColor->setDefaultValue(0.12,0);
@@ -1385,8 +1555,43 @@ Settings::setDefaultValues()
     _dopeSheetEditorGridColor->setDefaultValue(0.714, 1);
     _dopeSheetEditorGridColor->setDefaultValue(0.714, 2);
 
+    _keywordColor->setDefaultValue(0.7,0);
+    _keywordColor->setDefaultValue(0.7,1);
+    _keywordColor->setDefaultValue(0.,2);
+    
+    _operatorColor->setDefaultValue(0.78, 0);
+    _operatorColor->setDefaultValue(0.78, 1);
+    _operatorColor->setDefaultValue(0.78, 2);
+    
+    _braceColor->setDefaultValue(0.85, 0);
+    _braceColor->setDefaultValue(0.85, 1);
+    _braceColor->setDefaultValue(0.85, 2);
+    
+    _defClassColor->setDefaultValue(0.7,0);
+    _defClassColor->setDefaultValue(0.7,1);
+    _defClassColor->setDefaultValue(0.,2);
+    
+    _stringsColor->setDefaultValue(0.8,0);
+    _stringsColor->setDefaultValue(0.2,1);
+    _stringsColor->setDefaultValue(0.,2);
 
-    endKnobsValuesChanged(Natron::eValueChangedReasonPluginEdited);
+    _commentsColor->setDefaultValue(0.25,0);
+    _commentsColor->setDefaultValue(0.6,1);
+    _commentsColor->setDefaultValue(0.25,2);
+    
+    _selfColor->setDefaultValue(0.7,0);
+    _selfColor->setDefaultValue(0.7,1);
+    _selfColor->setDefaultValue(0.,2);
+
+    _numbersColor->setDefaultValue(0.25,0);
+    _numbersColor->setDefaultValue(0.8,1);
+    _numbersColor->setDefaultValue(0.9,2);
+    
+    _curLineColor->setDefaultValue(0.35,0);
+    _curLineColor->setDefaultValue(0.35,1);
+    _curLineColor->setDefaultValue(0.35,2);
+
+    endChanges();
 } // setDefaultValues
 
 void
@@ -1747,7 +1952,7 @@ Settings::tryLoadOpenColorIOConfig()
 void
 Settings::onKnobValueChanged(KnobI* k,
                              Natron::ValueChangedReasonEnum reason,
-                             SequenceTime /*time*/,
+                             double /*time*/,
                              bool /*originatedFromMainThread*/)
 {
     
@@ -1845,12 +2050,28 @@ Settings::onKnobValueChanged(KnobI* k,
                 k == _dopeSheetEditorRootSectionBackgroundColor.get() ||
                 k == _dopeSheetEditorKnobSectionBackgroundColor.get() ||
                 k == _dopeSheetEditorScaleColor.get() ||
-                k == _dopeSheetEditorGridColor.get())) {
+                k == _dopeSheetEditorGridColor.get() ||
+                k == _keywordColor.get() ||
+                k == _operatorColor.get() ||
+                k == _curLineColor.get() ||
+                k == _braceColor.get() ||
+                k == _defClassColor.get() ||
+                k == _stringsColor.get() ||
+                k == _commentsColor.get() ||
+                k == _selfColor.get() ||
+                k == _numbersColor.get())) {
                     appPTR->reloadStylesheets();
                   
-                }
-    else if (k == _qssFile.get()) {
+    } else if (k == _qssFile.get()) {
         appPTR->reloadStylesheets();
+    } else if (k == _hostName.get()) {
+        std::string hostName = _hostName->getActiveEntryText_mt_safe();
+        bool isCustom = hostName == NATRON_CUSTOM_HOST_NAME_ENTRY;
+        _customHostName->setSecret(!isCustom);
+    }
+    if ((k == _hostName.get() || k == _customHostName.get()) && !_restoringSettings) {
+        Natron::warningDialog(tr("Host-name change").toStdString(), tr("Changing this requires a restart of " NATRON_APPLICATION_NAME
+                                                                       " and clearing the OpenFX plug-ins load cache from the Cache menu.").toStdString());
     }
 } // onKnobValueChanged
 
@@ -1937,7 +2158,7 @@ std::string
 Settings::getReaderPluginIDForFileType(const std::string & extension)
 {
     for (U32 i = 0; i < _readersMapping.size(); ++i) {
-        if (_readersMapping[i]->getDescription() == extension) {
+        if (_readersMapping[i]->getLabel() == extension) {
             const std::vector<std::string> entries =  _readersMapping[i]->getEntries_mt_safe();
             int index = _readersMapping[i]->getValue();
             assert( index < (int)entries.size() );
@@ -1952,7 +2173,7 @@ std::string
 Settings::getWriterPluginIDForFileType(const std::string & extension)
 {
     for (U32 i = 0; i < _writersMapping.size(); ++i) {
-        if (_writersMapping[i]->getDescription() == extension) {
+        if (_writersMapping[i]->getLabel() == extension) {
             const std::vector<std::string>  entries =  _writersMapping[i]->getEntries_mt_safe();
             int index = _writersMapping[i]->getValue();
             assert( index < (int)entries.size() );
@@ -2187,7 +2408,6 @@ Settings::populatePluginsTab()
             pluginLabel->setAnimationEnabled(false);
             pluginLabel->setDefaultValue(pluginName);
             pluginLabel->setAddNewLine(false);
-            pluginLabel->hideDescription();
             pluginLabel->setIsPersistant(false);
             if (group) {
                 group->addKnob(pluginLabel);
@@ -2341,7 +2561,7 @@ Settings::restoreDefault()
         qDebug() << "Failed to remove settings ( " << settings.fileName() << " ).";
     }
 
-    beginKnobsValuesChanged(Natron::eValueChangedReasonPluginEdited);
+    beginChanges();
     const std::vector<boost::shared_ptr<KnobI> > & knobs = getKnobs();
     for (U32 i = 0; i < knobs.size(); ++i) {
         for (int j = 0; j < knobs[i]->getDimension(); ++j) {
@@ -2349,7 +2569,7 @@ Settings::restoreDefault()
         }
     }
     setCachingLabels();
-    endKnobsValuesChanged(Natron::eValueChangedReasonPluginEdited);
+    endChanges();
 }
 
 bool
@@ -2382,11 +2602,18 @@ Settings::isCheckForUpdatesEnabled() const
     return _checkForUpdates->getValue();
 }
 
+
 void
 Settings::setCheckUpdatesEnabled(bool enabled)
 {
     _checkForUpdates->setValue(enabled, 0);
     saveSetting(_checkForUpdates.get());
+}
+
+bool
+Settings::isCrashReportingEnabled() const
+{
+    return _enableCrashReports->getValue();
 }
 
 int
@@ -2399,6 +2626,7 @@ void
 Settings::setMaxPanelsOpened(int maxPanels)
 {
     _maxPanelsOpened->setValue(maxPanels, 0);
+    saveSetting(_maxPanelsOpened.get());
 }
 
 void
@@ -2584,7 +2812,16 @@ Settings::getDisconnectedArrowLength() const
 std::string
 Settings::getHostName() const
 {
-    return _hostName->getValue();
+    int entry_i =  _hostName->getValue();
+    std::vector<std::string> entries = _hostName->getEntries_mt_safe();
+    if (entry_i >= 0 && entry_i < (int)entries.size() && entries[entry_i] == NATRON_CUSTOM_HOST_NAME_ENTRY) {
+        return _customHostName->getValue();
+    } else {
+        if (entry_i >= 0 && entry_i < (int)_knownHostNames.size()) {
+            return _knownHostNames[entry_i];
+        }
+        return std::string();
+    }
 }
 
 bool
@@ -2609,6 +2846,12 @@ std::string
 Settings::getDefaultLayoutFile() const
 {
     return _defaultLayoutFile->getValue();
+}
+
+bool
+Settings::getLoadProjectWorkspce() const
+{
+    return _loadProjectsWorkspace->getValue();
 }
 
 bool
@@ -2694,6 +2937,9 @@ Settings::isMergeAutoConnectingToAInput() const
 {
     return _useInputAForMergeAutoConnect->getValue();
 }
+
+
+
 
 void
 Settings::doOCIOStartupCheckIfNeeded()
@@ -2858,11 +3104,24 @@ Settings::isAutoDeclaredVariablePrintActivated() const
     return _echoVariableDeclarationToPython->getValue();
 }
 
+void
+Settings::setAutoDeclaredVariablePrintEnabled(bool enabled)
+{
+    _echoVariableDeclarationToPython->setValue(enabled, 0);
+    saveSetting(_echoVariableDeclarationToPython.get());
+}
+
 bool
 Settings::isPluginIconActivatedOnNodeGraph() const
 {
     return _usePluginIconsInNodeGraph->getValue();
 
+}
+
+bool
+Settings::isNodeGraphAntiAliasingEnabled() const
+{
+    return _useAntiAliasing->getValue();
 }
 
 void
@@ -3038,6 +3297,80 @@ Settings::getDopeSheetEditorGridColor(double *r, double *g, double *b) const
     *g = _dopeSheetEditorGridColor->getValue(1);
     *b = _dopeSheetEditorGridColor->getValue(2);
 }
+
+void
+Settings::getSEKeywordColor(double* r,double* g, double* b) const
+{
+    *r = _keywordColor->getValue(0);
+    *g = _keywordColor->getValue(1);
+    *b = _keywordColor->getValue(2);
+}
+
+void
+Settings::getSEOperatorColor(double* r,double* g, double* b) const
+{
+    *r = _operatorColor->getValue(0);
+    *g = _operatorColor->getValue(1);
+    *b = _operatorColor->getValue(2);
+}
+
+void
+Settings::getSEBraceColor(double* r,double* g, double* b) const
+{
+    *r = _braceColor->getValue(0);
+    *g = _braceColor->getValue(1);
+    *b = _braceColor->getValue(2);
+}
+
+void
+Settings::getSEDefClassColor(double* r,double* g, double* b) const
+{
+    *r = _defClassColor->getValue(0);
+    *g = _defClassColor->getValue(1);
+    *b = _defClassColor->getValue(2);
+}
+
+void
+Settings::getSEStringsColor(double* r,double* g, double* b) const
+{
+    *r = _stringsColor->getValue(0);
+    *g = _stringsColor->getValue(1);
+    *b = _stringsColor->getValue(2);
+}
+
+void
+Settings::getSECommentsColor(double* r,double* g, double* b) const
+{
+    *r = _commentsColor->getValue(0);
+    *g = _commentsColor->getValue(1);
+    *b = _commentsColor->getValue(2);
+}
+
+void
+Settings::getSESelfColor(double* r,double* g, double* b) const
+{
+    *r = _selfColor->getValue(0);
+    *g = _selfColor->getValue(1);
+    *b = _selfColor->getValue(2);
+}
+
+void
+Settings::getSENumbersColor(double* r,double* g, double* b) const
+{
+    *r = _numbersColor->getValue(0);
+    *g = _numbersColor->getValue(1);
+    *b = _numbersColor->getValue(2);
+}
+
+
+void
+Settings::getSECurLineColor(double* r,double* g, double* b) const
+{
+    *r = _curLineColor->getValue(0);
+    *g = _curLineColor->getValue(1);
+    *b = _curLineColor->getValue(2);
+}
+
 
 void Settings::getPluginIconFrameColor(int *r, int *g, int *b) const
 {

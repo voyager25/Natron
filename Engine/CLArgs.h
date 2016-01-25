@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ CLANG_DIAG_ON(deprecated)
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #endif
+#include "Engine/EngineFwd.h"
 
 struct CLArgsPrivate;
 class CLArgs //: boost::noncopyable // GCC 4.2 requires the copy constructor
@@ -79,13 +80,23 @@ public:
     
     bool hasFrameRange() const;
     
-    const std::pair<int,int>& getFrameRange() const;
-    
+    const std::list<std::pair<int,std::pair<int,int> > >& getFrameRanges() const;
+        
     bool isBackgroundMode() const;
     
     bool isInterpreterMode() const;
     
-    const QString& getFilename() const;
+    /*
+     * @brief Has a Natron project or Python script been passed to the command line ?
+     */
+    const QString& getScriptFilename() const;
+    
+    /*
+     * @brief Has a regular image/video file been passed to the command line ?
+     * Warning: This may only be called once that all the plug-ins have been loaded in Natron
+     * otherwise it will always return an empty string.
+     */
+    const QString& getImageFilename() const;
     
     const QString& getDefaultOnProjectLoadedScript() const;
     
@@ -94,6 +105,16 @@ public:
     bool isPythonScript() const;
     
     bool areRenderStatsEnabled() const;
+    
+    const QString& getBreakpadProcessExecutableFilePath() const;
+    
+    qint64 getBreakpadProcessPID() const;
+    
+    int getBreakpadClientFD() const;
+    
+    const QString& getBreakpadPipeFilePath() const;
+    
+    const QString& getBreakpadComPipeFilePath() const;
     
 private:
     

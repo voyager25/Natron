@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ using std::pair;
 
 /*Class inheriting Knob and KnobGui, must have a function named BuildKnob and BuildKnobGui with the following signature.
    This function should in turn call a specific class-based static function with the appropriate param.*/
-typedef KnobHelper* (*KnobBuilder)(KnobHolder*  holder, const std::string &description, int dimension,bool declaredByPlugin);
+typedef KnobHelper* (*KnobBuilder)(KnobHolder* holder, const std::string &label, int dimension, bool declaredByPlugin);
 
 /***********************************FACTORY******************************************/
 KnobFactory::KnobFactory()
@@ -93,7 +93,7 @@ KnobFactory::loadBultinKnobs()
 
 boost::shared_ptr<KnobHelper> KnobFactory::createKnob(const std::string &id,
                                                       KnobHolder*  holder,
-                                                      const std::string &description,
+                                                      const std::string &label,
                                                       int dimension,
                                                       bool declaredByPlugin) const
 {
@@ -107,7 +107,7 @@ boost::shared_ptr<KnobHelper> KnobFactory::createKnob(const std::string &id,
             return boost::shared_ptr<KnobHelper>();
         }
         KnobBuilder builder = (KnobBuilder)(builderFunc.second);
-        boost::shared_ptr<KnobHelper> knob( builder(holder, description, dimension,declaredByPlugin) );
+        boost::shared_ptr<KnobHelper> knob( builder(holder, label, dimension, declaredByPlugin) );
         if (!knob) {
             boost::shared_ptr<KnobHelper>();
         }

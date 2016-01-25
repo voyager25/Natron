@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,13 +25,13 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
 #endif
-
-#include "Global/Macros.h"
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -40,75 +40,19 @@ CLANG_DIAG_ON(deprecated)
 CLANG_DIAG_ON(uninitialized)
 
 #include "Global/GlobalDefines.h"
+
+#include "Engine/ScriptObject.h"
+#include "Engine/EngineFwd.h"
+
 #include "Gui/SerializableWindow.h"
 #ifdef __NATRON_WIN32__
 #include "Gui/FileTypeMainWindow_win.h"
 #endif
-#include "Engine/ScriptObject.h"
+#include "Gui/RegisteredTabs.h"
+#include "Gui/GuiFwd.h"
 
 
 #define kMainSplitterObjectName "ToolbarSplitter"
-
-//boost
-namespace boost {
-namespace archive {
-class xml_iarchive;
-class xml_oarchive;
-}
-}
-
-//QtGui
-class Splitter;
-class QUndoStack;
-class QScrollArea;
-class QToolButton;
-class QVBoxLayout;
-class QMutex;
-
-//Natron gui
-#include "Gui/RegisteredTabs.h"
-class GuiLayoutSerialization;
-class GuiAppInstance;
-class PanelWidget;
-class AppInstance;
-class NodeGui;
-class TabWidget;
-class ToolButton;
-class ViewerTab;
-class DockablePanel;
-class NodeGraph;
-class CurveEditor;
-class Histogram;
-class RotoGui;
-class FloatingWidget;
-class BoundAction;
-class ScriptEditor;
-class PyPanel;
-class RectI;
-class DopeSheetEditor;
-class PropertiesBinWrapper;
-class RenderStatsDialog;
-
-//Natron engine
-class ViewerInstance;
-class PluginGroupNode;
-class KnobColor;
-class ProcessHandler;
-class NodeCollection;
-class KnobHolder;
-namespace Natron {
-class Node;
-class Image;
-class EffectInstance;
-class OutputEffectInstance;
-    
-    
-#if defined(Q_OS_MAC)
-//Implementation in Gui/QtMac.mm
-bool isHighDPIInternal(const QWidget* w);
-#endif
-    
-}
 
 
 struct GuiPrivate;
@@ -143,6 +87,7 @@ public:
 
     boost::shared_ptr<NodeGui> createNodeGUI(boost::shared_ptr<Natron::Node> node,
                                              bool requestedByLoad,
+                                             bool userEdited,
                                              bool pushUndoRedoCommand);
 
     void addNodeGuiToCurveEditor(const boost::shared_ptr<NodeGui> &node);
@@ -153,8 +98,6 @@ public:
     void removeNodeGuiFromDopeSheetEditor(const boost::shared_ptr<NodeGui>& node);
 
     const std::list<boost::shared_ptr<NodeGui> > & getSelectedNodes() const;
-
-    bool eventFilter(QObject *target, QEvent* e) OVERRIDE;
 
     void createViewerGui(boost::shared_ptr<Natron::Node> viewer);
 
@@ -382,7 +325,7 @@ public:
 
     void initProjectGuiKnobs();
 
-    void updateViewersViewsMenu(int viewsCount);
+    void updateViewersViewsMenu(const std::vector<std::string>& viewNames);
 
     void setViewersCurrentView(int view);
 
@@ -402,10 +345,10 @@ public:
 
     void deselectAllNodes() const;
 
-    void onProcessHandlerStarted(const QString & sequenceName,int firstFrame,int lastFrame,
+    void onProcessHandlerStarted(const QString & sequenceName,int firstFrame,int lastFrame, int frameStep,
                                  const boost::shared_ptr<ProcessHandler> & process);
 
-    void onWriterRenderStarted(const QString & sequenceName,int firstFrame,int lastFrame,
+    void onWriterRenderStarted(const QString & sequenceName,int firstFrame,int lastFrame,int frameStep,
                                Natron::OutputEffectInstance* writer);
 
     NodeGraph* getNodeGraph() const;
@@ -481,6 +424,7 @@ public:
     void removeVisibleDockablePanel(DockablePanel* panel);
 
     const std::list<DockablePanel*>& getVisiblePanels() const;
+    std::list<DockablePanel*> getVisiblePanels_mt_safe() const;
 
     std::list<ToolButton*> getToolButtonsOrdered() const;
 
@@ -492,7 +436,7 @@ public:
     void disconnectViewersFromViewerCache();
 
     ///Close the application instance, asking questions to the user
-    bool closeInstance();
+    bool closeInstance(bool warnUserIfSaveNeeded);
 
     void checkNumberOfNonFloatingPanes();
 
@@ -588,7 +532,11 @@ public:
      * @brief Close project right away, without any user interaction.
      * @param quitApp If true, the application will exit, otherwise the main window will stay active.
      **/
-    bool abortProject(bool quitApp);
+    bool abortProject(bool quitApp, bool warnUserIfSaveNeeded);
+    
+    void setGuiAboutToClose(bool about);
+    
+    void notifyGuiClosing();
     
     /*
      * @brief To be called by "main widgets" such as NodeGraph, Viewer etc... to determine if focus stealing is possible to have
@@ -599,8 +547,17 @@ public:
     PanelWidget* getCurrentPanelFocus() const;
     
     void setLastKeyPressVisitedClickFocus(bool visited);
-
+    void setLastKeyUpVisitedClickFocus(bool visited);
     
+    void setApplicationConsoleActionVisible(bool visible);
+
+protected:
+    // Reimplemented Protected Functions
+
+    //bool event(QEvent* event) OVERRIDE;
+    
+    bool eventFilter(QObject *target, QEvent* e) OVERRIDE;
+
 Q_SIGNALS:
 
 
@@ -622,6 +579,9 @@ public Q_SLOTS:
 
     ///Close the project instance, asking questions to the user and leaving the main window intact
     void closeProject();
+    
+    //Same as close + open same project to discard unsaved changes
+    void reloadProject();
     void toggleFullScreen();
     void closeEvent(QCloseEvent* e) OVERRIDE;
     void newProject();
@@ -682,7 +642,7 @@ public Q_SLOTS:
 
     void openRecentFile();
 
-    void onProjectNameChanged(const QString & name);
+    void onProjectNameChanged(const QString & filePath, bool modified);
 
     void onNodeNameChanged(const QString & name);
 
@@ -728,14 +688,20 @@ public Q_SLOTS:
     void onRenderProgressDialogFinished();
     
     void onFocusChanged(QWidget* old, QWidget*);
-
     
+    void onShowApplicationConsoleActionTriggered();
+
+    void openHelpWebsite();
+    void openHelpForum();
+    void openHelpIssues();
+    void openHelpPython();
+    void openHelpWiki();
+
 private:
 
-    
     void setCurrentPanelFocus(PanelWidget* widget);
     
-    AppInstance* openProjectInternal(const std::string & absoluteFileName) WARN_UNUSED_RETURN;
+    AppInstance* openProjectInternal(const std::string & absoluteFileName, bool attemptToLoadAutosave) WARN_UNUSED_RETURN;
 
     void setupUi();
 
@@ -749,7 +715,8 @@ private:
     //virtual bool event(QEvent* e) OVERRIDE FINAL;
     virtual void resizeEvent(QResizeEvent* e) OVERRIDE FINAL;
     virtual void keyPressEvent(QKeyEvent* e) OVERRIDE FINAL;
-
+    virtual void keyReleaseEvent(QKeyEvent* e) OVERRIDE FINAL;
+    
     boost::scoped_ptr<GuiPrivate> _imp;
 };
 #endif // Gui_Gui_h

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,23 +28,11 @@
 #include <string>
 
 #include "Global/Macros.h"
-#include "Engine/OutputEffectInstance.h"
 
-class ParallelRenderArgsSetter;
-class RenderingFlagSetter;
-struct RequestedFrame;
-namespace Natron {
-class Image;
-class FrameEntry;
-class EffectInstance;
-namespace Color {
-class Lut;
-}
-}
-class UpdateViewerParams;
-class TimeLine;
-class OpenGLViewerI;
-struct TextureRect;
+#include "Engine/OutputEffectInstance.h"
+#include "Engine/EngineFwd.h"
+
+class UpdateViewerParams; // ViewerInstancePrivate
 
 typedef std::map<boost::shared_ptr<Natron::Node>,NodeRenderStats > RenderStatsMap;
 
@@ -147,6 +135,7 @@ public:
                                                     int view,
                                                     U64 viewerHash,
                                                     const boost::shared_ptr<Natron::Node>& rotoPaintNode,
+                                                    const boost::shared_ptr<RotoStrokeItem>& strokeItem,
                                                     const boost::shared_ptr<RenderStats>& stats,
                                                     boost::shared_ptr<ViewerArgs>* argsA,
                                                     boost::shared_ptr<ViewerArgs>* argsB);
@@ -233,9 +222,9 @@ public:
     
     static const Natron::Color::Lut* lutFromColorspace(Natron::ViewerColorSpaceEnum cs) WARN_UNUSED_RETURN;
     
-    virtual bool checkOFXClipPreferences(double time,
+    virtual bool refreshClipPreferences(double time,
                                          const RenderScale & scale,
-                                         const std::string & reason,
+                                        Natron::ValueChangedReasonEnum reason,
                                          bool forceGetClipPrefAction) OVERRIDE FINAL;
     
     virtual void onChannelsSelectorRefreshed() OVERRIDE FINAL;
@@ -330,7 +319,7 @@ private:
     }
 
     virtual void getPluginGrouping(std::list<std::string>* grouping) const OVERRIDE FINAL;
-    virtual std::string getDescription() const OVERRIDE FINAL
+    virtual std::string getPluginDescription() const OVERRIDE FINAL
     {
         return "The Viewer node can display the output of a node graph.";
     }

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -166,18 +166,7 @@ NodeGraph::leaveEvent(QEvent* e)
    // setFocus();
 }
 
-void
-NodeGraph::setVisibleNodeDetails(bool visible)
-{
-    if (visible == _imp->_detailsVisible) {
-        return;
-    }
-    _imp->_detailsVisible = visible;
-    QMutexLocker k(&_imp->_nodesMutex);
-    for (std::list<boost::shared_ptr<NodeGui> >::const_iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
-        (*it)->setVisibleDetails(visible);
-    }
-}
+
 
 void
 NodeGraph::wheelEventInternal(bool ctrlDown,double delta)
@@ -189,11 +178,6 @@ NodeGraph::wheelEventInternal(bool ctrlDown,double delta)
     double newZoomfactor = currentZoomFactor * scaleFactor;
     if ((newZoomfactor < 0.01 && scaleFactor < 1.) || (newZoomfactor > 50 && scaleFactor > 1.)) {
         return;
-    }
-    if (newZoomfactor < 0.4) {
-        setVisibleNodeDetails(false);
-    } else if (newZoomfactor >= 0.4) {
-        setVisibleNodeDetails(true);
     }
     
     if (ctrlDown && _imp->_magnifiedNode) {
@@ -240,6 +224,9 @@ NodeGraph::keyReleaseEvent(QKeyEvent* e)
             _imp->setNodesBendPointsVisible(false);
         }
     }
+    
+    handleUnCaughtKeyUpEvent(e);
+    QGraphicsView::keyReleaseEvent(e);
 }
 
 void

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,10 +37,8 @@
 #endif
 
 #include "Global/GlobalDefines.h"
+#include "Engine/EngineFwd.h"
 
-class KnobDouble;
-class Curve;
-class Bezier;
 
 /**
  * @class A Bezier is an animated control point of a Bezier. It is the starting point
@@ -100,7 +98,7 @@ public:
 
     void removeKeyframe(bool useGuiCurves,double time);
     
-    void removeAnimation(bool useGuiCurves,int currentTime);
+    void removeAnimation(bool useGuiCurves,double currentTime);
 
     ///returns true if a keyframe was set
     bool cuspPoint(bool useGuiCurves,double time,bool autoKeying,bool rippleEdit,const std::pair<double,double>& pixelScale);
@@ -124,15 +122,15 @@ public:
 
     bool hasKeyFrameAtTime(bool useGuiCurves,double time) const;
 
-    void getKeyframeTimes(bool useGuiCurves,std::set<int>* times) const;
+    void getKeyframeTimes(bool useGuiCurves,std::set<double>* times) const;
     
-    void getKeyFrames(bool useGuiCurves,std::list<std::pair<int,Natron::KeyframeTypeEnum> >* keys) const;
+    void getKeyFrames(bool useGuiCurves,std::list<std::pair<double,Natron::KeyframeTypeEnum> >* keys) const;
     
     int getKeyFrameIndex(bool useGuiCurves,double time) const;
     
     void setKeyFrameInterpolation(bool useGuiCurves,Natron::KeyframeTypeEnum interp,int index);
 
-    int getKeyframeTime(bool useGuiCurves,int index) const;
+    double getKeyframeTime(bool useGuiCurves,int index) const;
 
     int getKeyframesCount(bool useGuiCurves) const;
 

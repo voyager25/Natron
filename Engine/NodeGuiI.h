@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,14 +27,10 @@
 
 #include "Global/KeySymbols.h"
 #include "Global/Enums.h"
+#include "Engine/EngineFwd.h"
 
 class QPointF;
-class KnobDouble;
-class KnobI;
-class OverlaySupport;
-namespace Natron {
-class Node;
-}
+
 
 class NodeGuiI
 {
@@ -98,41 +94,55 @@ public :
      **/
     virtual void addDefaultPositionInteract(const boost::shared_ptr<KnobDouble>& point) = 0;
     
-    virtual void drawDefaultOverlay(double time, double scaleX, double scaleY)  = 0;
+    /**
+     * @brief Add a default viewer transform overlay for this set of parameters
+     **/
+    virtual void addTransformInteract(const boost::shared_ptr<KnobDouble>& translate,
+                                      const boost::shared_ptr<KnobDouble>& scale,
+                                      const boost::shared_ptr<KnobBool>& scaleUniform,
+                                      const boost::shared_ptr<KnobDouble>& rotate,
+                                      const boost::shared_ptr<KnobDouble>& skewX,
+                                      const boost::shared_ptr<KnobDouble>& skewY,
+                                      const boost::shared_ptr<KnobChoice>& skewOrder,
+                                      const boost::shared_ptr<KnobDouble>& center) = 0;
     
-    virtual bool onOverlayPenDownDefault(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure)  = 0;
+    virtual void drawHostOverlay(double time, const RenderScale & renderScale)  = 0;
     
-    virtual bool onOverlayPenMotionDefault(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure)  = 0;
+    virtual bool onOverlayPenDownDefault(const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure)  = 0;
     
-    virtual bool onOverlayPenUpDefault(double scaleX, double scaleY, const QPointF & viewportPos, const QPointF & pos, double pressure)  = 0;
+    virtual bool onOverlayPenMotionDefault(const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure)  = 0;
     
-    virtual bool onOverlayKeyDownDefault(double scaleX, double scaleY, Natron::Key key, Natron::KeyboardModifiers modifiers)  = 0;
+    virtual bool onOverlayPenUpDefault(const RenderScale & renderScale, const QPointF & viewportPos, const QPointF & pos, double pressure)  = 0;
     
-    virtual bool onOverlayKeyUpDefault(double scaleX, double scaleY, Natron::Key key, Natron::KeyboardModifiers modifiers)  = 0;
+    virtual bool onOverlayKeyDownDefault(const RenderScale & renderScale, Natron::Key key, Natron::KeyboardModifiers modifiers)  = 0;
     
-    virtual bool onOverlayKeyRepeatDefault(double scaleX, double scaleY, Natron::Key key, Natron::KeyboardModifiers modifiers) = 0;
+    virtual bool onOverlayKeyUpDefault(const RenderScale & renderScale, Natron::Key key, Natron::KeyboardModifiers modifiers)  = 0;
     
-    virtual bool onOverlayFocusGainedDefault(double scaleX, double scaleY) = 0;
+    virtual bool onOverlayKeyRepeatDefault(const RenderScale & renderScale, Natron::Key key, Natron::KeyboardModifiers modifiers) = 0;
     
-    virtual bool onOverlayFocusLostDefault(double scaleX, double scaleY) = 0;
+    virtual bool onOverlayFocusGainedDefault(const RenderScale & renderScale) = 0;
     
-    virtual bool hasDefaultOverlay() const = 0;
+    virtual bool onOverlayFocusLostDefault(const RenderScale & renderScale) = 0;
     
-    virtual void setCurrentViewportForDefaultOverlays(OverlaySupport* viewPort) = 0;
+    virtual bool hasHostOverlay() const = 0;
     
-    virtual bool hasDefaultOverlayForParam(const KnobI* param) = 0;
+    virtual void setCurrentViewportForHostOverlays(OverlaySupport* viewPort) = 0;
     
-    virtual void removeDefaultOverlay(KnobI* knob) = 0;
+    virtual bool hasHostOverlayForParam(const KnobI* param) = 0;
+    
+    virtual void removePositionHostOverlay(KnobI* knob) = 0;
     
     virtual void setPluginIconFilePath(const std::string& filePath) = 0;
     
     virtual void setPluginDescription(const std::string& description) = 0;
 
-    virtual void setPluginIDAndVersion(const std::string& pluginLabel,const std::string& pluginID,unsigned int version) = 0;
+    virtual void setPluginIDAndVersion(const std::string& pluginLabel, const std::string& pluginID, unsigned int version) = 0;
     
     virtual bool isUserSelected() const = 0;
     
     virtual void restoreStateAfterCreation() = 0;
+    
+    virtual void onIdentityStateChanged(int inputNb) = 0;
 };
 
 #endif // NODEGUII_H

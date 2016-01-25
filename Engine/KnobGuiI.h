@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,8 +29,9 @@
 #include <boost/shared_ptr.hpp>
 #endif
 #include "Engine/OverlaySupport.h"
+#include "Engine/EngineFwd.h"
 
-class Curve;
+
 class KnobGuiI
     : public OverlaySupport
 {
@@ -51,7 +52,6 @@ public:
     virtual void restoreOpenGLContext() = 0;
     virtual unsigned int getCurrentRenderScale() const { return 0; }
     virtual boost::shared_ptr<Curve> getCurve(int dimension) const = 0;
-    virtual void onKnobDeletion() = 0;
 protected:
 
     ///Should set to the underlying knob the gui ptr

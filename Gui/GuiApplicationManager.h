@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,8 @@
  * along with Natron.  If not, see <http://www.gnu.org/licenses/gpl-2.0.html>
  * ***** END LICENSE BLOCK ***** */
 
-
 #ifndef Gui_GuiApplicationManager_h
 #define Gui_GuiApplicationManager_h
-
 
 // ***** BEGIN PYTHON BLOCK *****
 // from <https://docs.python.org/3/c-api/intro.html#include-files>:
@@ -27,10 +25,16 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <list>
 
 #include "Engine/AppManager.h"
 #include "Engine/Variant.h"
+#include "Engine/EngineFwd.h"
+
+#include "Gui/GuiFwd.h"
+
 
 #if defined(appPTR)
 #undef appPTR
@@ -55,22 +59,9 @@
  **/
 #define getKeybind(group,action) ( appPTR->getKeySequenceForAction(group,action) )
 
-class QPixmap;
-class QCursor;
-
-class ActionWithShortcut;
-class PluginGroupNode;
-class DockablePanel;
-class KnobI;
-class KnobGui;
-class KnobSerialization;
-class Curve;
-class BoundAction;
-class KeyBoundAction;
-class QAction;
-class NodeSerialization;
-class NodeGuiSerialization;
-struct NodeClipBoard;
+#define TO_DPI(x,y) ( appPTR->adjustSizeToDPI(x,y) )
+#define TO_DPIX(x) ( appPTR->adjustSizeToDPIX(x) )
+#define TO_DPIY(y) ( appPTR->adjustSizeToDPIY(y) )
 
 struct PythonUserCommand {
     QString grouping;
@@ -96,7 +87,7 @@ public:
     const std::list<boost::shared_ptr<PluginGroupNode> > & getTopLevelPluginsToolButtons() const;
     boost::shared_ptr<PluginGroupNode>  findPluginToolButtonOrCreate(const QStringList & grouping,
                                                                      const QString & name,
-                                                                     const QString& groupIconPath,
+                                                                     const QStringList& groupIconPath,
                                                                      const QString & iconPath,
                                                                      int major,
                                                                      int minor,
@@ -187,6 +178,9 @@ public:
     
     virtual int getAppFontSize() const OVERRIDE FINAL WARN_UNUSED_RETURN;
     
+    ///Closes the application, asking the user to save each opened project that has unsaved changes
+    virtual void exitApp(bool warnUserForSave) OVERRIDE FINAL;
+    
     bool isNodeClipBoardEmpty() const;
     
     NodeClipBoard& getNodeClipBoard();
@@ -199,11 +193,32 @@ public:
     
     const std::list<PythonUserCommand>& getUserPythonCommands() const;
     
+    bool handleImageFileOpenRequest(const std::string& imageFile);
+    
+    void appendTaskToPreviewThread(const boost::shared_ptr<NodeGui>& node, double time);
+    
+
+    void setCurrentLogicalDPI(double dpiX,double dpiY);
+    double getLogicalDPIXRATIO() const;
+    double getLogicalDPIYRATIO() const;
+
+    template <typename T>
+    void adjustSizeToDPI(T &x, T &y) const {
+        x *= getLogicalDPIXRATIO();
+        y *= getLogicalDPIYRATIO();
+    }
+
+    template <typename T>
+    T adjustSizeToDPIX(T x) const {
+        return x * getLogicalDPIXRATIO();
+    }
+
+    template <typename T>
+    T adjustSizeToDPIY(T y) const {
+        return y * getLogicalDPIYRATIO();
+    }
+
 public Q_SLOTS:
-
-
-    ///Closes the application, asking the user to save each opened project that has unsaved changes
-    virtual void exitApp() OVERRIDE FINAL;
     
     void onFontconfigCacheUpdateFinished();
 

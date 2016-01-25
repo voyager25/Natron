@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,35 +75,34 @@ NodeGraph::toggleConnectionHints()
 void
 NodeGraph::toggleAutoHideInputs(bool setSettings)
 {
-    bool autoHide ;
     if (setSettings) {
-        autoHide = !appPTR->getCurrentSettings()->areOptionalInputsAutoHidden();
+        bool autoHide = !appPTR->getCurrentSettings()->areOptionalInputsAutoHidden();
         appPTR->getCurrentSettings()->setOptionalInputsAutoHidden(autoHide);
-    } else {
-        autoHide = appPTR->getCurrentSettings()->areOptionalInputsAutoHidden();
     }
-    if (!autoHide) {
-        for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
-            (*it)->setOptionalInputsVisible(true);
-        }
-        for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodesTrash.begin(); it != _imp->_nodesTrash.end(); ++it) {
-            (*it)->setOptionalInputsVisible(true);
-        }
-    } else {
-        
-        QPointF evpt = mapFromScene(mapToScene(mapFromGlobal(QCursor::pos())));
-        for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
-            
-            QRectF bbox = (*it)->mapToScene((*it)->boundingRect()).boundingRect();
-            if (!(*it)->getIsSelected() && !bbox.contains(evpt)) {
-                (*it)->setOptionalInputsVisible(false);
-            }
-            
-        }
-        for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodesTrash.begin(); it != _imp->_nodesTrash.end(); ++it) {
-            (*it)->setOptionalInputsVisible(false);
-        }
+    for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
+        (*it)->refreshEdgesVisility();
     }
+    for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodesTrash.begin(); it != _imp->_nodesTrash.end(); ++it) {
+        (*it)->refreshEdgesVisility();
+    }
+}
+
+void
+NodeGraph::toggleHideInputs()
+{
+    const NodeGuiList& selectedNodes = getSelectedNodes();
+    if (selectedNodes.empty()) {
+        Natron::warningDialog(tr("Hide Inptus").toStdString(), tr("You must select a node first").toStdString());
+        return;
+    }
+
+    bool hidden = !selectedNodes.front()->getNode()->getHideInputsKnobValue();
+    
+    for (NodeGuiList::const_iterator it = selectedNodes.begin(); it != selectedNodes.end(); ++it) {
+        (*it)->getNode()->setHideInputsKnobValue(hidden);
+        //(*it)->refreshEdgesVisility();
+    }
+
 }
 
 std::list<boost::shared_ptr<NodeGui> > NodeGraph::getNodesWithinBackDrop(const boost::shared_ptr<NodeGui>& bd) const
@@ -133,14 +132,6 @@ NodeGraph::refreshNodesKnobsAtTime(SequenceTime time)
     ///Refresh all knobs at the current time
     for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
         (*it)->refreshKnobsAfterTimeChange(time);
-    }
-}
-
-void
-NodeGraph::onGuiFrozenChanged(bool frozen)
-{
-    for (std::list<boost::shared_ptr<NodeGui> >::iterator it = _imp->_nodes.begin(); it != _imp->_nodes.end(); ++it) {
-        (*it)->onGuiFrozenChanged(frozen);
     }
 }
 
@@ -510,7 +501,7 @@ EditNodeNameDialog::EditNodeNameDialog(const boost::shared_ptr<NodeGui>& node,QW
     mainLayout->setContentsMargins(0, 0, 0, 0);
     setWindowFlags(Qt::Window | Qt::CustomizeWindowHint);
     _imp->field = new LineEdit(this);
-    QObject::connect(_imp->field,SIGNAL(editingFinished()), this, SLOT(accept()));
+    //QObject::connect(_imp->field,SIGNAL(editingFinished()), this, SLOT(accept()));
     _imp->field->setPlaceholderText(tr("Edit node name"));
     mainLayout->addWidget(_imp->field);
 }
@@ -604,13 +595,15 @@ NodeGraph::expandSelectedGroups()
 }
 
 void
-NodeGraph::onGroupNameChanged(const QString& name)
+NodeGraph::onGroupNameChanged(const QString& /*name*/)
 {
-    
-    setLabel(name.toStdString());
+    NodeGroup* isGrp = dynamic_cast<NodeGroup*>(getGroup().get());
+    std::string label;
+    makeFullyQualifiedLabel(isGrp->getNode().get(),&label);
+    setLabel(label);
     TabWidget* parent = dynamic_cast<TabWidget*>(parentWidget() );
     if (parent) {
-        parent->setTabLabel(this, name);
+        parent->setTabLabel(this, label.c_str());
     }
 }
 
@@ -651,23 +644,38 @@ NodeGraph::onGroupScriptNameChanged(const QString& /*name*/)
 
 void
 NodeGraph::copyNodesAndCreateInGroup(const std::list<boost::shared_ptr<NodeGui> >& nodes,
-                                     const boost::shared_ptr<NodeCollection>& group)
+                                     const boost::shared_ptr<NodeCollection>& group,
+                                     std::list<std::pair<std::string,boost::shared_ptr<NodeGui> > >& createdNodes)
 {
-    NodeClipBoard clipboard;
-    _imp->copyNodesInternal(nodes,clipboard);
-    
-    std::list<std::pair<std::string,boost::shared_ptr<NodeGui> > > newNodes;
-    std::list<boost::shared_ptr<NodeSerialization> >::const_iterator itOther = clipboard.nodes.begin();
-    for (std::list<boost::shared_ptr<NodeGuiSerialization> >::const_iterator it = clipboard.nodesUI.begin();
-         it != clipboard.nodesUI.end(); ++it, ++itOther) {
-        boost::shared_ptr<NodeGui> node = _imp->pasteNode( **itOther,**it,QPointF(0,0),group,std::string(), false);
-        newNodes.push_back(std::make_pair((*itOther)->getNodeScriptName(),node));
+    {
+        CreatingNodeTreeFlag_RAII createNodeTree(getGui()->getApp());
+        
+        NodeClipBoard clipboard;
+        _imp->copyNodesInternal(nodes,clipboard);
+        
+        std::map<std::string,std::string> oldNewScriptNamesMapping;
+        std::list<boost::shared_ptr<NodeSerialization> >::const_iterator itOther = clipboard.nodes.begin();
+        for (std::list<boost::shared_ptr<NodeGuiSerialization> >::const_iterator it = clipboard.nodesUI.begin();
+             it != clipboard.nodesUI.end(); ++it, ++itOther) {
+            boost::shared_ptr<NodeGui> node = _imp->pasteNode( **itOther,**it,QPointF(0,0),group,std::string(), false,&oldNewScriptNamesMapping);
+            assert(node);
+            if (node) {
+                oldNewScriptNamesMapping[(*itOther)->getNodeScriptName()] = node->getNode()->getScriptName();
+                createdNodes.push_back(std::make_pair((*itOther)->getNodeScriptName(),node));
+            }
+            
+        }
+        assert( clipboard.nodes.size() == createdNodes.size() );
+        if (clipboard.nodes.size() != createdNodes.size()) {
+            return;
+        }
+        
+        ///Now that all nodes have been duplicated, try to restore nodes connections
+        _imp->restoreConnections(clipboard.nodes, createdNodes, oldNewScriptNamesMapping);
     }
-    assert( clipboard.nodes.size() == newNodes.size() );
     
-    ///Now that all nodes have been duplicated, try to restore nodes connections
-    _imp->restoreConnections(clipboard.nodes, newNodes);
-
+    getGui()->getApp()->getProject()->forceComputeInputDependentDataOnAllTrees();
+    
 }
 
 QPointF

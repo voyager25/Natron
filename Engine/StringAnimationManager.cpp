@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@
 struct StringKeyFrame
 {
     std::string value;
-    int time;
+    double time;
 };
 
 struct StringKeyFrame_compare_time
@@ -175,7 +175,7 @@ StringAnimationManager::customInterpolation(double time,
 } // customInterpolation
 
 void
-StringAnimationManager::insertKeyFrame(int time,
+StringAnimationManager::insertKeyFrame(double time,
                                        const std::string & v,
                                        double* index)
 {
@@ -194,7 +194,7 @@ StringAnimationManager::insertKeyFrame(int time,
 }
 
 void
-StringAnimationManager::removeKeyFrame(int time)
+StringAnimationManager::removeKeyFrame(double time)
 {
     QMutexLocker l(&_imp->keyframesMutex);
 

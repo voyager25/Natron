@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <map>
 
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
@@ -32,8 +34,6 @@
 #include <boost/weak_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
-
-#include "Global/Macros.h"
 
 CLANG_DIAG_OFF(deprecated)
 CLANG_DIAG_OFF(uninitialized)
@@ -47,21 +47,8 @@ CLANG_DIAG_ON(uninitialized)
 
 #include "Engine/DockablePanelI.h"
 
-class KnobI;
-class KnobGui;
-class KnobHolder;
-class NodeGui;
-class Gui;
-class KnobPage;
-class QVBoxLayout;
-class Button;
-class QUndoStack;
-class QUndoCommand;
-class QGridLayout;
-class RotoPanel;
-class MultiInstancePanel;
-class QTabWidget;
-class KnobGroup;
+#include "Gui/GuiFwd.h"
+
 
 /**
  * @brief Used when group are using the kFnOfxParamPropGroupIsTab extension
@@ -75,7 +62,7 @@ public:
     
     TabGroup(QWidget* parent);
     
-    QGridLayout* addTab(const boost::shared_ptr<KnobGroup>& group,const QString& name);
+    QGridLayout* addTab(const boost::shared_ptr<KnobGroup>& group, const QString &label);
     
     void removeTab(KnobGroup* group);
     

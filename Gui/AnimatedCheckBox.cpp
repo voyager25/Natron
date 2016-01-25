@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,6 +68,18 @@ AnimatedCheckBox::setDirty(bool b)
     update();
 }
 
+QSize
+AnimatedCheckBox::minimumSizeHint() const
+{
+    return QSize(TO_DPIX(15),TO_DPIY(15));
+}
+
+QSize
+AnimatedCheckBox::sizeHint() const
+{
+    return QSize(TO_DPIX(15),TO_DPIY(15));
+}
+
 void
 AnimatedCheckBox::setChecked(bool c) {
     checked = c;
@@ -100,6 +112,8 @@ AnimatedCheckBox::mousePressEvent(QMouseEvent* e)
         Q_EMIT clicked(checked);
         Q_EMIT toggled(checked);
         
+    } else {
+        QFrame::mousePressEvent(e);
     }
 }
 
@@ -149,7 +163,9 @@ AnimatedCheckBox::paintEvent(QPaintEvent* e)
     
     ///Draw tick
     if (checked) {
-        if (readOnly) {
+        if (animation == 3) {
+            activeColor = Qt::black;
+        } else if (readOnly) {
             activeColor.setRgbF(0.5, 0.5, 0.5);
         } else if (altered) {
             double r,g,b;

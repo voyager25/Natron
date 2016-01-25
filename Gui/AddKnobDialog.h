@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,19 +25,19 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #if !defined(Q_MOC_RUN) && !defined(SBK_RUN)
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #endif
 
-#include "Global/Macros.h"
-
 CLANG_DIAG_OFF(uninitialized)
 #include <QDialog>
 CLANG_DIAG_ON(uninitialized)
 
-class KnobI;
-class DockablePanel;
+#include "Gui/GuiFwd.h"
+
 
 struct AddKnobDialogPrivate;
 class AddKnobDialog : public QDialog
@@ -45,7 +45,11 @@ class AddKnobDialog : public QDialog
     Q_OBJECT
 public:
     
-    AddKnobDialog(DockablePanel* panel,const boost::shared_ptr<KnobI>& knob, QWidget* parent);
+    AddKnobDialog(DockablePanel* panel,
+                  const boost::shared_ptr<KnobI>& knob,
+                  const std::string& selectedPageName,
+                  const std::string& selectedGroupName,
+                  QWidget* parent);
     
     virtual ~AddKnobDialog();
     

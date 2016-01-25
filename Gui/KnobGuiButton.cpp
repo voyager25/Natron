@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -95,7 +95,7 @@ void
 KnobGuiButton::createWidget(QHBoxLayout* layout)
 {
     boost::shared_ptr<KnobButton> knob = _knob.lock();
-    QString label( knob->getDescription().c_str() );
+    QString label( knob->getLabel().c_str() );
     const std::string & iconFilePath = knob->getIconFilePath();
     
     QString filePath(iconFilePath.c_str());
@@ -161,7 +161,7 @@ void
 KnobGuiButton::setEnabled()
 {
     boost::shared_ptr<KnobButton> knob = _knob.lock();
-    bool b = knob->isEnabled(0) && knob->getExpression(0).empty();
+    bool b = knob->isEnabled(0);
 
     _button->setEnabled(b);
 }

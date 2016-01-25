@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,6 +65,13 @@ PropertiesBinWrapper::leaveEvent(QEvent* e)
 void
 PropertiesBinWrapper::keyPressEvent(QKeyEvent* e)
 {
-    handleUnCaughtKeyPressEvent();
+    handleUnCaughtKeyPressEvent(e);
     QWidget::keyPressEvent(e);
+}
+
+void
+PropertiesBinWrapper::keyReleaseEvent(QKeyEvent* e)
+{
+    handleUnCaughtKeyUpEvent(e);
+    QWidget::keyReleaseEvent(e);
 }

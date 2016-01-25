@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +25,14 @@
 #include <Python.h>
 // ***** END PYTHON BLOCK *****
 
+#include "Global/Macros.h"
+
 #include <utility> // pair
 #include <map>
 #include <string>
 
-class ScriptObject;
-class PanelWidget;
+#include "Gui/GuiFwd.h"
+
 
 typedef std::map<std::string,std::pair<PanelWidget*,ScriptObject*> > RegisteredTabs;
 

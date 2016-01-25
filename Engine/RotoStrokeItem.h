@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,64 +37,21 @@
 #include <boost/enable_shared_from_this.hpp>
 #endif
 
-#include "Global/GlobalDefines.h"
-#include "Engine/FitCurve.h"
-#include "Engine/RotoDrawableItem.h"
-
 CLANG_DIAG_OFF(deprecated-declarations)
 #include <QObject>
 #include <QMutex>
 #include <QMetaType>
 CLANG_DIAG_ON(deprecated-declarations)
 
-#define kRotoLayerBaseName "Layer"
-#define kRotoBezierBaseName "Bezier"
-#define kRotoOpenBezierBaseName "Pencil"
-#define kRotoEllipseBaseName "Ellipse"
-#define kRotoRectangleBaseName "Rectangle"
-#define kRotoPaintBrushBaseName "Brush"
-#define kRotoPaintEraserBaseName "Eraser"
-#define kRotoPaintBlurBaseName "Blur"
-#define kRotoPaintSmearBaseName "Smear"
-#define kRotoPaintSharpenBaseName "Sharpen"
-#define kRotoPaintCloneBaseName "Clone"
-#define kRotoPaintRevealBaseName "Reveal"
-#define kRotoPaintDodgeBaseName "Dodge"
-#define kRotoPaintBurnBaseName "Burn"
+#include "Global/GlobalDefines.h"
+#include "Engine/FitCurve.h"
+#include "Engine/RotoDrawableItem.h"
+#include "Engine/EngineFwd.h"
 
-namespace Natron {
-class Image;
-class ImageComponents;
-class Node;
-}
-namespace boost { namespace serialization { class access; } }
-
-class RectI;
-class RectD;
-class KnobI;
-class KnobBool;
-class KnobDouble;
-class KnobInt;
-class KnobChoice;
-class KnobColor;
-typedef struct _cairo_pattern cairo_pattern_t;
-
-class Curve;
-class Bezier;
-struct RotoPoint;
-class RotoItemSerialization;
-class BezierCP;
 
 /**
  * @class A base class for all items made by the roto context
  **/
-class RotoContext;
-class RotoLayer;
-
-namespace Transform {
-struct Matrix3x3;
-}
-
 
 
 /**
@@ -121,7 +78,7 @@ public:
      * @brief Appends to the paint stroke the raw points list.
      * @returns True if the number of points is > 1
      **/
-    bool appendPoint(bool newStroke,const RotoPoint& p);
+    bool appendPoint(bool newStroke, const RotoPoint& p);
     
     void addStroke(const boost::shared_ptr<Curve>& xCurve,
                   const boost::shared_ptr<Curve>& yCurve,
@@ -149,7 +106,7 @@ public:
 
     
     
-    bool getMostRecentStrokeChangesSinceAge(int time,int lastAge, std::list<std::pair<Natron::Point,double> >* points,
+    bool getMostRecentStrokeChangesSinceAge(double time,int lastAge, std::list<std::pair<Natron::Point,double> >* points,
                                             RectD* pointsBbox,
                                             RectD* wholeStrokeBbox,
                                             int* newAge,

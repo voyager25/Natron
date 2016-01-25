@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -644,34 +644,26 @@ CurveWidgetPrivate::isNearbyCurve(const QPoint &pt,double* x,double *y) const
         if ( (*it)->isVisible() ) {
             
             //Try once with expressions
-            {
-                double yCurve = (*it)->evaluate(true, openGL_pos.x() );
-                double yWidget = zoomCtx.toWidgetCoordinates(0,yCurve).y();
-                if (std::abs(pt.y() - yWidget) < CLICK_DISTANCE_FROM_CURVE_ACCEPTANCE) {
-                    if (x != NULL) {
-                        *x = openGL_pos.x();
-                    }
-                    if (y != NULL) {
-                        *y = yCurve;
-                    }
-                    return it;
-                }
+            double yCurve;
+            
+            try {
+                boost::shared_ptr<Curve> internalCurve = (*it)->getInternalCurve();
+                yCurve = (*it)->evaluate(internalCurve && !internalCurve->isAnimated(), openGL_pos.x() );
+            } catch (...) {
+                yCurve = (*it)->evaluate(false, openGL_pos.x() );
             }
-            //Try without expressions
-            {
-                double yCurve = (*it)->evaluate(false, openGL_pos.x() );
-                double yWidget = zoomCtx.toWidgetCoordinates(0,yCurve).y();
-                if (std::abs(pt.y() - yWidget) < CLICK_DISTANCE_FROM_CURVE_ACCEPTANCE) {
-                    if (x != NULL) {
-                        *x = openGL_pos.x();
-                    }
-                    if (y != NULL) {
-                        *y = yCurve;
-                    }
-                    return it;
+            
+            double yWidget = zoomCtx.toWidgetCoordinates(0,yCurve).y();
+            if (pt.y() < yWidget + CLICK_DISTANCE_FROM_CURVE_ACCEPTANCE && pt.y() > yWidget - CLICK_DISTANCE_FROM_CURVE_ACCEPTANCE ) {
+                if (x != NULL) {
+                    *x = openGL_pos.x();
                 }
-
+                if (y != NULL) {
+                    *y = yCurve;
+                }
+                return it;
             }
+            
         }
     }
 
@@ -1117,12 +1109,12 @@ CurveWidgetPrivate::moveSelectedKeyFrames(const QPointF & oldClick_opengl,
         } else {
             BezierCPCurveGui* bezierCurve = dynamic_cast<BezierCPCurveGui*>((*it)->curve.get());
             assert(bezierCurve);
-            std::set<int> keyframes;
+            std::set<double> keyframes;
             bezierCurve->getBezier()->getKeyframeTimes(&keyframes);
-            std::set<int>::iterator found = keyframes.find((*it)->key.getTime());
+            std::set<double>::iterator found = keyframes.find((*it)->key.getTime());
             assert(found != keyframes.end());
             if (found != keyframes.begin()) {
-                std::set<int>::iterator prev = found;
+                std::set<double>::iterator prev = found;
                 --prev;
                 if (!_widget->isSelectedKey((*it)->curve, *prev)) {
                     double diff = *prev  - *found + epsilon;
@@ -1130,11 +1122,13 @@ CurveWidgetPrivate::moveSelectedKeyFrames(const QPointF & oldClick_opengl,
                 }
             }
             if (found != keyframes.end()) {
-                std::set<int>::iterator next = found;
+                std::set<double>::iterator next = found;
                 ++next;
-                if (!_widget->isSelectedKey((*it)->curve, *next)) {
-                    double diff = *next - *found - epsilon;
-                    maxRight = std::max(0.,std::min(diff, maxRight));
+                if (next != keyframes.end()) {
+                    if (!_widget->isSelectedKey((*it)->curve, *next)) {
+                        double diff = *next - *found - epsilon;
+                        maxRight = std::max(0.,std::min(diff, maxRight));
+                    }
                 }
             }
         }
@@ -1199,23 +1193,19 @@ CurveWidgetPrivate::transformSelectedKeyFrames(const QPointF & oldClick_opengl,c
     }
     
     QPointF dragStartPointOpenGL = zoomCtx.toZoomCoordinates( _dragStartPoint.x(),_dragStartPoint.y() );
-    bool clampToIntegers = ( *_selectedKeyFrames.begin() )->curve->areKeyFramesTimeClampedToIntegers();
     bool updateOnPenUpOnly = appPTR->getCurrentSettings()->getRenderOnEditingFinishedOnly();
     
     QPointF totalMovement(newClick_opengl.x() - dragStartPointOpenGL.x(), newClick_opengl.y() - dragStartPointOpenGL.y());
-    /// round to the nearest integer the keyframes total motion (in X only)
-    ///Only for the curve editor, parametric curves are not affected by the following
-    if (clampToIntegers) {
-        totalMovement.rx() = std::floor(totalMovement.x() + 0.5);
-        for (SelectedKeys::const_iterator it = _selectedKeyFrames.begin(); it != _selectedKeyFrames.end(); ++it) {
-            if ( (*it)->curve->areKeyFramesValuesClampedToBooleans() ) {
-                totalMovement.ry() = std::max( 0.,std::min(std::floor(totalMovement.y() + 0.5),1.) );
-                break;
-            } else if ( (*it)->curve->areKeyFramesValuesClampedToIntegers() ) {
-                totalMovement.ry() = std::floor(totalMovement.y() + 0.5);
-            }
+
+    for (SelectedKeys::const_iterator it = _selectedKeyFrames.begin(); it != _selectedKeyFrames.end(); ++it) {
+        if ( (*it)->curve->areKeyFramesValuesClampedToBooleans() ) {
+            totalMovement.ry() = std::max( 0.,std::min(std::floor(totalMovement.y() + 0.5),1.) );
+            break;
+        } else if ( (*it)->curve->areKeyFramesValuesClampedToIntegers() ) {
+            totalMovement.ry() = std::floor(totalMovement.y() + 0.5);
         }
     }
+    
     
     double dt;
     dt = totalMovement.x() - _keyDragLastMovement.x();
@@ -1245,7 +1235,6 @@ CurveWidgetPrivate::transformSelectedKeyFrames(const QPointF & oldClick_opengl,c
         
         double sx = 1.,sy = 1.;
         double tx = 0., ty = 0.;
-        
         double oldX = newClick_opengl.x() - dt;
         double oldY = newClick_opengl.y() - dv;
         // the scale ratio is the ratio of distances to the center

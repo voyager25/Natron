@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,6 +73,7 @@ CLANG_DIAG_ON(uninitialized)
 #include "Gui/ProjectGui.h"
 #include "Gui/ScaleSliderQWidget.h"
 #include "Gui/SpinBox.h"
+#include "Gui/SpinBoxValidator.h"
 #include "Gui/TabGroup.h"
 #include "Gui/Utils.h"
 
@@ -166,7 +167,9 @@ KnobGuiInt::createWidget(QHBoxLayout* layout)
             //subDesc->setFont( QFont(appFont,appFontSize) );
             boxContainerLayout->addWidget(subDesc);
         }
-        SpinBox *box = new SpinBox(layout->parentWidget(), SpinBox::eSpinBoxTypeInt);
+        SpinBox *box = new KnobSpinBox(layout->parentWidget(), SpinBox::eSpinBoxTypeInt, this, i);
+        NumericKnobValidator* validator = new NumericKnobValidator(box,this);
+        box->setValidator(validator);
         QObject::connect( box, SIGNAL( valueChanged(double) ), this, SLOT( onSpinBoxValueChanged() ) );
 
         ///set the copy/link actions in the right click menu
@@ -286,6 +289,23 @@ KnobGuiInt::shouldAddStretch() const
     return _knob.lock()->isSliderDisabled();
 }
 
+bool
+KnobGuiInt::getAllDimensionsVisible() const
+{
+    return !_dimensionSwitchButton || _dimensionSwitchButton->isChecked();
+}
+
+int
+KnobGuiInt::getDimensionForSpinBox(const SpinBox* spinbox) const
+{
+    for (std::size_t i = 0; i < _spinBoxes.size(); ++i) {
+        if (_spinBoxes[i].first == spinbox) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 void
 KnobGuiInt::expandAllDimensions()
 {
@@ -372,46 +392,70 @@ void
 KnobGuiInt::updateGUI(int dimension)
 {
     boost::shared_ptr<KnobInt> knob = _knob.lock();
-    int v = knob->getValue(dimension);
-
-    if (_dimensionSwitchButton && !_dimensionSwitchButton->isChecked()) {
-        for (int i = 0; i < knob->getDimension(); ++i) {
-            
-            if (i == dimension) {
-                continue;
-            }
-            if (knob->getValue(i) != v) {
-                expandAllDimensions();
-            }
+    const int knobDim =  knob->getDimension();
+    if (knobDim < 1 || dimension >= knobDim) {
+        return;
+    }
+    int values[3];
+    assert(1 <= knobDim && knobDim <= 3);
+    assert(dimension == -1 || (0 <= dimension && dimension < knobDim));
+    for (int i = 0; i < knobDim; ++i) {
+        values[i] = knob->getValue(i);
+    }
+    int refValue;
+    if (dimension == -1) {
+        refValue = values[0];
+    } else {
+        values[dimension] = knob->getValue(dimension);
+        refValue = values[dimension];
+    }
+    bool allValuesNotEqual = false;
+    for (int i = 0; i < knobDim; ++i) {
+        if (values[i] != refValue) {
+            allValuesNotEqual = true;
         }
+    }
+    if (_dimensionSwitchButton && !_dimensionSwitchButton->isChecked() && allValuesNotEqual) {
+        expandAllDimensions();
+    } else if (_dimensionSwitchButton && _dimensionSwitchButton->isChecked() && !allValuesNotEqual) {
+        foldAllDimensions();
     }
     
     if (_slider) {
-        _slider->seekScalePosition(v);
+        _slider->seekScalePosition(values[0]);
     }
-    _spinBoxes[dimension].first->setValue(v);
     
-    if (_dimensionSwitchButton && !_dimensionSwitchButton->isChecked()) {
-        if (dimension == 0) {
-            for (int i = 1; i < knob->getDimension(); ++i) {
-                _spinBoxes[i].first->setValue(v);
+    
+    if (dimension != -1) {
+        switch (dimension) {
+            case 0:
+                _spinBoxes[dimension].first->setValue(values[dimension]);
+                if (_dimensionSwitchButton && !_dimensionSwitchButton->isChecked()) {
+                    for (int i = 1; i < knobDim; ++i) {
+                        _spinBoxes[i].first->setValue(values[dimension]);
+                    }
+                }
+                break;
+            case 1:
+            case 2:
+                _spinBoxes[dimension].first->setValue(values[dimension]);
+                break;
+            default:
+                break;
+        }
+        
+    } else {
+        _spinBoxes[0].first->setValue(values[0]);
+        if (_dimensionSwitchButton && !_dimensionSwitchButton->isChecked()) {
+            for (int i = 1; i < knobDim; ++i) {
+                _spinBoxes[i].first->setValue(values[0]);
+            }
+        } else {
+            for (int i = 1; i < knobDim; ++i) {
+                _spinBoxes[i].first->setValue(values[i]);
             }
         }
     }
-//    bool valuesEqual = true;
-//    double v0 = _spinBoxes[0].first->value();
-//    
-//    for (int i = 1; i < _knob->getDimension(); ++i) {
-//        if (_spinBoxes[i].first->value() != v0) {
-//            valuesEqual = false;
-//            break;
-//        }
-//    }
-//    if (_dimensionSwitchButton && !_dimensionSwitchButton->isChecked() && !valuesEqual) {
-//        expandAllDimensions();
-//    } else if (_dimensionSwitchButton && _dimensionSwitchButton->isChecked() && valuesEqual) {
-//        foldAllDimensions();
-//    }
 }
 
 void
@@ -569,7 +613,7 @@ KnobGuiInt::setEnabled()
     bool enabled0 = knob->isEnabled(0) && !knob->isSlave(0) && knob->getExpression(0).empty();
     
     for (U32 i = 0; i < _spinBoxes.size(); ++i) {
-        bool b = knob->isEnabled(i) && !knob->isSlave(i) && knob->getExpression(i).empty();
+        bool b = knob->isEnabled(i) && !knob->isSlave(i);
         //_spinBoxes[i].first->setEnabled(b);
         _spinBoxes[i].first->setReadOnly(!b);
         if (_spinBoxes[i].second) {
@@ -617,7 +661,7 @@ KnobGuiInt::reflectExpressionState(int dimension,
 
     if (hasExpr) {
         _spinBoxes[dimension].first->setAnimation(3);
-        _spinBoxes[dimension].first->setReadOnly(true);
+        //_spinBoxes[dimension].first->setReadOnly(true);
         if (_slider) {
             _slider->setReadOnly(true);
         }

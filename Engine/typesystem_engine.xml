@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!-- ***** BEGIN LICENSE BLOCK *****
   - This file is part of Natron <http://www.natron.fr/>,
-  - Copyright (C) 2015 INRIA and Alexandre Gauthier
+  - Copyright (C) 2016 INRIA and Alexandre Gauthier
   -
   - Natron is free software: you can redistribute it and/or modify
   - it under the terms of the GNU General Public License as published by
@@ -111,8 +111,8 @@
         PyObject* %out = PyDict_New();
         %INTYPE::const_iterator it = %in.begin();
         for (; it != %in.end(); ++it) {
-        %INTYPE_0 key = it.key();
-        %INTYPE_1 value = it.value();
+        %INTYPE_0 key = it->first;
+        %INTYPE_1 value = it->second;
         PyObject* pyKey = %CONVERTTOPYTHON[%INTYPE_0](key);
         PyObject* pyValue = %CONVERTTOPYTHON[%INTYPE_1](value);
         PyDict_SetItem(%out, pyKey, pyValue);
@@ -128,7 +128,7 @@
         while (PyDict_Next(%in, &amp;pos, &amp;key, &amp;value)) {
         %OUTTYPE_0 cppKey = %CONVERTTOCPP[%OUTTYPE_0](key);
         %OUTTYPE_1 cppValue = %CONVERTTOCPP[%OUTTYPE_1](value);
-        %out.insert(cppKey, cppValue);
+        %out.insert(std::make_pair(cppKey, cppValue));
         }
     </template>
 
@@ -303,6 +303,9 @@
        </modify-function>
        
    </object-type>
+   
+   <value-type name="ImageLayer" copyable="true" hash-function="ImageLayer::getHash">
+   </value-type>
 
     <object-type name="Group" copyable="false">
         <inject-documentation format="target">
@@ -347,7 +350,9 @@
                 <define-ownership class="target" owner="target"/>
             </modify-argument>
         </modify-function>
-        <modify-function signature="render(std::list&lt;Effect*&gt;,std::list&lt;int&gt;,std::list&lt;int&gt;)">
+        <modify-function signature="renderInternal(bool,std::list&lt;Effect*&gt;,std::list&lt;int&gt;,std::list&lt;int&gt;,std::list&lt;int&gt;)" remove="all"/>
+        <modify-function signature="renderInternal(bool,Effect*,int,int,int)" remove="all"/>
+        <modify-function signature="render(std::list&lt;Effect*&gt;,std::list&lt;int&gt;,std::list&lt;int&gt;,std::list&lt;int&gt;)">
             <modify-argument index="1">
                 <replace-type modified-type="PyList"/>
             </modify-argument>
@@ -355,6 +360,9 @@
                 <remove-argument/>
             </modify-argument>
             <modify-argument index="3">
+                <remove-argument/>
+            </modify-argument>
+            <modify-argument index="4">
                 <remove-argument/>
             </modify-argument>
             <inject-code class="target" position="beginning">
@@ -368,6 +376,8 @@
                 
                 std::list&lt;int&gt; lastFrames;
                 
+                std::list&lt;int&gt; frameSteps;
+                
                 int size = (int)PyList_GET_SIZE(%PYARG_1);
                 for (int i = 0; i &lt; size; ++i) {
                     PyObject* tuple = PyList_GET_ITEM(%PYARG_1,i);
@@ -375,19 +385,28 @@
                         PyErr_SetString(PyExc_TypeError, "tasks must be a list of tuple objects.");
                         return 0;
                     }
-                    if (PyTuple_GET_SIZE(%PYARG_1) != 3) {
-                    PyErr_SetString(PyExc_TypeError, "the tuple must have exactly 3 items.");
-                    return 0;
+                    
+                    int tupleSize = PyTuple_GET_SIZE(tuple);
+                    if (tupleSize != 4 &amp;&amp; tupleSize != 3) {
+                        PyErr_SetString(PyExc_TypeError, "the tuple must have 3 or 4 items.");
+                        return 0;
                     }
                     Effect* writeNode = %CONVERTTOCPP[Effect*](PyTuple_GET_ITEM(tuple, 0));
                     int firstFrame = %CONVERTTOCPP[int](PyTuple_GET_ITEM(tuple, 1));
                     int lastFrame = %CONVERTTOCPP[int](PyTuple_GET_ITEM(tuple, 2));
+                    int frameStep;
+                    if (tupleSize == 4) {
+                        frameStep = %CONVERTTOCPP[int](PyTuple_GET_ITEM(tuple, 3));
+                    } else {
+                        frameStep = INT_MIN;
+                    }
                     effects.push_back(writeNode);
                     firstFrames.push_back(firstFrame);
                     lastFrames.push_back(lastFrame);
+                    frameSteps.push_back(frameStep);
                 }
                 
-                %CPPSELF.%FUNCTION_NAME(effects,firstFrames,lastFrames);
+                %CPPSELF.%FUNCTION_NAME(effects,firstFrames,lastFrames, frameSteps);
             </inject-code>
         </modify-function>
         <modify-function signature="loadProject(std::string)">
@@ -477,6 +496,11 @@
             </modify-argument>
         </modify-function>
         <modify-function signature="createButtonParam(std::string,std::string)">
+            <modify-argument index="return">
+                <define-ownership class="target" owner="target"/>
+            </modify-argument>
+        </modify-function>
+        <modify-function signature="createSeparatorParam(std::string,std::string)">
             <modify-argument index="return">
                 <define-ownership class="target" owner="target"/>
             </modify-argument>
@@ -654,6 +678,26 @@
                 <define-ownership class="target" owner="target"/>
             </modify-argument>
         </modify-function>
+        <modify-function signature="getAvailableLayers()const">
+            <inject-code class="target" position="beginning">
+                std::map&lt;ImageLayer,Effect*&gt; comps = %CPPSELF.%FUNCTION_NAME();
+                
+                PyObject* ret = PyDict_New();
+                std::map&lt;ImageLayer,Effect*&gt;::iterator it = comps.begin();
+                for (; it != comps.end(); ++it) {
+                    const ImageLayer&amp; key = it->first;
+                    Effect* value = it->second;
+                    PyObject* pyKey = %CONVERTTOPYTHON[ImageLayer](key);
+                    PyObject* pyValue = %CONVERTTOPYTHON[Effect*](value);
+                    // Ownership transferences.
+                    Shiboken::Object::getOwnership(pyValue);
+                    PyDict_SetItem(ret, pyKey, pyValue);
+                    Py_DECREF(pyKey);
+                    Py_DECREF(pyValue);
+                }
+                return ret;
+            </inject-code>
+        </modify-function>
     </object-type>
 
     
@@ -734,7 +778,7 @@
                 %CPPSELF.%FUNCTION_NAME(%1);
             </inject-code>
         </modify-function>
-        <modify-function signature="set(int,int)">
+        <modify-function signature="set(int,double)">
             <inject-code class="target" position="beginning">
                 %CPPSELF.%FUNCTION_NAME(%1,%2);
             </inject-code>
@@ -744,7 +788,7 @@
                 %CPPSELF.%FUNCTION_NAME(%1,%2);
             </inject-code>
         </modify-function>
-        <modify-function signature="setValueAtTime(int,int,int)">
+        <modify-function signature="setValueAtTime(int,double,int)">
             <inject-code class="target" position="beginning">
                 %CPPSELF.%FUNCTION_NAME(%1,%2,%3);
             </inject-code>
@@ -782,7 +826,7 @@
                 %CPPSELF.%FUNCTION_NAME(%1,%2);
             </inject-code>
         </modify-function>
-        <modify-function signature="set(int,int,int)">
+        <modify-function signature="set(int,int,double)">
             <inject-code class="target" position="beginning">
                 %CPPSELF.%FUNCTION_NAME(%1,%2,%3);
             </inject-code>
@@ -818,7 +862,7 @@
                 %CPPSELF.%FUNCTION_NAME(%1,%2,%3);
             </inject-code>
         </modify-function>
-        <modify-function signature="set(int,int,int,int)">
+        <modify-function signature="set(int,int,int,double)">
             <inject-code class="target" position="beginning">
                 %CPPSELF.%FUNCTION_NAME(%1,%2,%3,%4);
             </inject-code>
@@ -879,7 +923,7 @@
                 %CPPSELF.%FUNCTION_NAME(%1,%2,%3);
             </inject-code>
         </modify-function>
-        <modify-function signature="set(double,double,double,int)">
+        <modify-function signature="set(double,double,double,double)">
             <inject-code class="target" position="beginning">
                 %CPPSELF.%FUNCTION_NAME(%1,%2,%3,%4);
             </inject-code>
@@ -920,6 +964,7 @@
     <object-type name="ChoiceParam">
     </object-type>
     <object-type name="ButtonParam"/>
+    <object-type name="SeparatorParam"/>
     <object-type name="StringParamBase">
     </object-type>
     <object-type name="StringParam">
@@ -1090,7 +1135,7 @@
                 %PYARG_0 = %CONVERTTOPYTHON[%RETURN_TYPE](%0);
             </inject-code>
         </modify-function>
-        <modify-function signature="createBezier(double,double,int)">
+        <modify-function signature="createBezier(double,double,double)">
             <modify-argument index="return">
                 <define-ownership class="target" owner="target"/>
             </modify-argument>
@@ -1099,7 +1144,7 @@
                 %PYARG_0 = %CONVERTTOPYTHON[%RETURN_TYPE](%0);
             </inject-code>
         </modify-function>
-        <modify-function signature="createEllipse(double,double,double,bool,int)">
+        <modify-function signature="createEllipse(double,double,double,bool,double)">
             <modify-argument index="return">
                 <define-ownership class="target" owner="target"/>
             </modify-argument>
@@ -1108,7 +1153,7 @@
                 %PYARG_0 = %CONVERTTOPYTHON[%RETURN_TYPE](%0);
             </inject-code>
         </modify-function>
-        <modify-function signature="createRectangle(double,double,double,int)">
+        <modify-function signature="createRectangle(double,double,double,double)">
             <modify-argument index="return">
                 <define-ownership class="target" owner="target"/>
             </modify-argument>
@@ -1135,7 +1180,7 @@
             </modify-argument>
         </modify-function>
     </object-type>
-    
+   
     
 
 </typesystem>

@@ -1,6 +1,6 @@
 /* ***** BEGIN LICENSE BLOCK *****
  * This file is part of Natron <http://www.natron.fr/>,
- * Copyright (C) 2015 INRIA and Alexandre Gauthier-Foichat
+ * Copyright (C) 2016 INRIA and Alexandre Gauthier-Foichat
  *
  * Natron is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,12 @@
 #include <string>
 #include <map>
 #include <vector>
+
 #include "Global/Macros.h"
 #include "Global/GlobalDefines.h"
+#include "Engine/EngineFwd.h"
+
+
 namespace Natron {
 #ifdef __NATRON_OSX__
     #define NATRON_LIBRARY_EXT "dylib"
